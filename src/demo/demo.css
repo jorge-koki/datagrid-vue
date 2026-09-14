@@ -1,0 +1,282 @@
+/*
+ * Estilos de la página de demostración.
+ *
+ * ## Por qué son globales y no `<style scoped>`
+ *
+ * Las filas y las celdas del cuerpo las crea `useRowPool` con
+ * `document.createElement`, fuera del render de Vue, así que NO llevan el
+ * atributo `data-v-*` que el CSS con alcance usa para acotarse. Una regla scoped
+ * sobre `.dt-cell` no se aplicaría nunca. La clase `demo-cell-high-budget`, que
+ * devuelve el `cellClass` de la columna de presupuesto, es el caso concreto.
+ *
+ * ## Los tokens son los mismos que los de la tabla
+ *
+ * La página declara los mismos `--dt-*` con los mismos fallbacks de
+ * `datatable.css`, incluida la indirección `var(--ui-*, ...)`. Así la demo y la
+ * tabla cambian de tema juntas, y una aplicación anfitriona que defina los tokens
+ * de NuxtUI las tiñe a las dos de una sola vez.
+ */
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+}
+
+.demo {
+  --dt-bg: var(--ui-bg, #ffffff);
+  --dt-bg-muted: var(--ui-bg-muted, #f9fafb);
+  --dt-bg-elevated: var(--ui-bg-elevated, #f3f4f6);
+  --dt-bg-accented: var(--ui-bg-accented, #e5e7eb);
+  --dt-border: var(--ui-border, #e5e7eb);
+  --dt-text: var(--ui-text, #111827);
+  --dt-text-muted: var(--ui-text-muted, #6b7280);
+  --dt-text-dimmed: var(--ui-text-dimmed, #9ca3af);
+  --dt-primary: var(--ui-primary, #00c16a);
+  --dt-radius: var(--ui-radius, 0.375rem);
+  --dt-color-blue: #1d4ed8;
+  --dt-color-red: #b91c1c;
+  --dt-color-amber: #b45309;
+  --dt-color-green: #15803d;
+  --dt-color-neutral: #4b5563;
+
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-height: 100vh;
+  padding: 1.5rem;
+  background: var(--dt-bg-muted);
+  color: var(--dt-text);
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+/* Las tres vías al tema oscuro, con la misma precedencia que usa `datatable.css`. */
+.demo[data-theme='dark'],
+:root.dark .demo[data-theme='auto'] {
+  --dt-bg: var(--ui-bg, #111827);
+  --dt-bg-muted: var(--ui-bg-muted, #0b1120);
+  --dt-bg-elevated: var(--ui-bg-elevated, #1f2937);
+  --dt-bg-accented: var(--ui-bg-accented, #374151);
+  --dt-border: var(--ui-border, #374151);
+  --dt-text: var(--ui-text, #f9fafb);
+  --dt-text-muted: var(--ui-text-muted, #9ca3af);
+  --dt-text-dimmed: var(--ui-text-dimmed, #6b7280);
+  --dt-color-blue: #60a5fa;
+  --dt-color-red: #f87171;
+  --dt-color-amber: #fbbf24;
+  --dt-color-green: #4ade80;
+  --dt-color-neutral: #9ca3af;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not(.light) .demo[data-theme='auto'] {
+    --dt-bg: var(--ui-bg, #111827);
+    --dt-bg-muted: var(--ui-bg-muted, #0b1120);
+    --dt-bg-elevated: var(--ui-bg-elevated, #1f2937);
+    --dt-bg-accented: var(--ui-bg-accented, #374151);
+    --dt-border: var(--ui-border, #374151);
+    --dt-text: var(--ui-text, #f9fafb);
+    --dt-text-muted: var(--ui-text-muted, #9ca3af);
+    --dt-text-dimmed: var(--ui-text-dimmed, #6b7280);
+    --dt-color-blue: #60a5fa;
+    --dt-color-red: #f87171;
+    --dt-color-amber: #fbbf24;
+    --dt-color-green: #4ade80;
+    --dt-color-neutral: #9ca3af;
+  }
+}
+
+/* ----------------------------------------------------------------- Header */
+
+.demo-header h1 {
+  margin: 0 0 0.25rem;
+  font-size: 1.25rem;
+}
+
+.demo-header p {
+  margin: 0;
+  max-width: 68ch;
+  color: var(--dt-text-muted);
+}
+
+/* ---------------------------------------------------------------- Toolbar */
+
+.demo-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.demo-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--dt-text-muted);
+}
+
+.demo-field--inline {
+  cursor: pointer;
+}
+
+.demo-field select,
+.demo-button {
+  padding: 0.375rem 0.75rem;
+  border: 1px solid var(--dt-border);
+  border-radius: var(--dt-radius);
+  background: var(--dt-bg-elevated);
+  color: var(--dt-text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.demo-button:hover,
+.demo-field select:hover {
+  background: var(--dt-bg-accented);
+}
+
+.demo-field input[type='checkbox'] {
+  accent-color: var(--dt-primary);
+  margin: 0;
+}
+
+/* ------------------------------------------------------------------ Tabla */
+
+.demo-table {
+  height: 60vh;
+  min-height: 320px;
+}
+
+/* El componente no fija altura propia: la toma del contenedor. */
+.demo-table > .dt-root {
+  height: 100%;
+}
+
+/* Clase que devuelve el `cellClass` de la columna de presupuesto. */
+.demo-cell-high-budget {
+  color: var(--dt-color-red);
+  font-weight: 600;
+}
+
+/* ---------------------------------------------------------------- Paneles */
+
+.demo-panels {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1rem;
+}
+
+@media (min-width: 60rem) {
+  .demo-panels {
+    grid-template-columns: minmax(0, 20rem) minmax(0, 1fr);
+  }
+}
+
+.demo-stats,
+.demo-log {
+  padding: 0.75rem;
+  border: 1px solid var(--dt-border);
+  border-radius: var(--dt-radius);
+  background: var(--dt-bg);
+}
+
+.demo-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(5rem, 1fr));
+  gap: 0.5rem;
+  align-content: start;
+}
+
+.demo-stat {
+  display: flex;
+  flex-direction: column;
+}
+
+.demo-stat-value {
+  font-size: 1.125rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.demo-stat-label {
+  color: var(--dt-text-dimmed);
+  font-size: 0.75rem;
+}
+
+/* --------------------------------------------------------------- Bitácora */
+
+.demo-log-empty {
+  margin: 0;
+  color: var(--dt-text-muted);
+}
+
+.demo-log-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.demo-log-item {
+  display: grid;
+  grid-template-columns: 4.5rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.demo-log-kind {
+  padding: 0 0.375rem;
+  border-radius: 999px;
+  color: var(--dt-color-neutral);
+  background: color-mix(in srgb, var(--dt-color-neutral) 16%, transparent);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.demo-log-kind[data-kind='veto'],
+.demo-log-kind[data-kind='cancel'] {
+  color: var(--dt-color-red);
+  background: color-mix(in srgb, var(--dt-color-red) 16%, transparent);
+}
+
+.demo-log-kind[data-kind='commit'] {
+  color: var(--dt-color-green);
+  background: color-mix(in srgb, var(--dt-color-green) 16%, transparent);
+}
+
+.demo-log-kind[data-kind='before'] {
+  color: var(--dt-color-amber);
+  background: color-mix(in srgb, var(--dt-color-amber) 16%, transparent);
+}
+
+.demo-log-kind[data-kind='after'],
+.demo-log-kind[data-kind='info'] {
+  color: var(--dt-color-blue);
+  background: color-mix(in srgb, var(--dt-color-blue) 16%, transparent);
+}
+
+.demo-log-message {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+
+.demo-log-time {
+  color: var(--dt-text-dimmed);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}

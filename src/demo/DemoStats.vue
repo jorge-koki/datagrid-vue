@@ -1,0 +1,96 @@
+<script setup lang="ts">
+import { onBeforeUnmount, onMounted, shallowRef } from 'vue'
+
+/**
+ * Medidor de FPS y de nodos realmente presentes en el DOM.
+ *
+ * Es la instrumentación que hace visible la tesis del componente: al scrollear,
+ * la cantidad de filas y celdas pintadas se queda quieta, sin importar cuántas
+ * filas tenga el dataset. Un `v-for` sobre las mismas filas haría crecer esos
+ * números de forma lineal.
+ *
+ * ## Por qué el conteo no va por frame
+ *
+ * `querySelectorAll` recorre el subárbol. Hacerlo en cada frame convertiría al
+ * medidor en parte del costo que pretende medir. El contador de FPS sí suma un
+ * entero por frame —eso es gratis— y el conteo de nodos se rehace cuatro veces
+ * por segundo, que para un número que cambia poco alcanza de sobra.
+ */
+const props = defineProps<{
+  /** Contenedor que envuelve a la tabla. Se cuentan los nodos que hay adentro. */
+  host: HTMLElement | null
+  /** Cantidad de filas del dataset, para contrastarla con las pintadas. */
+  rowCount: number
+}>()
+
+/** Cada cuántos ms se recalculan FPS y conteos. */
+const SAMPLE_INTERVAL = 250
+
+const fps = shallowRef(0)
+const paintedRows = shallowRef(0)
+const paintedCells = shallowRef(0)
+const totalNodes = shallowRef(0)
+
+let frameHandle = 0
+let frameCount = 0
+let lastSample = 0
+
+function countNodes(): void {
+  const host = props.host
+  if (!host) return
+  paintedRows.value = host.querySelectorAll('.dt-row:not([hidden])').length
+  paintedCells.value = host.querySelectorAll('.dt-cell:not([hidden])').length
+  totalNodes.value = host.getElementsByTagName('*').length
+}
+
+function tick(timestamp: number): void {
+  frameHandle = requestAnimationFrame(tick)
+
+  frameCount += 1
+  const elapsed = timestamp - lastSample
+  if (elapsed < SAMPLE_INTERVAL) return
+
+  fps.value = Math.round((frameCount * 1000) / elapsed)
+  frameCount = 0
+  lastSample = timestamp
+  countNodes()
+}
+
+onMounted(() => {
+  lastSample = performance.now()
+  frameHandle = requestAnimationFrame(tick)
+})
+
+onBeforeUnmount(() => {
+  if (frameHandle !== 0) cancelAnimationFrame(frameHandle)
+  frameHandle = 0
+})
+
+/** Separador de miles, construido una vez. */
+const formatter = new Intl.NumberFormat('en-US')
+</script>
+
+<template>
+  <div class="demo-stats">
+    <div class="demo-stat">
+      <span class="demo-stat-value">{{ fps }}</span>
+      <span class="demo-stat-label">fps</span>
+    </div>
+    <div class="demo-stat">
+      <span class="demo-stat-value">{{ formatter.format(props.rowCount) }}</span>
+      <span class="demo-stat-label">rows in data</span>
+    </div>
+    <div class="demo-stat">
+      <span class="demo-stat-value">{{ paintedRows }}</span>
+      <span class="demo-stat-label">rows in DOM</span>
+    </div>
+    <div class="demo-stat">
+      <span class="demo-stat-value">{{ paintedCells }}</span>
+      <span class="demo-stat-label">cells in DOM</span>
+    </div>
+    <div class="demo-stat">
+      <span class="demo-stat-value">{{ formatter.format(totalNodes) }}</span>
+      <span class="demo-stat-label">total nodes</span>
+    </div>
+  </div>
+</template>

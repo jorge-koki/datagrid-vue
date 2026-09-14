@@ -1,0 +1,322 @@
+import { computed, onBeforeUnmount, onMounted, toValue, watch } from 'vue'
+import type { ComputedRef, MaybeRefOrGetter } from 'vue'
+import type {
+  DataTableColumn,
+  DataTablePersistOptions,
+  DataTableStorageAdapter,
+  PersistedTableState,
+} from '../types'
+import { isPersistedTableState, reconcilePersistedState } from '../internal/reconcile'
+import {
+  DEFAULT_PERSIST_DEBOUNCE,
+  DEFAULT_PERSIST_VERSION,
+  STORAGE_KEY_PREFIX,
+} from '../internal/constants'
+
+/**
+ * Lee `localStorage` sin poder explotar.
+ *
+ * Hay dos escenarios donde el simple acceso a la variable lanza, no solo su uso:
+ * el renderizado en servidor, donde no existe, y los modos privados o las
+ * políticas de cookies que la declaran pero niegan el acceso. Por eso el
+ * `typeof` y el `try` son ambos necesarios: uno cubre "no está", el otro cubre
+ * "está pero tocarla tira".
+ */
+function getLocalStorage(): Storage | null {
+  try {
+    if (typeof localStorage === 'undefined') return null
+    return localStorage
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Adaptador por defecto: guarda el layout en `localStorage`.
+ *
+ * Degrada a no-op en lugar de fallar. Que no se pueda guardar la preferencia de
+ * un usuario es una molestia; que la tabla no renderice por eso es un bug.
+ */
+export function createLocalStorageAdapter(): DataTableStorageAdapter {
+  return {
+    load(key: string): PersistedTableState | null {
+      const storage = getLocalStorage()
+      if (!storage) return null
+      try {
+        const raw = storage.getItem(key)
+        if (raw === null) return null
+        // `JSON.parse` está tipado como `any`; se ancla a `unknown` para que el
+        // contenido tenga que pasar sí o sí por la validación de forma.
+        const parsed: unknown = JSON.parse(raw)
+        return isPersistedTableState(parsed) ? parsed : null
+      } catch {
+        // JSON inválido o acceso denegado: se arranca de cero.
+        return null
+      }
+    },
+
+    save(key: string, state: PersistedTableState): void {
+      const storage = getLocalStorage()
+      if (!storage) return
+      try {
+        storage.setItem(key, JSON.stringify(state))
+      } catch {
+        // Cuota agotada o almacenamiento de solo lectura. No hay nada que hacer
+        // ni nada que romper.
+      }
+    },
+
+    remove(key: string): void {
+      const storage = getLocalStorage()
+      if (!storage) return
+      try {
+        storage.removeItem(key)
+      } catch {
+        // Igual que en `save`.
+      }
+    },
+  }
+}
+
+/** Opciones de {@link useTablePersistence}. */
+export interface UseTablePersistenceOptions<TRow> {
+  /** Identificador único de esta tabla. Obligatorio para poder persistir. */
+  tableId: MaybeRefOrGetter<string | undefined>
+  /** Configuración de persistencia, tal como llega por props. */
+  persist: MaybeRefOrGetter<boolean | DataTablePersistOptions | undefined>
+  /** Columnas actuales, contra las que se reconcilia lo guardado. */
+  columns: MaybeRefOrGetter<readonly DataTableColumn<TRow>[]>
+  /** Estado vigente de la tabla, que se guardará cuando cambie. */
+  state: MaybeRefOrGetter<PersistedTableState>
+  /** Aplica al componente el estado ya reconciliado que se leyó del almacenamiento. */
+  onLoad: (state: PersistedTableState) => void
+}
+
+/** Resultado de {@link useTablePersistence}. */
+export interface UseTablePersistenceReturn {
+  /** `true` cuando la persistencia está activa y correctamente configurada. */
+  enabled: ComputedRef<boolean>
+  /** Escribe de inmediato lo que esté pendiente por el debounce. */
+  flush(): void
+  /** Borra el estado guardado de esta tabla. */
+  clear(): void
+}
+
+/** Opciones ya normalizadas a valores concretos. */
+interface ResolvedPersistOptions {
+  adapter: DataTableStorageAdapter
+  debounce: number
+  version: number
+  includeVisibility: boolean
+  includeWidths: boolean
+  includeOrder: boolean
+  storageKey: string
+}
+
+/**
+ * Carga y guarda el layout de la tabla entre sesiones.
+ *
+ * ## El orden de las operaciones importa
+ *
+ * Primero se carga, después se empieza a guardar. Si el watcher de guardado
+ * estuviera activo desde el montaje, el estado inicial por defecto se escribiría
+ * antes de que llegue la respuesta del adaptador y pisaría la configuración real
+ * del usuario. Por eso existe la bandera `ready`.
+ *
+ * ## Por qué el guardado va con debounce
+ *
+ * Arrastrar el borde de una columna emite un `pointermove` por frame. Serializar
+ * y escribir en `localStorage` a 60Hz es una fuente real de jank, porque
+ * `setItem` es sincrónico y bloquea el hilo principal. Se acumulan los cambios y
+ * se escribe una sola vez cuando el usuario suelta. Lo pendiente se vuelca al
+ * desmontar para que un cambio hecho justo antes de navegar no se pierda.
+ */
+export function useTablePersistence<TRow>(
+  options: UseTablePersistenceOptions<TRow>,
+): UseTablePersistenceReturn {
+  /** Se apaga al desmontar para descartar respuestas asíncronas tardías. */
+  let alive = true
+  /** Recién en `true` después de cargar: antes, guardar pisaría lo guardado. */
+  let ready = false
+  /** Handle del timer de debounce. 0 significa que no hay escritura pendiente. */
+  let timer = 0
+  /** Garantiza que el aviso por `tableId` faltante se emita una sola vez. */
+  let warnedMissingId = false
+
+  const resolved = computed<ResolvedPersistOptions | null>(() => {
+    const persist = toValue(options.persist)
+    if (!persist) return null
+
+    const config: DataTablePersistOptions = typeof persist === 'object' ? persist : {}
+    if (config.enabled === false) return null
+
+    const tableId = toValue(options.tableId)
+    // Sin id no se puede persistir: dos tablas compartirían la misma clave.
+    if (!tableId) return null
+
+    const include = config.include
+    return {
+      adapter: config.adapter ?? createLocalStorageAdapter(),
+      debounce: config.debounce ?? DEFAULT_PERSIST_DEBOUNCE,
+      version: config.version ?? DEFAULT_PERSIST_VERSION,
+      includeVisibility: include?.visibility ?? true,
+      includeWidths: include?.widths ?? true,
+      includeOrder: include?.order ?? true,
+      storageKey: `${STORAGE_KEY_PREFIX}${tableId}`,
+    }
+  })
+
+  const enabled = computed(() => resolved.value !== null)
+
+  /**
+   * Avisa una única vez que falta `tableId`.
+   *
+   * No se lanza una excepción: una preferencia de layout que no se guarda no
+   * justifica tumbar la aplicación. Pero sí hay que decirlo fuerte, porque el
+   * síntoma sin el aviso —dos tablas pisándose la configuración— es de los más
+   * confusos de diagnosticar.
+   */
+  function warnMissingTableId(): void {
+    if (warnedMissingId) return
+    warnedMissingId = true
+    console.warn(
+      '[DataTable] `persist` está activo pero no se pasó `tableId`. ' +
+        'Sin un id, dos tablas de la misma aplicación compartirían la clave de ' +
+        'almacenamiento y se sobrescribirían la configuración entre sí. ' +
+        'La persistencia queda desactivada para esta tabla.',
+    )
+  }
+
+  watch(
+    [() => toValue(options.persist), () => toValue(options.tableId)],
+    ([persist, tableId]) => {
+      if (persist && !tableId) warnMissingTableId()
+    },
+    { immediate: true },
+  )
+
+  /** Arma el payload a guardar, respetando `include`. */
+  function buildPayload(config: ResolvedPersistOptions): PersistedTableState {
+    const current = toValue(options.state)
+    return {
+      version: config.version,
+      // Se copian los objetos: lo que va al almacenamiento no debe ser una
+      // referencia viva al estado del componente.
+      columnVisibility: config.includeVisibility ? { ...current.columnVisibility } : {},
+      columnWidths: config.includeWidths ? { ...current.columnWidths } : {},
+      columnOrder: config.includeOrder ? [...current.columnOrder] : [],
+    }
+  }
+
+  function cancelPending(): void {
+    if (timer === 0) return
+    clearTimeout(timer)
+    timer = 0
+  }
+
+  function writeNow(): void {
+    const config = resolved.value
+    if (!config) return
+    void config.adapter.save(config.storageKey, buildPayload(config))
+  }
+
+  function schedule(): void {
+    const config = resolved.value
+    if (!config) return
+
+    cancelPending()
+    if (config.debounce <= 0) {
+      writeNow()
+      return
+    }
+    // `setTimeout` en el navegador devuelve un número; el tipo del entorno DOM
+    // es el que corresponde acá y evita depender de los tipos de Node.
+    timer = setTimeout(() => {
+      timer = 0
+      writeNow()
+    }, config.debounce)
+  }
+
+  function flush(): void {
+    if (timer === 0) return
+    cancelPending()
+    writeNow()
+  }
+
+  function clear(): void {
+    const config = resolved.value
+    if (!config) return
+    cancelPending()
+    void config.adapter.remove(config.storageKey)
+  }
+
+  /** Aplica lo cargado si sigue siendo pertinente, y habilita el guardado. */
+  function applyLoaded(loaded: PersistedTableState | null, config: ResolvedPersistOptions): void {
+    // El componente pudo desmontarse mientras el adaptador resolvía. Aplicar acá
+    // escribiría sobre un componente que ya no existe.
+    if (!alive) return
+
+    if (loaded && loaded.version === config.version) {
+      const columns = toValue(options.columns)
+      const reconciled = reconcilePersistedState(loaded, columns)
+      options.onLoad({
+        version: config.version,
+        columnVisibility: config.includeVisibility ? reconciled.columnVisibility : {},
+        columnWidths: config.includeWidths ? reconciled.columnWidths : {},
+        columnOrder: config.includeOrder ? reconciled.columnOrder : [],
+      })
+    }
+
+    // Se marca listo incluso cuando no había nada o la versión no coincidía: a
+    // partir de acá los cambios del usuario sí deben guardarse.
+    ready = true
+  }
+
+  onMounted(() => {
+    const config = resolved.value
+    if (!config) {
+      // Sin persistencia no hay carga, pero tampoco hay razón para bloquear nada.
+      ready = true
+      return
+    }
+
+    let result: PersistedTableState | null | Promise<PersistedTableState | null>
+    try {
+      result = config.adapter.load(config.storageKey)
+    } catch {
+      // Un adaptador de terceros puede lanzar de forma sincrónica.
+      ready = true
+      return
+    }
+
+    if (result instanceof Promise) {
+      result
+        .then((loaded) => applyLoaded(loaded, config))
+        .catch(() => {
+          // Una carga fallida no debe dejar la tabla sin poder guardar después.
+          if (alive) ready = true
+        })
+      return
+    }
+
+    applyLoaded(result, config)
+  })
+
+  watch(
+    () => toValue(options.state),
+    () => {
+      if (!ready) return
+      schedule()
+    },
+  )
+
+  onBeforeUnmount(() => {
+    alive = false
+    // Se vuelca antes de apagar: un cambio hecho dentro de la ventana del
+    // debounce justo antes de navegar se perdería.
+    flush()
+    cancelPending()
+  })
+
+  return { enabled, flush, clear }
+}

@@ -1,0 +1,921 @@
+<script setup lang="ts" generic="TRow extends Record<string, unknown>">
+import { computed, onBeforeUnmount, onMounted, shallowRef, watch } from 'vue'
+import type {
+  AfterEditEvent,
+  BeforeEditEvent,
+  CellPosition,
+  CellSelectEvent,
+  CellValue,
+  ColumnResizeEvent,
+  ColumnVisibilityState,
+  ColumnWidthState,
+  DataTableColumn,
+  DataTableProps,
+  EditCommitEvent,
+  PersistedTableState,
+} from './types'
+import { useVirtualWindow } from './composables/useVirtualWindow'
+import { useColumnLayout } from './composables/useColumnLayout'
+import type { ResolvedColumn } from './composables/useColumnLayout'
+import { useRowPool } from './composables/useRowPool'
+import { useScrollSync } from './composables/useScrollSync'
+import { useCellEditor } from './composables/useCellEditor'
+import type { CellGeometry } from './composables/useCellEditor'
+import { useTablePersistence } from './composables/useTablePersistence'
+import {
+  DEFAULT_COLUMN_WIDTH,
+  DEFAULT_HEADER_HEIGHT,
+  DEFAULT_OVERSCAN,
+  DEFAULT_PERSIST_VERSION,
+  DEFAULT_ROW_HEIGHT,
+  DENSE_HEADER_HEIGHT,
+  DENSE_ROW_HEIGHT,
+} from './internal/constants'
+import { readCellValue } from './internal/values'
+import './styles/datatable.css'
+
+/**
+ * Tabla virtualizada de alto rendimiento.
+ *
+ * ## El reparto de responsabilidades
+ *
+ * Vue conserva lo que cambia poco y se beneficia de ser declarativo: las props,
+ * el header, el editor, el ciclo de vida. El pool de nodos conserva el camino
+ * caliente del scroll, donde la reactividad no aporta nada porque ya se sabe
+ * exactamente qué cambió y dónde.
+ *
+ * Concretamente: las celdas del cuerpo **no son nodos del VDOM**. Si lo fueran,
+ * cada frame de scroll costaría ~450 diffs de vnode y el presupuesto de 16ms se
+ * agotaría antes de llegar a pintar. Las filas las inyecta `useRowPool`
+ * directamente en `.dt-canvas` y Vue nunca las toca.
+ *
+ * El header sí lo renderiza Vue: son pocos nodos, se rediferencian solo cuando
+ * cambia la configuración de columnas —nunca durante el scroll, que se resuelve
+ * con un único `transform` sobre `.dt-header-inner`— y los handles de
+ * redimensionado se benefician de tener estado reactivo.
+ *
+ * ## Por qué 100k filas no cuestan memoria
+ *
+ * El objeto `props` de Vue es `shallowReactive`, así que `props.rows` devuelve
+ * el array original y no un proxy profundo. Ninguna fila se envuelve nunca. El
+ * componente solo indexa dentro de la ventana visible.
+ *
+ * ## Es un componente controlado
+ *
+ * Nunca escribe sobre `rows`. Las ediciones se reportan con `editCommit` y el
+ * padre decide si persiste.
+ */
+const props = withDefaults(defineProps<DataTableProps<TRow>>(), {
+  // `rowHeight` y `headerHeight` quedan deliberadamente fuera: su valor por
+  // defecto depende de `dense`, y `withDefaults` no admite defaults derivados de
+  // otra prop. Se resuelven más abajo en un `computed`.
+  dense: false,
+  overscan: DEFAULT_OVERSCAN,
+  defaultColumnWidth: DEFAULT_COLUMN_WIDTH,
+  virtualizeColumns: true,
+  theme: 'auto',
+  emptyText: 'No data',
+  stripe: false,
+  bordered: false,
+  selectionMode: 'cell',
+  // `columnVisibility`, `columnOrder`, `columnWidths` y `activeCell` quedan
+  // deliberadamente sin default: `undefined` es lo que distingue el modo no
+  // controlado del controlado, y darles un default borraría esa distinción.
+  // Para `activeCell` la diferencia es doble, porque `null` ya significa
+  // "controlado y sin selección".
+  persist: false,
+})
+
+const emit = defineEmits<{
+  beforeEdit: [BeforeEditEvent<TRow>]
+  afterEdit: [AfterEditEvent<TRow>]
+  editCommit: [EditCommitEvent<TRow>]
+  columnResize: [ColumnResizeEvent]
+  rowClick: [{ row: TRow; rowIndex: number }]
+  cellSelect: [CellSelectEvent<TRow>]
+  'update:activeCell': [CellPosition | null]
+  'update:columnVisibility': [ColumnVisibilityState]
+  'update:columnOrder': [string[]]
+  'update:columnWidths': [ColumnWidthState]
+}>()
+
+/* --------------------------------------------- Estado de layout de columnas */
+
+/**
+ * Visibilidad, orden y anchos: controlado o no controlado, por prop.
+ *
+ * Cada uno de los tres se puede usar de dos maneras y el componente sirve a las
+ * dos sin bifurcar su lógica interna:
+ *
+ * - **No controlado**: si la prop llega `undefined`, el estado vive en el ref
+ *   interno y la tabla funciona sola. Es el modo que usa la persistencia.
+ * - **Controlado**: si la prop llega con valor, esa prop es la verdad. El
+ *   componente NO escribe el ref interno, solo emite `update:*`, y el padre
+ *   decide. Si el padre ignora el evento, no pasa nada: es la semántica normal
+ *   de un v-model y evita que la vista se desincronice del estado del padre.
+ *
+ * El evento se emite siempre, incluso sin controlar, para que un consumidor
+ * pueda escuchar los cambios sin tener que tomar posesión del estado.
+ */
+const internalVisibility = shallowRef<Record<string, boolean>>({})
+const internalOrder = shallowRef<string[]>([])
+const internalWidths = shallowRef<Record<string, number>>({})
+
+const columnVisibility = computed<ColumnVisibilityState>(
+  () => props.columnVisibility ?? internalVisibility.value,
+)
+const columnOrder = computed<readonly string[]>(() => props.columnOrder ?? internalOrder.value)
+const columnWidths = computed<ColumnWidthState>(() => props.columnWidths ?? internalWidths.value)
+
+function setColumnVisibility(next: Record<string, boolean>): void {
+  if (props.columnVisibility === undefined) internalVisibility.value = next
+  emit('update:columnVisibility', next)
+}
+
+function setColumnOrder(next: string[]): void {
+  if (props.columnOrder === undefined) internalOrder.value = next
+  emit('update:columnOrder', next)
+}
+
+function setColumnWidths(next: Record<string, number>): void {
+  if (props.columnWidths === undefined) internalWidths.value = next
+  emit('update:columnWidths', next)
+}
+
+/* ------------------------------------------------------------ Referencias DOM */
+
+const viewportEl = shallowRef<HTMLElement | null>(null)
+const headerInnerEl = shallowRef<HTMLElement | null>(null)
+const canvasEl = shallowRef<HTMLElement | null>(null)
+const editorHostEl = shallowRef<HTMLElement | null>(null)
+
+/* -------------------------------------------------------------- Métricas base */
+
+/**
+ * Altura de fila efectiva.
+ *
+ * Es un número en px y no un valor CSS porque el virtualizador divide por él en
+ * cada frame. Se replica a `--dt-row-height` para que la presentación coincida.
+ */
+const rowHeight = computed(() => {
+  const declared = props.rowHeight
+  if (declared !== undefined && Number.isFinite(declared) && declared > 0) return declared
+  return props.dense ? DENSE_ROW_HEIGHT : DEFAULT_ROW_HEIGHT
+})
+
+const headerHeight = computed(() => {
+  const declared = props.headerHeight
+  if (declared !== undefined && Number.isFinite(declared) && declared > 0) return declared
+  return props.dense ? DENSE_HEADER_HEIGHT : DEFAULT_HEADER_HEIGHT
+})
+
+/* ------------------------------------------------------------ Layout y scroll */
+
+const layout = useColumnLayout<TRow>({
+  columns: () => props.columns,
+  defaultColumnWidth: () => props.defaultColumnWidth,
+  visibility: columnVisibility,
+  order: columnOrder,
+  widths: columnWidths,
+  // El arrastre pide el ancho, el componente lo guarda. El layout no almacena
+  // nada: así el ancho puede venir de un v-model o de un layout restaurado sin
+  // que existan dos fuentes de verdad compitiendo.
+  onWidthChange: (key, width) => {
+    const current = columnWidths.value
+    if (current[key] === width) return
+    setColumnWidths({ ...current, [key]: width })
+  },
+})
+
+// El template solo desenvuelve refs de nivel superior, no refs anidados dentro
+// de un objeto. Se extraen los que el header necesita para no tener que escribir
+// `.value` en el markup.
+const { resolvedColumns, totalWidth } = layout
+
+/* ------------------------------------------------------------- Persistencia */
+
+/**
+ * Estado que se guarda y se restaura.
+ *
+ * El orden se materializa a partir de las columnas ya ordenadas en lugar de
+ * guardar el array crudo: mientras el usuario no reordene nada, `columnOrder`
+ * está vacío, y guardar un orden vacío haría que al volver no se restaure nada.
+ * Guardar el orden efectivo deja el layout reproducible desde la primera sesión.
+ */
+const persistedState = computed<PersistedTableState>(() => ({
+  version: DEFAULT_PERSIST_VERSION,
+  columnVisibility: { ...columnVisibility.value },
+  columnWidths: { ...columnWidths.value },
+  columnOrder: layout.orderedColumns.value.map((column) => column.key),
+}))
+
+const persistence = useTablePersistence<TRow>({
+  tableId: () => props.tableId,
+  persist: () => props.persist,
+  columns: () => props.columns,
+  state: persistedState,
+  onLoad: (loaded) => {
+    // Llega ya reconciliado contra las columnas actuales: se puede aplicar tal
+    // cual. Se pasa por los mismos setters que la UI para respetar el modo
+    // controlado, donde el padre es quien decide si acepta el layout guardado.
+    setColumnVisibility(loaded.columnVisibility)
+    setColumnWidths(loaded.columnWidths)
+    setColumnOrder(loaded.columnOrder)
+  },
+})
+
+const scroll = useScrollSync({
+  viewport: viewportEl,
+  headerInner: headerInnerEl,
+  onFrame: paintFrame,
+})
+
+const rowVirtual = useVirtualWindow({
+  itemCount: () => props.rows.length,
+  itemSize: rowHeight,
+  viewportSize: () => scroll.state.value.viewportHeight,
+  scrollOffset: () => scroll.state.value.scrollTop,
+  overscan: () => props.overscan,
+})
+
+/**
+ * Tramo horizontal de columnas a pintar.
+ *
+ * Con `virtualizeColumns` apagado se devuelve el rango completo: en tablas
+ * angostas la búsqueda binaria y el recorte son overhead puro.
+ */
+const columnRange = computed(() => {
+  const all = resolvedColumns.value
+  if (!props.virtualizeColumns) return { start: 0, end: all.length }
+  const metrics = scroll.state.value
+  return layout.findColumnRange(metrics.scrollLeft, metrics.viewportWidth, props.overscan)
+})
+
+/**
+ * Las columnas que el pool debe pintar en este frame.
+ *
+ * El `slice` asigna un array nuevo por frame, pero de ~15 elementos: es
+ * irrelevante frente a evitar que el pool tenga que decidir por celda si le toca
+ * pintar o no.
+ */
+const visibleColumns = computed<readonly ResolvedColumn<TRow>[]>(() =>
+  resolvedColumns.value.slice(columnRange.value.start, columnRange.value.end),
+)
+
+/* ------------------------------------------------------------------- Pool */
+
+const pool = useRowPool<TRow>({
+  onCellDoubleClick: (position) => {
+    editor.beginEdit(position)
+  },
+  onRowClick: (rowIndex) => {
+    const row = props.rows[rowIndex]
+    if (row === undefined) return
+    emit('rowClick', { row, rowIndex })
+  },
+  onCellPointerDown: (position) => {
+    // Un clic simple SELECCIONA. No abre el editor: eso lo hacen el doble clic,
+    // Enter y F2.
+    if (props.selectionMode === 'none') return
+    selectCell(position)
+  },
+  onCellToggle: (position, nextValue) => {
+    editor.commitValue(position, nextValue)
+  },
+})
+
+/** Valor actual de una celda, para poder alternarlo desde el teclado. */
+function readCurrentValue(position: CellPosition): CellValue {
+  const row = props.rows[position.rowIndex]
+  const column = layout.getResolvedColumn(position.columnKey)?.column
+  if (row === undefined || !column) return undefined
+  return readCellValue(column, row)
+}
+
+/* --------------------------------------------------------------- Selección */
+
+/**
+ * Celda activa: controlada o no controlada, igual que el trío de columnas.
+ *
+ * La comparación es contra `undefined` y no contra un valor falsy, porque `null`
+ * es un estado legítimo del modo controlado: significa "el padre manda y ahora
+ * mismo no hay nada seleccionado". Confundirlos haría que un padre que limpia la
+ * selección perdiera el control sobre ella.
+ */
+const internalActiveCell = shallowRef<CellPosition | null>(null)
+
+const activeCell = computed<CellPosition | null>(() =>
+  props.activeCell !== undefined ? props.activeCell : internalActiveCell.value,
+)
+
+/** Índice de la columna activa dentro de las columnas VISIBLES, o -1. */
+const activeColumnIndex = computed(() => {
+  const current = activeCell.value
+  if (!current) return -1
+  return resolvedColumns.value.findIndex((column) => column.key === current.columnKey)
+})
+
+/**
+ * Fija la celda activa y avisa.
+ *
+ * Emite siempre, incluso sin controlar, para que un consumidor pueda escuchar la
+ * selección sin tomar posesión del estado.
+ */
+function selectCell(position: CellPosition | null): void {
+  const current = activeCell.value
+  if (
+    (current === null && position === null) ||
+    (current !== null &&
+      position !== null &&
+      current.rowIndex === position.rowIndex &&
+      current.columnKey === position.columnKey)
+  ) {
+    return
+  }
+
+  if (props.activeCell === undefined) internalActiveCell.value = position
+  emit('update:activeCell', position)
+
+  if (!position) return
+
+  const row = props.rows[position.rowIndex]
+  const column = layout.getResolvedColumn(position.columnKey)?.column
+  if (row === undefined || !column) return
+
+  emit('cellSelect', {
+    row,
+    rowIndex: position.rowIndex,
+    column,
+    columnKey: position.columnKey,
+    value: readCellValue(column, row),
+  })
+}
+
+/**
+ * Desplaza lo MÍNIMO necesario para que una celda quede visible.
+ *
+ * Mínimo y no centrado: centrar mueve la vista incluso cuando la celda ya estaba
+ * a la vista, y al navegar con flechas eso produce un salto en cada tecla que
+ * desorienta. Con el ajuste mínimo, moverse dentro de la ventana no desplaza
+ * nada y llegar al borde corre exactamente una fila o una columna.
+ *
+ * Se leen las métricas VIVAS y no el espejo reactivo: el espejo se publica una
+ * vez por frame y podría estar un frame atrasado, lo que haría calcular el
+ * desplazamiento contra una posición que ya cambió. Escribir el scroll dispara
+ * el evento nativo, así que el repintado sigue el camino de siempre y no pelea
+ * con el acelerador de rAF.
+ */
+function scrollToCell(position: CellPosition): void {
+  const metrics = scroll.live
+  const height = rowHeight.value
+
+  const rowTop = position.rowIndex * height
+  const rowBottom = rowTop + height
+  let top = metrics.scrollTop
+  if (rowTop < top) top = rowTop
+  else if (rowBottom > top + metrics.viewportHeight) top = rowBottom - metrics.viewportHeight
+
+  let left = metrics.scrollLeft
+  const column = layout.getResolvedColumn(position.columnKey)
+  if (column) {
+    const columnRight = column.offset + column.width
+    if (column.offset < left) left = column.offset
+    else if (columnRight > left + metrics.viewportWidth) left = columnRight - metrics.viewportWidth
+  }
+
+  top = Math.max(0, top)
+  left = Math.max(0, left)
+  if (top === metrics.scrollTop && left === metrics.scrollLeft) return
+  scroll.scrollTo({ top, left })
+}
+
+/* ---------------------------------------------- Navegación con el teclado */
+
+/** Cantidad de filas que entran enteras en el viewport. Mínimo 1. */
+function pageSize(): number {
+  const rows = Math.floor(scroll.live.viewportHeight / rowHeight.value)
+  return Math.max(1, rows)
+}
+
+/**
+ * Mueve la selección a una coordenada de la grilla y la trae a la vista.
+ *
+ * Trabaja sobre las columnas RESUELTAS, que ya excluyen las ocultas y respetan
+ * el orden vigente. Navegar sobre la prop `columns` haría que una flecha se
+ * detuviera en una columna invisible y pareciera que la tecla no funciona.
+ */
+function moveActiveTo(rowIndex: number, columnIndex: number): void {
+  const columns = resolvedColumns.value
+  const rowCount = props.rows.length
+  if (columns.length === 0 || rowCount === 0) return
+
+  const clampedRow = Math.min(Math.max(rowIndex, 0), rowCount - 1)
+  const clampedColumn = Math.min(Math.max(columnIndex, 0), columns.length - 1)
+  const column = columns[clampedColumn]
+  if (!column) return
+
+  const position: CellPosition = { rowIndex: clampedRow, columnKey: column.key }
+  selectCell(position)
+  scrollToCell(position)
+}
+
+/** Mueve la selección relativa a donde está. Se acota en los bordes, no da la vuelta. */
+function moveActiveBy(rowDelta: number, columnDelta: number): void {
+  const current = activeCell.value
+  const rowIndex = current ? current.rowIndex : 0
+  const columnIndex = current ? Math.max(activeColumnIndex.value, 0) : 0
+  moveActiveTo(rowIndex + rowDelta, columnIndex + columnDelta)
+}
+
+/**
+ * Avanza o retrocede una celda en orden de lectura.
+ *
+ * A diferencia de las flechas, acá sí se pasa a la fila siguiente o anterior al
+ * llegar al borde: es lo que hace Tab en un formulario y en una planilla, y es
+ * lo que permite recorrer la tabla entera sin levantar la mano del teclado.
+ */
+function moveActiveInReadingOrder(forward: boolean): void {
+  const columns = resolvedColumns.value
+  const rowCount = props.rows.length
+  if (columns.length === 0 || rowCount === 0) return
+
+  const current = activeCell.value
+  const rowIndex = current ? current.rowIndex : 0
+  const columnIndex = current ? Math.max(activeColumnIndex.value, 0) : 0
+
+  if (forward) {
+    if (columnIndex < columns.length - 1) moveActiveTo(rowIndex, columnIndex + 1)
+    else if (rowIndex < rowCount - 1) moveActiveTo(rowIndex + 1, 0)
+    return
+  }
+
+  if (columnIndex > 0) moveActiveTo(rowIndex, columnIndex - 1)
+  else if (rowIndex > 0) moveActiveTo(rowIndex - 1, columns.length - 1)
+}
+
+/** Abre el editor sobre la celda activa, o alterna si es una casilla. */
+function editActiveCell(initialText?: string): void {
+  const position = activeCell.value
+  if (!position) return
+
+  // Una casilla no abre control flotante: se alterna por la misma tubería que
+  // usa el clic, veto incluido.
+  if (editor.resolveEditorType(position) === 'checkbox') {
+    editor.commitValue(position, !(readCurrentValue(position) === true))
+    return
+  }
+
+  editor.beginEdit(position, initialText)
+}
+
+/**
+ * Manejador de teclado de la grilla.
+ *
+ * Vive en el viewport y opera sobre la celda ACTIVA, no sobre el nodo enfocado.
+ * Los nodos se reciclan al scrollear, así que el foco del DOM no es un lugar
+ * confiable donde guardar "dónde está parado el usuario"; la posición activa es
+ * estado del componente y sobrevive a cualquier repintado.
+ */
+function onViewportKeyDown(event: KeyboardEvent): void {
+  // Mientras se edita, las teclas son del control: Enter y Escape ya las
+  // consume el editor, que además detiene su propagación.
+  if (editor.editing.value) return
+
+  const rowCount = props.rows.length
+  if (rowCount === 0) return
+
+  const ctrl = event.ctrlKey || event.metaKey
+  const columns = resolvedColumns.value
+  const lastRow = rowCount - 1
+  const lastColumn = Math.max(0, columns.length - 1)
+
+  switch (event.key) {
+    case 'ArrowDown':
+      event.preventDefault()
+      moveActiveBy(1, 0)
+      return
+    case 'ArrowUp':
+      event.preventDefault()
+      moveActiveBy(-1, 0)
+      return
+    case 'ArrowRight':
+      event.preventDefault()
+      moveActiveBy(0, 1)
+      return
+    case 'ArrowLeft':
+      event.preventDefault()
+      moveActiveBy(0, -1)
+      return
+    case 'Tab':
+      event.preventDefault()
+      moveActiveInReadingOrder(!event.shiftKey)
+      return
+    case 'Home':
+      event.preventDefault()
+      if (ctrl) moveActiveTo(0, 0)
+      else moveActiveBy(0, -Number.MAX_SAFE_INTEGER)
+      return
+    case 'End':
+      event.preventDefault()
+      if (ctrl) moveActiveTo(lastRow, lastColumn)
+      else moveActiveTo(activeCell.value?.rowIndex ?? 0, lastColumn)
+      return
+    case 'PageDown':
+      event.preventDefault()
+      moveActiveBy(pageSize(), 0)
+      return
+    case 'PageUp':
+      event.preventDefault()
+      moveActiveBy(-pageSize(), 0)
+      return
+    case 'Enter':
+    case 'F2':
+      event.preventDefault()
+      editActiveCell()
+      return
+    case 'Escape':
+      // Sin editor abierto, Escape no limpia la selección: perder de vista
+      // dónde estabas parado es más molesto que seguir seleccionado.
+      return
+    default:
+      break
+  }
+
+  // Escribir para editar. Se exige exactamente un carácter para descartar
+  // nombres de tecla como "ArrowUp" o "F5", y se excluyen los modificadores
+  // —menos Shift, que solo cambia el carácter— para no secuestrar los atajos
+  // del navegador.
+  if (event.key.length !== 1 || ctrl || event.altKey) return
+  const position = activeCell.value
+  if (!position) return
+  event.preventDefault()
+  editActiveCell(event.key)
+}
+
+/**
+ * Forma de los listeners del viewport.
+ *
+ * La clave es OPCIONAL, no de tipo `Fn | undefined`: la diferencia es
+ * justamente el punto. Con `Record<string, Fn>` habría que producir un valor
+ * para `keydown` siempre, y con `Record<string, Fn | undefined>` se produciría
+ * la clave con valor indefinido. Acá, en modo `none`, la clave no existe y Vue
+ * no tiene nada que registrar.
+ */
+interface ViewportListeners {
+  keydown?: (event: KeyboardEvent) => void
+}
+
+/**
+ * Listeners del viewport, como objeto para `v-on`.
+ *
+ * En modo `none` el objeto viene vacío y no se registra ningún listener de
+ * teclado: no es un early return adentro del manejador, es que no hay manejador.
+ *
+ * Se usa la forma de objeto y no `@keydown="expr"` porque el compilador de Vue
+ * envuelve los manejadores en una closure cacheada, así que un `undefined`
+ * igual terminaría registrando un listener que no hace nada. Con `v-on` sobre un
+ * objeto, la clave simplemente no existe.
+ */
+const viewportListeners = computed<ViewportListeners>(() => {
+  if (props.selectionMode === 'none') return {}
+  return { keydown: onViewportKeyDown }
+})
+
+/* ----------------------------------------------------------------- Editor */
+
+function getColumnDefinition(columnKey: string): DataTableColumn<TRow> | undefined {
+  return layout.getResolvedColumn(columnKey)?.column
+}
+
+/**
+ * Geometría de una celda en coordenadas del canvas.
+ *
+ * Se calcula con aritmética pura sobre el layout ya resuelto, sin leer el DOM:
+ * un `getBoundingClientRect` aquí forzaría layout en cada frame mientras hay una
+ * celda en edición.
+ */
+function getCellGeometry(position: CellPosition): CellGeometry | null {
+  const resolved = layout.getResolvedColumn(position.columnKey)
+  if (!resolved) return null
+  return {
+    x: resolved.offset,
+    y: position.rowIndex * rowHeight.value,
+    width: resolved.width,
+    height: rowHeight.value,
+  }
+}
+
+const editor = useCellEditor<TRow>({
+  host: editorHostEl,
+  getRow: (rowIndex) => props.rows[rowIndex],
+  getColumn: getColumnDefinition,
+  getCellGeometry,
+  isCellPainted: (position) => pool.getCellElement(position.rowIndex, position.columnKey) !== null,
+  emitBeforeEdit: (event) => emit('beforeEdit', event),
+  emitAfterEdit: (event) => emit('afterEdit', event),
+  emitEditCommit: (event) => emit('editCommit', event),
+  onEnterCommit: () => {
+    // Enter confirma y baja una fila, como en una planilla. La selección se
+    // mueve aunque el padre no persista el valor: es navegación, no edición.
+    moveActiveBy(1, 0)
+  },
+})
+
+/* ------------------------------------------------------------------ Pintado */
+
+/** Resuelve la clave estable de una fila para `data-row-key`. */
+function resolveRowKey(row: TRow, index: number): string {
+  const key = props.rowKey
+  if (typeof key === 'function') return String(key(row, index))
+  return String(row[key])
+}
+
+/**
+ * Pinta un frame completo.
+ *
+ * Se invoca desde el `requestAnimationFrame` de `useScrollSync`, siempre después
+ * de que el espejo reactivo del scroll quedó publicado. Los `computed` que se
+ * leen aquí son perezosos: se resuelven en este instante, con los valores de
+ * este frame.
+ */
+function paintFrame(): void {
+  pool.paint({
+    rows: props.rows,
+    rowRange: rowVirtual.window.value,
+    columns: visibleColumns.value,
+    rowHeight: rowHeight.value,
+    editing: editor.editing.value,
+    active: activeCell.value,
+    selectionMode: props.selectionMode,
+    stripe: props.stripe,
+    resolveRowKey,
+  })
+  // Después del pool: `syncPosition` consulta si la celda editada sigue pintada,
+  // y esa respuesta solo es válida una vez que el pool corrió.
+  editor.syncPosition()
+}
+
+/**
+ * Todo lo que obliga a repintar y no pasa por el scroll.
+ *
+ * Se agenda el mismo `requestAnimationFrame` que usa el scroll en lugar de
+ * pintar en el acto: varios cambios en el mismo tick colapsan en un solo
+ * pintado, y ese pintado cae alineado con el compositor.
+ */
+watch(
+  [
+    () => props.rows,
+    () => props.columns,
+    () => props.stripe,
+    () => props.virtualizeColumns,
+    rowHeight,
+    // `resolvedColumns` cubre visibilidad, orden y anchos de una sola vez: es un
+    // array nuevo en cada recálculo. `totalWidth` por sí solo no alcanzaría,
+    // porque intercambiar dos columnas del mismo ancho no lo mueve.
+    resolvedColumns,
+    editor.editing,
+    // Mover la selección tiene que agendar un frame; sin esto la marca no se
+    // pintaría hasta el próximo scroll.
+    activeCell,
+    () => props.selectionMode,
+  ],
+  () => scroll.requestFrame(),
+  { flush: 'post' },
+)
+
+/**
+ * Recorta el pool cuando el viewport se achica.
+ *
+ * Es el único momento en que el pool puede encoger: hacerlo durante el scroll
+ * destruiría los nodos que el frame siguiente va a volver a pedir.
+ */
+watch(
+  () => scroll.state.value.viewportHeight,
+  (height) => {
+    pool.trim(Math.ceil(height / rowHeight.value) + props.overscan * 2 + 1)
+  },
+)
+
+/* ------------------------------------------ Redimensionado de columnas */
+
+/**
+ * Arrastre del handle de redimensionado.
+ *
+ * Con `setPointerCapture` los eventos siguen llegando al handle aunque el cursor
+ * salga de él, lo que evita tener que escuchar en `document` y perder el
+ * arrastre al soltar fuera de la ventana.
+ */
+function onResizePointerDown(event: PointerEvent, column: ResolvedColumn<TRow>): void {
+  const handle = event.currentTarget
+  if (!(handle instanceof HTMLElement)) return
+
+  event.preventDefault()
+  event.stopPropagation()
+  handle.setPointerCapture(event.pointerId)
+
+  const startX = event.clientX
+  const startWidth = column.width
+  // Se recuerda el último ancho aplicado en lugar de releerlo del layout al
+  // soltar: en modo controlado el padre puede no haber actualizado la prop
+  // todavía, y la relectura devolvería el ancho viejo.
+  let appliedWidth = startWidth
+
+  // Los listeners se declaran como `const` con función flecha y no como
+  // declaraciones de función: una `function` se iza al tope del scope, y para
+  // TypeScript eso significa que se creó antes del `instanceof` de más arriba,
+  // por lo que dentro de su cuerpo `handle` volvería a ser `EventTarget | null`.
+  // Declarándolos después del estrechamiento, el tipo `HTMLElement` sobrevive y
+  // `addEventListener` resuelve su sobrecarga tipada.
+  const onPointerMove = (moveEvent: PointerEvent): void => {
+    appliedWidth = layout.setColumnWidth(column.key, startWidth + (moveEvent.clientX - startX))
+  }
+
+  const onPointerUp = (upEvent: PointerEvent): void => {
+    handle.removeEventListener('pointermove', onPointerMove)
+    handle.removeEventListener('pointerup', onPointerUp)
+    handle.removeEventListener('pointercancel', onPointerUp)
+    if (handle.hasPointerCapture(upEvent.pointerId)) handle.releasePointerCapture(upEvent.pointerId)
+
+    // Solo se emite ante un cambio real: un click sin arrastre no es un resize.
+    if (appliedWidth === startWidth) return
+    emit('columnResize', { columnKey: column.key, width: appliedWidth, previousWidth: startWidth })
+  }
+
+  handle.addEventListener('pointermove', onPointerMove)
+  handle.addEventListener('pointerup', onPointerUp)
+  handle.addEventListener('pointercancel', onPointerUp)
+}
+
+/* ------------------------------------------------------------ API imperativa */
+
+/** Scrollea hasta dejar `index` como primera fila visible. */
+function scrollToRow(index: number): void {
+  const maxIndex = Math.max(0, props.rows.length - 1)
+  const clamped = Math.min(Math.max(Math.floor(index), 0), maxIndex)
+  scroll.scrollTo({ top: clamped * rowHeight.value })
+}
+
+/** Scrollea hasta dejar la columna en el borde izquierdo. */
+function scrollToColumn(key: string): void {
+  const resolved = layout.getResolvedColumn(key)
+  if (!resolved) return
+  scroll.scrollTo({ left: resolved.offset })
+}
+
+/**
+ * Fuerza un repintado completo.
+ *
+ * No es necesario para mutaciones de datos: el caché del pool se indexa por el
+ * valor crudo de cada celda y detecta esos cambios por su cuenta. Sí lo es
+ * cuando `format` o `cellClass` cambian su salida por estado externo capturado
+ * por closure, donde las entradas del caché son idénticas y el resultado no.
+ */
+function refresh(): void {
+  pool.invalidate()
+  scroll.requestFrame()
+}
+
+/**
+ * Descarta el layout guardado y vuelve al estado por defecto.
+ *
+ * Es el "restablecer columnas" que toda tabla configurable necesita: borrar el
+ * almacenamiento sin limpiar el estado vivo dejaría al usuario mirando la misma
+ * configuración que quiso descartar hasta el próximo reload.
+ */
+function resetLayout(): void {
+  persistence.clear()
+  setColumnVisibility({})
+  setColumnWidths({})
+  setColumnOrder([])
+}
+
+/** Escribe de inmediato el layout pendiente por el debounce. */
+function flushPersistence(): void {
+  persistence.flush()
+}
+
+/**
+ * Fija la celda activa desde fuera del componente.
+ *
+ * Se diferencia del `selectCell` interno en que además trae la celda a la vista:
+ * quien la llama por código —un resultado de búsqueda, un enlace profundo— no
+ * tiene forma de saber si esa celda estaba dentro de la ventana.
+ */
+function selectCellFromApi(position: CellPosition | null): void {
+  selectCell(position)
+  if (position) scrollToCell(position)
+}
+
+defineExpose({
+  scrollToRow,
+  scrollToColumn,
+  scrollToCell,
+  selectCell: selectCellFromApi,
+  refresh,
+  resetLayout,
+  flushPersistence,
+})
+
+/* ------------------------------------------------------------- Ciclo de vida */
+
+onMounted(() => {
+  const canvas = canvasEl.value
+  if (canvas) pool.mount(canvas)
+  scroll.requestFrame()
+})
+
+onBeforeUnmount(() => {
+  // `useScrollSync` y `useCellEditor` limpian lo suyo con sus propios hooks; el
+  // pool no es un composable de Vue, así que se desmonta explícitamente.
+  pool.unmount()
+})
+
+/* --------------------------------------------------------------- Presentación */
+
+const rootStyle = computed(() => ({
+  '--dt-row-height': `${rowHeight.value}px`,
+  '--dt-header-height': `${headerHeight.value}px`,
+}))
+
+const canvasStyle = computed(() => ({
+  width: `${totalWidth.value}px`,
+  height: `${rowVirtual.totalSize.value}px`,
+}))
+
+function headerAlignClass(column: ResolvedColumn<TRow>): string | undefined {
+  if (column.align === 'center') return 'dt-header-cell--center'
+  if (column.align === 'right') return 'dt-header-cell--right'
+  return undefined
+}
+</script>
+
+<template>
+  <div
+    class="dt-root"
+    :style="rootStyle"
+    :data-dense="dense ? 'true' : 'false'"
+    :data-theme="theme"
+    :data-bordered="bordered ? 'true' : 'false'"
+    :data-selection="selectionMode"
+  >
+    <div class="dt-header">
+      <!--
+        Las celdas de header las renderiza Vue: son pocas y cambian solo cuando
+        cambia la configuración de columnas. El scroll horizontal no las vuelve a
+        diferenciar, se resuelve con un único transform sobre este contenedor.
+      -->
+      <div ref="headerInnerEl" class="dt-header-inner" :style="{ width: `${totalWidth}px` }">
+        <div
+          v-for="column in resolvedColumns"
+          :key="column.key"
+          class="dt-header-cell"
+          :class="[
+            headerAlignClass(column),
+            { 'dt-header-cell--active': column.key === activeCell?.columnKey },
+          ]"
+          :style="{
+            transform: `translate3d(${column.offset}px, 0, 0)`,
+            width: `${column.width}px`,
+          }"
+          :title="column.label"
+        >
+          <span class="dt-header-label">{{ column.label }}</span>
+          <span
+            v-if="column.resizable"
+            class="dt-resize-handle"
+            role="separator"
+            aria-orientation="vertical"
+            @pointerdown="onResizePointerDown($event, column)"
+          />
+        </div>
+      </div>
+    </div>
+
+    <!--
+      El viewport es la grilla accesible y el que recibe el teclado. En modo
+      `none` el manejador es `undefined`, y entonces Vue directamente no
+      registra el listener.
+    -->
+    <div
+      ref="viewportEl"
+      class="dt-viewport"
+      role="grid"
+      :tabindex="selectionMode === 'none' ? -1 : 0"
+      :aria-rowcount="rows.length + 1"
+      :aria-colcount="resolvedColumns.length"
+      v-on="viewportListeners"
+    >
+      <!-- El canvas solo dimensiona la barra de scroll. Sus hijos los inyecta useRowPool. -->
+      <div ref="canvasEl" class="dt-canvas" :style="canvasStyle" />
+      <!--
+        Host de los controles de edición. Vue lo renderiza una vez y nunca toca
+        sus hijos: useCellEditor monta ahí un control por tipo, de forma
+        perezosa. Al vivir dentro del viewport que scrollea, los controles
+        acompañan al scroll sin reposicionarse.
+      -->
+      <div ref="editorHostEl" class="dt-editor-host" />
+    </div>
+
+    <div v-if="rows.length === 0" class="dt-empty">{{ emptyText }}</div>
+  </div>
+</template>

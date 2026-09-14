@@ -1,0 +1,93 @@
+{
+  "name": "datagrid-vue",
+  "version": "0.1.0",
+  "description": "High-performance virtualized data grid for Vue 3, with DOM node recycling, cell editing, custom renderers and persistent column layout.",
+  "license": "MIT",
+  "author": "jorge-koki",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jorge-koki/datagrid-vue.git"
+  },
+  "homepage": "https://github.com/jorge-koki/datagrid-vue#readme",
+  "bugs": {
+    "url": "https://github.com/jorge-koki/datagrid-vue/issues"
+  },
+  "keywords": [
+    "vue",
+    "vue3",
+    "datagrid",
+    "datatable",
+    "virtual-scroll",
+    "virtualization",
+    "table",
+    "grid",
+    "typescript",
+    "nuxt-ui"
+  ],
+  "type": "module",
+  "sideEffects": [
+    "*.css",
+    "**/*.css"
+  ],
+  "files": [
+    "dist"
+  ],
+  "main": "./dist/datagrid-vue.js",
+  "module": "./dist/datagrid-vue.js",
+  "types": "./dist/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/types/index.d.ts",
+      "import": "./dist/datagrid-vue.js"
+    },
+    "./style.css": "./dist/style.css",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "run-p type-check \"build-only {@}\" --",
+    "preview": "vite preview",
+    "build-only": "vite build",
+    "build:lib": "run-s build:lib-bundle build:lib-types",
+    "build:lib-bundle": "vite build --mode lib",
+    "build:lib-types": "vue-tsc -p tsconfig.lib.json",
+    "type-check": "vue-tsc --build",
+    "format": "oxfmt src/",
+    "prepare": "npm run build:lib"
+  },
+  "peerDependencies": {
+    "vue": "^3.5.0 || >=3.6.0-0"
+  },
+  "devDependencies": {
+    "@tsconfig/node24": "^24.0.4",
+    "@types/node": "^24.13.3",
+    "@vitejs/plugin-vue": "^6.0.8",
+    "@vitejs/plugin-vue-jsx": "^5.1.6",
+    "@vue/tsconfig": "^0.9.1",
+    "npm-run-all2": "^9.0.2",
+    "oxfmt": "^0.59.0",
+    "typescript": "~6.0.0",
+    "vite": "^8.1.5",
+    "vite-plugin-vue-devtools": "^8.1.5",
+    "vue": "rc",
+    "vue-tsc": "^3.3.7"
+  },
+  "engines": {
+    "node": "^22.18.0 || >=24.12.0"
+  },
+  "overrides": {
+    "vue": "rc",
+    "@vue/compiler-core": "rc",
+    "@vue/compiler-dom": "rc",
+    "@vue/compiler-sfc": "rc",
+    "@vue/compiler-ssr": "rc",
+    "@vue/compiler-vapor": "rc",
+    "@vue/reactivity": "rc",
+    "@vue/runtime-core": "rc",
+    "@vue/runtime-dom": "rc",
+    "@vue/runtime-vapor": "rc",
+    "@vue/server-renderer": "rc",
+    "@vue/shared": "rc",
+    "@vue/compat": "rc"
+  }
+}
