@@ -8,11 +8,14 @@ import { DataTable, DataTableColumnToggle } from '@/components/ui/datatable'
 import type {
   AfterEditEvent,
   BeforeEditEvent,
+  CellPosition,
+  CellSelectEvent,
   CellValue,
   ColumnVisibilityState,
   DataTableInstance,
   DataTableTheme,
   EditCommitEvent,
+  SelectionMode,
 } from '@/components/ui/datatable'
 import { createProjects } from './demo/data'
 import type { ProjectRow } from './demo/data'
@@ -45,11 +48,6 @@ const rowCount = shallowRef<number>(ROW_COUNTS[0])
  */
 const rows = shallowRef<readonly ProjectRow[]>(createProjects(rowCount.value))
 
-watch(rowCount, (count) => {
-  rows.value = createProjects(count)
-  logEvent('info', `Regenerated dataset with ${count.toLocaleString('en-US')} rows`)
-})
-
 /* --------------------------------------------------------------- Controles */
 
 const theme = shallowRef<DataTableTheme>('auto')
@@ -66,6 +64,42 @@ const columnVisibility = shallowRef<ColumnVisibilityState>({})
 
 const table = useTemplateRef<DataTableInstance>('table')
 const tableHost = useTemplateRef<HTMLElement>('tableHost')
+
+/* --------------------------------------------------------------- Selección */
+
+const selectionMode = shallowRef<SelectionMode>('cell')
+
+/**
+ * Celda activa, controlada por el padre.
+ *
+ * Con `v-model:active-cell` el estado vive acá y se puede mostrar en pantalla.
+ * Sin controlar, la tabla lo mantendría internamente y funcionaría igual: se
+ * controla solamente para poder exhibirlo.
+ */
+const activeCell = shallowRef<CellPosition | null>(null)
+
+/**
+ * `selectionMode: 'none'` apaga las vías de entrada del usuario, pero no borra
+ * una selección ya existente. Se limpia desde acá para que el control haga lo
+ * que su etiqueta promete.
+ */
+watch(selectionMode, (mode) => {
+  if (mode === 'none') activeCell.value = null
+})
+
+watch(rowCount, (count) => {
+  rows.value = createProjects(count)
+  // La celda activa apunta a un índice del dataset anterior: al regenerarlo
+  // podría quedar fuera de rango. Como acá la selección está controlada, basta
+  // con limpiarla.
+  activeCell.value = null
+  logEvent('info', `Regenerated dataset with ${count.toLocaleString('en-US')} rows`)
+})
+
+/** Un clic simple selecciona; el editor lo abren el doble clic, Enter y F2. */
+function onCellSelect(event: CellSelectEvent<ProjectRow>): void {
+  logEvent('select', `${event.row.id} · ${event.columnKey} = ${describe(event.value)}`)
+}
 
 /**
  * El tema `auto` del componente sigue a una clase del documento y, si no la hay,
@@ -139,8 +173,9 @@ function onAfterEdit(event: AfterEditEvent<ProjectRow>): void {
     <header class="demo-header">
       <h1>DataTable</h1>
       <p>
-        A virtualized Vue 3 table. Vue owns the structure and the config; a recycled DOM node pool
-        owns the scroll hot path. Change the row count and watch the node counters stay flat.
+        A virtualized Vue 3 grid. Vue owns the structure and the config; a recycled DOM node pool
+        owns the scroll hot path. Change the row count and watch the node counters stay flat while
+        the dataset grows 500×.
       </p>
     </header>
 
@@ -163,6 +198,15 @@ function onAfterEdit(event: AfterEditEvent<ProjectRow>): void {
         </select>
       </label>
 
+      <label class="demo-field">
+        <span>Selection</span>
+        <select v-model="selectionMode">
+          <option value="cell">Cell</option>
+          <option value="row">Row</option>
+          <option value="none">None</option>
+        </select>
+      </label>
+
       <label class="demo-field demo-field--inline">
         <input v-model="dense" type="checkbox" />
         <span>Dense</span>
@@ -173,20 +217,33 @@ function onAfterEdit(event: AfterEditEvent<ProjectRow>): void {
       <button type="button" class="demo-button" @click="resetLayout">Reset layout</button>
     </section>
 
+    <p class="demo-hint">
+      Click a cell to select it, then navigate with <kbd>↑</kbd> <kbd>↓</kbd> <kbd>←</kbd>
+      <kbd>→</kbd>, <kbd>Tab</kbd>, <kbd>Home</kbd> / <kbd>End</kbd>, <kbd>Ctrl</kbd>+<kbd
+        >Home</kbd
+      >
+      / <kbd>End</kbd> and <kbd>PgUp</kbd> / <kbd>PgDn</kbd>. Edit with a double-click,
+      <kbd>Enter</kbd> or <kbd>F2</kbd> — or just start typing. <kbd>Esc</kbd> discards the edit and
+      keeps the selection.
+    </p>
+
     <div ref="tableHost" class="demo-table">
       <DataTable
         ref="table"
         v-model:column-visibility="columnVisibility"
+        v-model:active-cell="activeCell"
         :rows="rows"
         :columns="projectColumns"
         row-key="id"
         :theme="theme"
         :dense="dense"
+        :selection-mode="selectionMode"
         table-id="demo-projects"
         persist
         stripe
         bordered
         empty-text="No projects"
+        @cell-select="onCellSelect"
         @before-edit="onBeforeEdit"
         @edit-commit="onEditCommit"
         @after-edit="onAfterEdit"
@@ -194,7 +251,7 @@ function onAfterEdit(event: AfterEditEvent<ProjectRow>): void {
     </div>
 
     <section class="demo-panels">
-      <DemoStats :host="tableHost" :row-count="rows.length" />
+      <DemoStats :host="tableHost" :row-count="rows.length" :active-cell="activeCell" />
       <DemoEventLog :entries="eventLog" />
     </section>
   </main>

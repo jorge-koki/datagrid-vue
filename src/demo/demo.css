@@ -46,6 +46,7 @@ body {
   --dt-color-red: #b91c1c;
   --dt-color-amber: #b45309;
   --dt-color-green: #15803d;
+  --dt-color-purple: #7e22ce;
   --dt-color-neutral: #4b5563;
 
   display: flex;
@@ -74,6 +75,7 @@ body {
   --dt-color-red: #f87171;
   --dt-color-amber: #fbbf24;
   --dt-color-green: #4ade80;
+  --dt-color-purple: #c084fc;
   --dt-color-neutral: #9ca3af;
 }
 
@@ -91,6 +93,7 @@ body {
     --dt-color-red: #f87171;
     --dt-color-amber: #fbbf24;
     --dt-color-green: #4ade80;
+    --dt-color-purple: #c084fc;
     --dt-color-neutral: #9ca3af;
   }
 }
@@ -149,6 +152,29 @@ body {
   margin: 0;
 }
 
+/* ------------------------------------------------------------------- Ayuda */
+
+.demo-hint {
+  margin: 0;
+  max-width: 88ch;
+  color: var(--dt-text-muted);
+}
+
+.demo-hint kbd {
+  display: inline-block;
+  min-width: 1.5rem;
+  padding: 0 0.25rem;
+  border: 1px solid var(--dt-border);
+  border-bottom-width: 2px;
+  border-radius: 0.25rem;
+  background: var(--dt-bg-elevated);
+  color: var(--dt-text);
+  font-family: inherit;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  text-align: center;
+}
+
 /* ------------------------------------------------------------------ Tabla */
 
 .demo-table {
@@ -201,10 +227,22 @@ body {
   flex-direction: column;
 }
 
+/* La celda activa es texto, no un número: ocupa la fila entera de la grilla. */
+.demo-stat--wide {
+  grid-column: 1 / -1;
+}
+
 .demo-stat-value {
   font-size: 1.125rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
+}
+
+.demo-stat-value--text {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 0.9375rem;
 }
 
 .demo-stat-label {
@@ -266,6 +304,11 @@ body {
 .demo-log-kind[data-kind='info'] {
   color: var(--dt-color-blue);
   background: color-mix(in srgb, var(--dt-color-blue) 16%, transparent);
+}
+
+.demo-log-kind[data-kind='select'] {
+  color: var(--dt-color-purple);
+  background: color-mix(in srgb, var(--dt-color-purple) 16%, transparent);
 }
 
 .demo-log-message {

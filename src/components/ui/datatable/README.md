@@ -50,6 +50,10 @@ const columns: readonly DataTableColumn<Invoice>[] = [
 The component fills its container; it has no height of its own. Wrap it in something with a height or
 you will see an empty box.
 
+That is already a working grid: cell selection and full keyboard navigation are on by default
+(`selectionMode: 'cell'`). Click the table and use the arrow keys. Turn it off with
+`selection-mode="none"`.
+
 > **Use `shallowRef` for `rows`, not `ref`.** A deep `ref` wraps every row in a reactive Proxy. The
 > table never needs per-row reactivity — only to know that the array was replaced.
 
@@ -74,7 +78,7 @@ and your bundler deduplicates it.
 ### Path B — install the package from GitHub
 
 ```sh
-npm install github:<your-user>/<your-repo>
+npm install github:jorge-koki/datagrid-vue
 ```
 
 ```ts
@@ -90,6 +94,10 @@ breaks SSR (the bundle would touch `document` on import) and takes away your abi
 The package ships ESM only, with `vue` as a peer dependency — it is never bundled. Two copies of Vue
 in one application break reactivity in ways that are close to undebuggable: effects register on one
 runtime and fire from the other.
+
+`dist/` is not committed, so the package builds itself at install time through the `prepare` script
+that npm runs for git dependencies. Nothing extra to do on your side; it just means the install takes
+a couple of seconds longer than a registry install would.
 
 **If your project does not already declare `*.css` modules for TypeScript**, add a
 `declare module '*.css';` to a `.d.ts`. The emitted `DataTable.vue.d.ts` carries the SFC's
@@ -212,11 +220,13 @@ function onEditCommit(event: EditCommitEvent<Invoice>): void {
 | `columnWidths`       | `Readonly<Record<string, number>>`                               | _uncontrolled_           | `v-model:column-widths`. Overrides `column.width`, always clamped by `minWidth` / `maxWidth`.                                                       |
 | `tableId`            | `string`                                                         | —                        | Unique id for this table in your application. Required for persistence — it is what separates one table's layout from another's.                    |
 | `persist`            | `boolean \| DataTablePersistOptions`                             | `false`                  | Persist layout across sessions. `true` means `localStorage` with defaults. See [Persistence](#column-visibility-order-and-persistence).             |
+| `selectionMode`      | `'none' \| 'cell' \| 'row'`                                      | `'cell'`                 | What a click and the keyboard select. See [Selection](#selection-and-keyboard-navigation).                                                          |
+| `activeCell`         | `CellPosition \| null`                                           | _uncontrolled_           | `v-model:active-cell`. The currently selected cell. `null` means "controlled, nothing selected".                                                    |
 
 ### Controlled vs uncontrolled
 
-`columnVisibility`, `columnOrder` and `columnWidths` each work two ways, and the component serves
-both without branching internally:
+`columnVisibility`, `columnOrder`, `columnWidths` and `activeCell` each work two ways, and the
+component serves both without branching internally:
 
 - **Uncontrolled** (prop is `undefined`): the state lives in an internal ref and the table manages
   itself. This is the mode persistence uses.
@@ -225,6 +235,10 @@ both without branching internally:
   normal `v-model` semantics.
 
 The `update:*` event fires either way, so you can observe changes without taking ownership.
+
+> **`activeCell` distinguishes `undefined` from `null`.** `undefined` means uncontrolled; `null`
+> means controlled with nothing selected. If the check were on falsiness instead, a parent that
+> cleared the selection would silently hand control back to the component.
 
 ---
 
@@ -237,6 +251,8 @@ The `update:*` event fires either way, so you can observe changes without taking
 | `afterEdit`               | `AfterEditEvent<TRow>`              | An edit session ended, committed or not. Exactly once per opened editor.                |
 | `columnResize`            | `ColumnResizeEvent`                 | A resize drag ended with a different width. A click without a drag is not a resize.     |
 | `rowClick`                | `{ row: TRow; rowIndex: number }`   | Click anywhere on a painted row.                                                        |
+| `cellSelect`              | `CellSelectEvent<TRow>`             | The active cell moved to a real cell. Carries the row, column and resolved value.       |
+| `update:activeCell`       | `CellPosition \| null`              | The active cell changed, including to `null`. Fires before `cellSelect`.                |
 | `update:columnVisibility` | `Readonly<Record<string, boolean>>` | Visibility changed (UI, persistence load, or `resetLayout`).                            |
 | `update:columnOrder`      | `string[]`                          | Order changed.                                                                          |
 | `update:columnWidths`     | `Readonly<Record<string, number>>`  | Widths changed, including during a resize drag.                                         |
@@ -285,17 +301,156 @@ The new value is coerced back to the primitive type of the old value where that 
 editing a numeric column hands you a `number`, not a `string`. A `<select>` hands back the typed
 `option.value`, so a parent that stored `1` does not get `"1"`.
 
-**Keyboard and pointer triggers**
+**What opens and closes an editor**
 
-| Input                                           | Effect                                                          |
-| ----------------------------------------------- | --------------------------------------------------------------- |
-| Double-click a cell                             | Open the editor                                                 |
-| `Enter` or `F2` on a focused cell               | Open the editor; on a checkbox column, toggle the value         |
-| `Enter` in the editor                           | Commit                                                          |
-| `Escape` in the editor                          | Discard (still emits `afterEdit` with `canceled: true`)         |
-| Blur the editor                                 | Commit                                                          |
-| Change a `<select>` editor                      | Commit immediately                                              |
-| Scroll the edited row out of the virtual window | Commit and close — the node backing that cell has been recycled |
+A single click does **not** open the editor — it selects. The full key map lives in
+[Selection and keyboard navigation](#selection-and-keyboard-navigation); this table is only the part
+that touches editing.
+
+| Input                                           | Effect                                                                         |
+| ----------------------------------------------- | ------------------------------------------------------------------------------ |
+| Double-click a cell                             | Open the editor                                                                |
+| `Enter` or `F2` on the active cell              | Open the editor; on a checkbox column, toggle the value instead                |
+| Type a printable character on the active cell   | Open the editor seeded with that character (not for `select` / `date`)         |
+| `Enter` in the editor                           | Commit, then move the selection one row down                                   |
+| `Escape` in the editor                          | Discard (still emits `afterEdit` with `canceled: true`) and keep the selection |
+| Blur the editor                                 | Commit                                                                         |
+| Change a `<select>` editor                      | Commit immediately                                                             |
+| Scroll the edited row out of the virtual window | Commit and close — the node backing that cell has been recycled                |
+
+While an editor is open the grid's own key handler stands down completely: arrows, `Home`, `PageUp`
+and the rest belong to the control. `Enter` and `Escape` stop propagating, so closing the editor
+cannot immediately reopen it.
+
+---
+
+## Selection and keyboard navigation
+
+The model is a spreadsheet's: **one click selects, two clicks edit.** Selecting to read a value or to
+start navigating is far more common than editing, and requiring a double-click for it would cost an
+extra gesture in the common case.
+
+Selection is a `CellPosition` (`{ rowIndex, columnKey }`) held by the component, not DOM focus. That
+matters here more than in an ordinary table: pool nodes are recycled as you scroll, so the focused
+element is not a reliable place to store "where the user is standing". The active position survives
+any repaint.
+
+### `selectionMode`
+
+| Value    | Behavior                                                                                                                                                                                  |
+| -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `'cell'` | Default. The active **cell** gets `.dt-cell--active` and `aria-selected`; its row also gets `.dt-row--active`.                                                                            |
+| `'row'`  | The active **row** is the selected unit: it gets the ring and `aria-selected`; the cell gets neither. The active cell is still tracked, so arrow keys still know which column you are in. |
+| `'none'` | No pointer selection, no key handler registered at all, and the viewport is not focusable (`tabindex="-1"`).                                                                              |
+
+`'none'` is not an early return inside a handler — the listener object is empty, so Vue registers
+nothing. The exposed `selectCell()` still writes the state if you call it, so a programmatic
+selection remains possible; only the user-facing input paths are gone.
+
+### Keys
+
+All of these act on the active cell and require the viewport to have focus.
+
+| Key                     | Effect                                                                                    |
+| ----------------------- | ----------------------------------------------------------------------------------------- |
+| `↑` `↓` `←` `→`         | Move one cell. **Clamps at the edges — it does not wrap.**                                |
+| `Tab` / `Shift`+`Tab`   | Move one cell in reading order. **Wraps to the next / previous row** at the end of a row. |
+| `Home`                  | First column of the current row                                                           |
+| `End`                   | Last column of the current row                                                            |
+| `Ctrl`/`Cmd`+`Home`     | First cell of the table                                                                   |
+| `Ctrl`/`Cmd`+`End`      | Last cell of the table                                                                    |
+| `PageUp` / `PageDown`   | Up or down by one viewport's worth of whole rows (minimum 1)                              |
+| `Enter` / `F2`          | Edit the active cell (toggles it, on a checkbox column)                                   |
+| Any printable character | Edit the active cell, seeded with that character                                          |
+| `Escape`                | With an editor open: discard. With no editor open: **nothing** — the selection is kept.   |
+
+Two deliberate asymmetries:
+
+- **Arrows clamp, `Tab` wraps.** Arrows are spatial — running off the right edge and reappearing on
+  the next row is disorienting. `Tab` is sequential, which is what it means in a form and in a
+  spreadsheet, and it is what lets you walk the whole grid without leaving the keyboard.
+- **`Escape` with no editor open keeps the selection.** Losing track of where you were standing is
+  more annoying than staying selected.
+
+**Typing to edit** ignores modifier combinations so it cannot hijack browser shortcuts: the key must
+be exactly one character long, with no `Ctrl`, `Cmd` or `Alt`. `Shift` is allowed, since it only
+changes which character you get. The seeded character is **not** selected in the input, so what you
+type next appends instead of replacing. `select` and `date` editors ignore the seed and open on the
+current value — there is no sensible way to seed a dropdown or a date picker with one keystroke.
+
+**Hidden columns are skipped.** Navigation walks the _resolved_ columns, which already exclude
+hidden ones and respect the current order. An arrow key never parks on a column you cannot see.
+
+### Auto-scroll
+
+Keyboard navigation scrolls **the minimum necessary** to bring the target cell into view — it does
+not center it. Centering moves the viewport even when the cell was already visible, which turns every
+arrow keypress into a jump. With a minimal adjustment, moving inside the window scrolls nothing and
+reaching an edge advances exactly one row or one column.
+
+### Wiring it up
+
+```vue
+<script setup lang="ts">
+import { shallowRef } from 'vue'
+import type { CellPosition, CellSelectEvent, SelectionMode } from 'datagrid-vue'
+
+const selectionMode = shallowRef<SelectionMode>('cell')
+const activeCell = shallowRef<CellPosition | null>(null)
+
+function onCellSelect(event: CellSelectEvent<Invoice>): void {
+  console.log(event.rowIndex, event.columnKey, event.value)
+}
+</script>
+
+<template>
+  <DataTable
+    v-model:active-cell="activeCell"
+    :selection-mode="selectionMode"
+    :rows="rows"
+    :columns="columns"
+    row-key="id"
+    @cell-select="onCellSelect"
+  />
+</template>
+```
+
+`update:activeCell` fires on every change, including to `null`. `cellSelect` fires only when the new
+position resolves to a real row and a visible column, and it carries the row, the column definition
+and the value already read through the column's `accessor` — so a details panel does not have to look
+anything up.
+
+Neither event fires when the selection is set to the cell that is already active.
+
+### How selection interacts with editing
+
+- Selecting never opens an editor, and opening an editor never moves the selection.
+- The editor still goes through `beforeEdit`, so a veto stops it and leaves the cell selected.
+- `Enter` inside the editor commits **and moves the selection one row down**, spreadsheet style. The
+  move happens whether or not the parent persists the value — it is navigation, not editing.
+- Scrolling the edited row out of the virtual window commits and closes the editor; the selection
+  stays on that cell.
+
+### Accessibility
+
+The scrolling viewport is the grid. Roles and indices are written once per node where they are
+structural, and only when they change where they are not — `aria-rowindex` lives on the row rather
+than on each cell, which is the same information for a screen reader at a fifteenth of the writes.
+
+| Element        | Attributes                                                                                                                                                     |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.dt-viewport` | `role="grid"`, `aria-rowcount` (data rows **+ 1** for the header), `aria-colcount` (visible columns), `tabindex="0"` unless `selectionMode` is `'none'`        |
+| `.dt-row`      | `role="row"`, `aria-rowindex` (1-based, and offset by the header row: data row `0` reports `2`), `aria-selected` in `'row'` mode                               |
+| `.dt-cell`     | `role="gridcell"`, `aria-colindex` (1-based over the **visible** columns, so a hidden column takes no slot), `aria-selected` in `'cell'` mode, `tabindex="-1"` |
+
+Cells carry `tabindex="-1"` so they are focusable by script and click without entering the tab order
+— with ~450 visible cells, joining the tab order would make the table impossible to tab past.
+
+> **Known gap.** The header is rendered outside the `role="grid"` element and carries no
+> `role="row"` / `role="columnheader"`. `aria-rowcount` and `aria-rowindex` both count a header row
+> that assistive technology cannot find inside the grid. Column names are therefore not announced
+> with the cells. Fixing it means moving the header inside the grid or wiring `aria-describedby` per
+> column; until then, treat the header as visual-only.
 
 ---
 
@@ -311,14 +466,20 @@ const table = useTemplateRef<DataTableInstance>('table')
 | --------------------- | --------------------------------------------------------------------------------------------------------------- |
 | `scrollToRow(index)`  | Scroll until `index` is the first fully visible row. Clamped to the dataset.                                    |
 | `scrollToColumn(key)` | Scroll until that column sits at the left edge. No-op for an unknown key.                                       |
+| `scrollToCell(pos)`   | Scroll the minimum needed to bring that cell into view. Does not center, does not move the selection.           |
+| `selectCell(pos)`     | Set the active cell, or clear it with `null`. **Also scrolls it into view**, unlike an internal selection.      |
 | `refresh()`           | Invalidate every cached cell value **and schedule a repaint on the next frame**.                                |
 | `resetLayout()`       | Drop the stored layout and return visibility, order and widths to their defaults. This is your "reset columns". |
 | `flushPersistence()`  | Write the debounced layout immediately. Unmount already flushes on its own.                                     |
 
+`selectCell` scrolls and the internal click/keyboard path does not need to, because code calling it —
+a search result, a deep link — has no way of knowing whether that cell was inside the window. It
+emits `update:activeCell` and `cellSelect` exactly like a click would.
+
 **When you actually need `refresh()`.** The paint cache is keyed by the raw cell value, so a changed
 value repaints itself — _on the next frame that gets scheduled_. Frames are scheduled by scrolling,
 resizing, and by changes to `rows`, `columns`, `stripe`, `virtualizeColumns`, row height, the
-resolved columns, or the editing cell. Two consequences:
+resolved columns, the selection mode, the active cell, or the editing cell. Two consequences:
 
 - If you mutate a row object **in place** and nothing else changes, no frame is scheduled and the
   screen does not update. Call `refresh()`, or replace the array (the controlled pattern).
@@ -685,6 +846,31 @@ watchEffect(() => {
 `dense` is a preset, not a single knob: row height `40 → 30`, header `44 → 34`, font `0.875 → 0.8125rem`,
 cell padding `0.75 → 0.5rem`. An explicit `rowHeight` / `headerHeight` still wins.
 
+### Selection styling
+
+Selection introduces no new tokens — it is drawn entirely from `--dt-primary` and `--dt-bg-accented`,
+so restyling the accent restyles the selection.
+
+| Hook                             | What it does                                                                                                                                       |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.dt-cell--active`               | The active cell. `box-shadow: inset 0 0 0 2px var(--dt-primary)` plus `z-index: 1`.                                                                |
+| `.dt-row--active`                | The row containing the active cell. Background `--dt-bg-accented`, in **both** `'cell'` and `'row'` mode.                                          |
+| `.dt-header-cell--active`        | The header of the active column. Accented background plus a 2px underline in `--dt-primary`.                                                       |
+| `[data-selection]` on `.dt-root` | Mirrors `selectionMode` (`none` / `cell` / `row`). The stylesheet uses it to move the ring: in `'row'` mode the row gets it and the cell drops it. |
+
+The ring is `box-shadow: inset`, not `border` and not `outline`, and the choice is load-bearing:
+
+- A `border` would change the cell's box and shift its content by 2px as the selection moves.
+- An `outline` draws outside the box, so the neighbouring cell — which is absolutely positioned right
+  against it — would paint over half of it.
+
+`inset` box-shadow draws inside the existing box, costs no layout, and composites. `z-index: 1` lifts
+the active cell above its neighbours so the ring is not clipped by the next cell's background.
+
+Because `.dt-row--active` and `.dt-row--stripe` have the same specificity and a row can be both, the
+active rule is declared **after** the stripe rule and wins on source order. If you override either,
+keep that ordering.
+
 ### Styling cells from your own CSS
 
 `column.cellClass` returns a class name that lands on the `.dt-cell` element. **That rule must be
@@ -826,16 +1012,17 @@ different now, widths were rebalanced), bump `persist.version`.
 
 ### What makes it fast
 
-| Mechanism                           | Effect                                                                                                           |
-| ----------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| Body cells are not vnodes           | No per-frame vnode diff. The pool writes only changed properties.                                                |
-| Node recycling by viewport slot     | The pool grows with the visible count and never shrinks during scroll.                                           |
-| Write-only-if-changed everywhere    | Every node caches what was last painted on it. A repaint with the same inputs writes nothing.                    |
-| Raw-value paint cache               | If a cell already shows this value, for this row and column, `format`, `cellClass` and `update` are all skipped. |
-| `transform`, not `top` / `left`     | Positioning resolves on the compositor and does not invalidate document layout.                                  |
-| One delegated listener per event    | Not 450 listener registrations per frame.                                                                        |
-| `shallowRef` / shallow props        | 100k rows cost zero proxies. Window math is O(1): one division per frame, independent of row count.              |
-| Header scroll is a single transform | The header is Vue-rendered but never re-diffed while scrolling.                                                  |
+| Mechanism                           | Effect                                                                                                                                                                        |
+| ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Body cells are not vnodes           | No per-frame vnode diff. The pool writes only changed properties.                                                                                                             |
+| Node recycling by viewport slot     | The pool grows with the visible count and never shrinks during scroll.                                                                                                        |
+| Write-only-if-changed everywhere    | Every node caches what was last painted on it. A repaint with the same inputs writes nothing.                                                                                 |
+| Raw-value paint cache               | If a cell already shows this value, for this row and column, `format`, `cellClass` and `update` are all skipped.                                                              |
+| `transform`, not `top` / `left`     | Positioning resolves on the compositor and does not invalidate document layout.                                                                                               |
+| One delegated listener per event    | Not 450 listener registrations per frame.                                                                                                                                     |
+| `shallowRef` / shallow props        | 100k rows cost zero proxies. Window math is O(1): one division per frame, independent of row count.                                                                           |
+| Header scroll is a single transform | The header is Vue-rendered but never re-diffed while scrolling.                                                                                                               |
+| Selection resolved by comparison    | The active position is destructured once per frame; each cell compares two values it already holds. Moving the selection writes to exactly the two cells whose state changed. |
 
 ### What you can do to make it slow
 
@@ -888,17 +1075,18 @@ These are the realistic ways to give the performance back, in rough order of how
 
 Stated plainly. None of these are implemented:
 
-| Not implemented                              | Notes                                                                                                                     |
-| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| **Sorting**                                  | No sort state, no sort indicators, no click-to-sort. Sort `rows` yourself and pass the sorted array.                      |
-| **Filtering / search**                       | Same: filter upstream and pass the filtered array.                                                                        |
-| **Row selection**                            | No selection model, no checkbox column built in, no `selectedRows`. `rowClick` is the hook.                               |
-| **Grouping / pivoting**                      | No group headers, no aggregation, no expand/collapse.                                                                     |
-| **Drag-to-reorder columns**                  | The `columnOrder` v-model exists and is fully reconciled, but no drag UI ships with it. Resizing does have a drag handle. |
-| **Row virtualization with variable heights** | `rowHeight` is fixed per table. Variable heights would replace the O(1) division with a measured offset index.            |
-| **Frozen / pinned columns**                  | Every column scrolls.                                                                                                     |
-| **Multi-select editor**                      | The `tags` renderer displays lists; there is no editor that edits one.                                                    |
-| **SSR of the body**                          | The header and the shell render fine; the body is painted on mount, client-side only.                                     |
+| Not implemented                              | Notes                                                                                                                                                                             |
+| -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Sorting**                                  | No sort state, no sort indicators, no click-to-sort. Sort `rows` yourself and pass the sorted array.                                                                              |
+| **Filtering / search**                       | Same: filter upstream and pass the filtered array.                                                                                                                                |
+| **Range selection**                          | Selection is exactly one cell (or one row). No `Shift`+click, no `Shift`+arrow range, no `Ctrl`+click multi-select, no copy of a block.                                           |
+| **Multi-row selection with checkboxes**      | No `selectedRows` model and no built-in checkbox column. `'row'` selection mode marks one row at a time; `rowClick` and `cellSelect` are the hooks if you need to build your own. |
+| **Grouping / pivoting**                      | No group headers, no aggregation, no expand/collapse.                                                                                                                             |
+| **Drag-to-reorder columns**                  | The `columnOrder` v-model exists and is fully reconciled, but no drag UI ships with it. Resizing does have a drag handle.                                                         |
+| **Row virtualization with variable heights** | `rowHeight` is fixed per table. Variable heights would replace the O(1) division with a measured offset index.                                                                    |
+| **Frozen / pinned columns**                  | Every column scrolls.                                                                                                                                                             |
+| **Multi-select editor**                      | The `tags` renderer displays lists; there is no editor that edits one.                                                                                                            |
+| **SSR of the body**                          | The header and the shell render fine; the body is painted on mount, client-side only.                                                                                             |
 
 ### Per-cell Vue components — deliberately not supported
 
@@ -916,46 +1104,45 @@ handful of nodes that re-diff only when the column configuration changes.
 
 ## Pre-publish checklist
 
-The package is wired up but generic. Before publishing, in `package.json`:
+Installing from GitHub already works. Everything below is what is left before pushing to **npm**.
 
-- [ ] **Package name** — still `datagrid-vue`. Set your own (and your scope, if you use one).
-- [ ] **`repository`, `author`, `description`, `keywords`** — not set at all yet.
-- [ ] **`license`** — not set, and there is **no LICENSE file**. Add both; without a license the code
-      is "all rights reserved" by default, which is almost certainly not what you want for something
-      you are handing out.
-- [ ] **`version`** — still `0.0.0`.
-- [ ] **`private`** — already removed, so `npm publish` will work. Add it back if you want to publish
-      only via GitHub and block accidental npm publishes.
-- [ ] **`peerDependencies.vue`** — currently `^3.5.0 || >=3.6.0-0`. Narrow it if you only intend to
-      support stable 3.x.
-- [ ] Decide how `dist/` reaches consumers on a GitHub install — see below.
+Already done — nothing to do:
 
-### Making `npm install github:user/repo` work
+- [x] **Name** `datagrid-vue`, **version** `0.1.0`, **description** and **keywords**.
+- [x] **License** MIT, declared in `package.json` and present as a `LICENSE` file.
+- [x] **Author** `jorge-koki`; **`repository`**, **`homepage`** and **`bugs`** all point at
+      `jorge-koki/datagrid-vue`.
+- [x] **`private`** removed, so `npm publish` will work.
+- [x] **`prepare`** script, so `npm install github:jorge-koki/datagrid-vue` builds `dist/` on install
+      without committing build output.
 
-`dist/` is gitignored, and `files: ["dist"]` means it is the only thing published. Pick one:
+Still open:
 
-- **Add a `prepare` script** — `"prepare": "npm run build:lib"`. npm runs `prepare` for git
-  dependencies (and installs devDependencies so it can), so the consumer's install builds the
-  package. Cost: it also runs on every local `npm install` in this repo, and a build failure fails
-  the install.
-- **Commit `dist/`** — remove it from `.gitignore` and commit the build output. No install-time
-  machinery, but build artifacts in version control and in every diff.
+- [ ] **Check the name is free on npm** — `npm view datagrid-vue`. If it is taken, publish under a
+      scope (`@jorge-koki/datagrid-vue`) and update every import in this README.
+- [ ] **Decide on the Vue range.** `peerDependencies.vue` is `^3.5.0 || >=3.6.0-0`, which admits 3.6
+      release candidates because that is what this repo develops against. Narrow it to `^3.5.0` if
+      you would rather not promise support for prereleases.
+- [ ] **Know what `prepare` costs you.** It also runs on every local `npm install` in this repo, and
+      a build failure fails the install. The alternative is committing `dist/` and dropping the
+      script.
+- [ ] **Add a CHANGELOG** if you plan to ship more than one version.
 
-Publishing to npm instead needs neither: `npm publish` runs the build through `prepublishOnly` /
-`prepare` or you run `npm run build:lib` beforehand.
+Publishing to npm needs no extra step: `npm publish` runs `prepare`, which builds `dist/`, and
+`files: ["dist"]` keeps everything else out of the tarball.
 
 ---
 
 ## Reference: what the package exports
 
-| Export                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | Kind                                          |
-| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------- |
-| `DataTable` (also the default export), `DataTableColumnToggle`                                                                                                                                                                                                                                                                                                                                                                                                                    | Components                                    |
-| `COLOR_TOKENS`, `ColorTokenName`                                                                                                                                                                                                                                                                                                                                                                                                                                                  | Status palette map and its key type           |
-| `registerRenderer`, `resolveRenderer`, `createTextRenderer`, `TEXT_RENDERER_TYPE`                                                                                                                                                                                                                                                                                                                                                                                                 | Renderer registry                             |
-| `textRenderer`, `numberRenderer`, `badgeRenderer`, `selectRenderer`, `progressRenderer`, `avatarRenderer`, `checkboxRenderer`, `tagsRenderer`                                                                                                                                                                                                                                                                                                                                     | Built-in renderer instances, for composing on |
-| `createLocalStorageAdapter`                                                                                                                                                                                                                                                                                                                                                                                                                                                       | The default storage adapter                   |
-| `DataTableProps`, `DataTableColumn`, `DataTableInstance`, `DataTableTheme`, `CellValue`, `CellAlign`, `CellOption`, `CellEditorType`, `CellPosition`, `CellRenderer`, `CellRenderContext`, `CellRendererHandle`, `AnyCellRenderer`, `CellRendererFactory`, `BeforeEditEvent`, `AfterEditEvent`, `EditCommitEvent`, `ColumnResizeEvent`, `ColumnVisibilityState`, `ColumnWidthState`, `DataTablePersistOptions`, `DataTableStorageAdapter`, `PersistedTableState`, `VirtualWindow` | Types                                         |
+| Export                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Kind                                          |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------- |
+| `DataTable` (also the default export), `DataTableColumnToggle`                                                                                                                                                                                                                                                                                                                                                                                                                                                        | Components                                    |
+| `COLOR_TOKENS`, `ColorTokenName`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | Status palette map and its key type           |
+| `registerRenderer`, `resolveRenderer`, `createTextRenderer`, `TEXT_RENDERER_TYPE`                                                                                                                                                                                                                                                                                                                                                                                                                                     | Renderer registry                             |
+| `textRenderer`, `numberRenderer`, `badgeRenderer`, `selectRenderer`, `progressRenderer`, `avatarRenderer`, `checkboxRenderer`, `tagsRenderer`                                                                                                                                                                                                                                                                                                                                                                         | Built-in renderer instances, for composing on |
+| `createLocalStorageAdapter`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | The default storage adapter                   |
+| `DataTableProps`, `DataTableColumn`, `DataTableInstance`, `DataTableTheme`, `CellValue`, `CellAlign`, `CellOption`, `CellEditorType`, `CellPosition`, `CellRenderer`, `CellRenderContext`, `CellRendererHandle`, `AnyCellRenderer`, `CellRendererFactory`, `SelectionMode`, `CellSelectEvent`, `BeforeEditEvent`, `AfterEditEvent`, `EditCommitEvent`, `ColumnResizeEvent`, `ColumnVisibilityState`, `ColumnWidthState`, `DataTablePersistOptions`, `DataTableStorageAdapter`, `PersistedTableState`, `VirtualWindow` | Types                                         |
 
 The composables and the node pool are **not** exported. They are implementation details, and
 exporting them would turn them into API that has to be supported forever.

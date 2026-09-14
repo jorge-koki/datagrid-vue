@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, shallowRef } from 'vue'
+import { computed, onBeforeUnmount, onMounted, shallowRef } from 'vue'
+import type { CellPosition } from '@/components/ui/datatable'
 
 /**
  * Medidor de FPS y de nodos realmente presentes en el DOM.
@@ -21,6 +22,8 @@ const props = defineProps<{
   host: HTMLElement | null
   /** Cantidad de filas del dataset, para contrastarla con las pintadas. */
   rowCount: number
+  /** Celda activa, para que la selección se vea sin abrir las devtools. */
+  activeCell: CellPosition | null
 }>()
 
 /** Cada cuántos ms se recalculan FPS y conteos. */
@@ -68,6 +71,13 @@ onBeforeUnmount(() => {
 
 /** Separador de miles, construido una vez. */
 const formatter = new Intl.NumberFormat('en-US')
+
+/** Descripción legible de la celda activa. */
+const activeLabel = computed(() => {
+  const cell = props.activeCell
+  if (!cell) return 'none'
+  return `row ${formatter.format(cell.rowIndex)} · ${cell.columnKey}`
+})
 </script>
 
 <template>
@@ -91,6 +101,10 @@ const formatter = new Intl.NumberFormat('en-US')
     <div class="demo-stat">
       <span class="demo-stat-value">{{ formatter.format(totalNodes) }}</span>
       <span class="demo-stat-label">total nodes</span>
+    </div>
+    <div class="demo-stat demo-stat--wide">
+      <span class="demo-stat-value demo-stat-value--text">{{ activeLabel }}</span>
+      <span class="demo-stat-label">active cell</span>
     </div>
   </div>
 </template>

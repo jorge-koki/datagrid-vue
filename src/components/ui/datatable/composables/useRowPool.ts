@@ -158,15 +158,17 @@ export interface RowPool<TRow> {
   /**
    * Invalida el caché de valores de todas las celdas.
    *
-   * El caché detecta por su cuenta los cambios de valor crudo, de fila, de
-   * columna y de definición de columna, así que mutar una fila en el lugar ya se
-   * repinta en el frame siguiente sin necesidad de llamar a esto.
+   * El caché compara valor crudo, fila, columna y definición de columna, y en el
+   * próximo pintado detectaría cualquiera de esos cambios. Lo que no hace es
+   * provocar ese pintado: invalidar no agenda un frame. Quien mute una fila en
+   * el lugar tiene que pedir el repintado además de invalidar, y por eso
+   * `refresh()` en el componente hace las dos cosas.
    *
-   * Lo que el caché no puede ver es que `format` o `cellClass` produzcan otra
-   * salida a partir de estado ajeno a la fila: un locale, una cotización o un
-   * conjunto de selección capturados por closure. En esos casos los datos de
-   * entrada son idénticos y el texto resultante no, y este es el único modo de
-   * anunciarlo.
+   * Lo que el caché no puede ver de ningún modo es que `format` o `cellClass`
+   * produzcan otra salida a partir de estado ajeno a la fila: un locale, una
+   * cotización o un conjunto de selección capturados por closure. En esos casos
+   * los datos de entrada son idénticos y el texto resultante no, y esta es la
+   * única forma de anunciarlo.
    */
   invalidate(): void
   /** Nodo DOM de una celda pintada, o `null` si esa celda no está en la ventana. */

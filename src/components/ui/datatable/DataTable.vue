@@ -763,12 +763,22 @@ function scrollToColumn(key: string): void {
 }
 
 /**
- * Fuerza un repintado completo.
+ * Invalida el caché de celdas y agenda un repintado.
  *
- * No es necesario para mutaciones de datos: el caché del pool se indexa por el
- * valor crudo de cada celda y detecta esos cambios por su cuenta. Sí lo es
- * cuando `format` o `cellClass` cambian su salida por estado externo capturado
- * por closure, donde las entradas del caché son idénticas y el resultado no.
+ * Hace falta en dos situaciones, y conviene no confundirlas:
+ *
+ * 1. **Mutación de una fila en el lugar.** El caché compara por valor crudo, así
+ *    que detectaría el cambio, pero nadie agenda el frame donde esa comparación
+ *    ocurriría. Los repintados nacen del scroll, del `ResizeObserver` o del
+ *    watcher sobre `rows`, `columns`, `stripe`, `virtualizeColumns`,
+ *    `rowHeight`, las columnas resueltas y la celda en edición. Reemplazar el
+ *    array de filas dispara ese watcher; mutar un objeto de fila no.
+ * 2. **`format` o `cellClass` que cambian su salida por estado externo**
+ *    capturado por closure —un locale, una cotización—, donde las entradas del
+ *    caché son idénticas y el resultado no.
+ *
+ * Dentro del flujo de edición no hace falta llamarlo: cerrar el editor modifica
+ * `editing`, y ese watcher ya agenda el frame.
  */
 function refresh(): void {
   pool.invalidate()
