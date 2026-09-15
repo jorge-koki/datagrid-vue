@@ -1,106 +1,121 @@
 # datagrid-vue
 
-A virtualized Vue 3 data grid that holds 60fps at 100,000 rows, plus the demo application that proves
-it.
+Una grilla de datos virtualizada para Vue 3 que sostiene 60fps con 100.000 filas, más la aplicación
+de demostración que lo prueba.
 
-The idea in one sentence: **Vue owns structure and configuration, a plain-TypeScript pool of recycled
-DOM nodes owns the scroll hot path.** Body cells are not vnodes, so a scroll frame costs a handful of
-property writes instead of ~450 vnode diffs — and `rows` is never made deeply reactive, so 100k rows
-cost zero proxies.
+La idea en una frase: **Vue es dueño de la estructura y de la configuración; un pool de nodos DOM
+reciclados, escrito en TypeScript plano, es dueño del camino caliente del scroll.** Las celdas del
+cuerpo no son vnodes, así que un frame de scroll cuesta un puñado de escrituras de propiedad en lugar
+de unos 450 diffs de vnode. Y `rows` nunca se vuelve reactivo en profundidad, así que 100k filas
+cuestan cero proxies.
 
 ```sh
 npm install github:jorge-koki/datagrid-vue
 ```
 
-**→ [Component documentation](./src/components/ui/datatable/README.md)** — props, events, selection,
-renderers, theming, persistence, performance, limitations.
+**→ [Documentación del componente](./src/components/ui/datatable/README.md)** — props, eventos,
+selección, agrupación, renderers, temas, persistencia, rendimiento, limitaciones.
 
-## Features
+## Qué trae
 
-- **Virtualized on both axes.** Rows and columns. Window math is O(1) — one division per frame,
-  independent of how many rows you have.
-- **Recycled DOM node pool.** Nodes are reused by viewport slot and written only where a value
-  actually changed. A repaint with identical inputs performs zero DOM writes.
-- **Cell and row selection** with full keyboard navigation: arrows, `Tab`, `Home` / `End`,
-  `Ctrl`+`Home` / `End`, `PageUp` / `PageDown`, and minimal auto-scroll.
-- **Inline editing** with a cancelable `beforeEdit` → `editCommit` → `afterEdit` lifecycle. The grid
-  is controlled: it never mutates your rows.
-- **Eight built-in cell renderers** — text, number, badge, select, progress, avatar, checkbox, tags —
-  plus a documented protocol and a registry for your own.
-- **Resizable, hideable, reorderable columns**, with layout persistence that reconciles saved state
-  against the columns that exist today.
-- **Themeable through `--dt-*` custom properties**, light / dark / auto, with a `dense` preset. Picks
-  up NuxtUI v3 tokens automatically when the host app defines them.
-- **ARIA grid roles** and row / column indices on the recycled nodes.
-- **No runtime dependencies** beyond `vue`, which stays a peer dependency and is never bundled.
+- **Virtualización en los dos ejes.** Filas y columnas. El cálculo de la ventana es O(1): una
+  división por frame, independiente de cuántas filas haya.
+- **Pool de nodos DOM reciclados.** Los nodos se reutilizan por slot de viewport y se escriben solo
+  donde un valor cambió de verdad. Repintar con entradas idénticas produce cero escrituras en el DOM.
+- **Selección por celda y por fila** con navegación completa de teclado: flechas, `Tab`, `Home` /
+  `End`, `Ctrl`+`Home` / `End`, `PageUp` / `PageDown`, y auto-scroll mínimo.
+- **Edición en línea** con un ciclo cancelable `beforeEdit` → `editCommit` → `afterEdit`. La grilla es
+  controlada: nunca muta las filas del consumidor.
+- **Agrupación multinivel con agregados.** Cabeceras plegables, cinco agregaciones incluidas
+  (`sum`, `avg`, `count`, `min`, `max`) más funciones propias, y un padre que agrega sobre todas sus
+  filas descendientes y no sobre los agregados de sus hijos.
+- **Ocho renderers de celda incluidos** —text, number, badge, select, progress, avatar, checkbox,
+  tags—, más un protocolo documentado y un registro para los propios.
+- **Columnas redimensionables, ocultables y reordenables**, con persistencia del layout que reconcilia
+  el estado guardado contra las columnas que existen hoy.
+- **Tematizable con custom properties `--dt-*`**, en claro / oscuro / automático, con un preset
+  `dense`. Adopta los tokens de NuxtUI v3 cuando la aplicación anfitriona los define.
+- **Roles ARIA de grilla** —`treegrid` cuando hay agrupación activa— e índices de fila y de columna
+  sobre los nodos reciclados.
+- **Sin dependencias de runtime** más allá de `vue`, que queda como peer dependency y nunca se
+  empaqueta.
 
-## Run the demo
+## Correr la demo
 
 ```sh
 npm install
 npm run dev      # http://localhost:5173
 ```
 
-The demo opens with **100 rows** so it reads as a usage example. From there:
+La demo abre con **100 filas**, para que se lea como un ejemplo de uso. Desde ahí:
 
-- Use the row-count selector to jump to 1,000 / 10,000 / 50,000 and watch the FPS and "nodes in DOM"
-  counters — the dataset grows by 500×, the node count does not move.
-- Click a cell and navigate with the arrow keys; the active cell is shown in the stats panel.
-- Double-click (or press `Enter`, or just start typing) to edit. Rows marked **Locked** are vetoed
-  from `beforeEdit`, and the event log shows the whole lifecycle as it happens.
+- Usar el selector de filas para saltar a 1.000 / 10.000 / 50.000 y mirar los contadores de FPS y de
+  nodos en el DOM: el dataset crece 500× y la cantidad de nodos no se mueve.
+- Hacer clic en una celda y navegar con las flechas; la celda activa se muestra en el panel de
+  estadísticas.
+- Doble clic —o `Enter`, o directamente empezar a escribir— para editar. Las filas marcadas como
+  **Bloqueado** quedan vetadas desde `beforeEdit`, y la bitácora muestra el ciclo entero a medida que
+  ocurre.
+- Elegir una agrupación en el selector **Agrupar**: por estado, por prioridad, o los dos niveles a la
+  vez. Las cabeceras muestran el total de presupuesto, el promedio de progreso y el conteo del grupo,
+  y los botones **Expandir todo** y **Colapsar todo** actúan sobre el árbol completo.
 
-## What's in here
+## Qué hay acá adentro
 
-| Path                           | What it is                                                                                  |
-| ------------------------------ | --------------------------------------------------------------------------------------------- |
-| `src/components/ui/datatable/` | The component. Self-contained — relative imports only, `vue` is its sole runtime dependency. |
-| `src/demo/`                    | The demo's seeded data generator, column definitions, stats and event log.                   |
-| `src/App.vue`                  | The demo page. Read this first if you want a working usage example.                          |
+| Ruta                           | Qué es                                                                                              |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------- |
+| `src/components/ui/datatable/` | El componente. Autocontenido: solo imports relativos, y `vue` como única dependencia de runtime.     |
+| `src/demo/`                    | El generador de datos sembrado de la demo, las definiciones de columna, los presets de agrupación, el panel de estadísticas y la bitácora de eventos. |
+| `src/App.vue`                  | La página de la demo. Conviene leerla primero para ver un ejemplo de uso funcionando.                |
 
 ## Scripts
 
-| Script               | What it does                                                                                        |
-| -------------------- | ----------------------------------------------------------------------------------------------------- |
-| `npm run dev`        | Dev server for the demo.                                                                            |
-| `npm run build`      | Type-check + build the demo into `dist-demo/`.                                                      |
-| `npm run preview`    | Serve the built demo.                                                                               |
-| `npm run build:lib`  | Build the distributable library into `dist/` — ESM bundle, extracted `style.css`, and `.d.ts` files. |
-| `npm run type-check` | `vue-tsc --build`. Must exit 0.                                                                     |
-| `npm run format`     | `oxfmt` over `src/`.                                                                                |
+| Script               | Qué hace                                                                                                |
+| -------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `npm run dev`        | Servidor de desarrollo de la demo.                                                                      |
+| `npm run build`      | Verificación de tipos + build de la demo en `dist-demo/`.                                               |
+| `npm run preview`    | Sirve la demo ya construida.                                                                            |
+| `npm run build:lib`  | Construye la librería distribuible en `dist/`: bundle ESM, `style.css` extraído y archivos `.d.ts`.     |
+| `npm run type-check` | `vue-tsc --build`. Tiene que salir con código 0.                                                        |
+| `npm run format`     | `oxfmt` sobre `src/`.                                                                                   |
 
-`npm run build` and `npm run build:lib` write to **different directories** on purpose, so the demo
-build never clobbers the published artifact. `build:lib` also runs automatically as `prepare`, which
-is what makes `npm install github:jorge-koki/datagrid-vue` work without committing `dist/`.
+`npm run build` y `npm run build:lib` escriben en **directorios distintos** a propósito, para que el
+build de la demo nunca pise el artefacto publicable. `build:lib` además corre automáticamente como
+`prepare`, que es lo que hace funcionar a `npm install github:jorge-koki/datagrid-vue` sin necesidad
+de versionar `dist/`.
 
-## Using the component in another project
+## Usar el componente en otro proyecto
 
-Two paths, both documented in full in the
-[component README](./src/components/ui/datatable/README.md#install):
+Dos vías, las dos documentadas en detalle en el
+[README del componente](./src/components/ui/datatable/README.md#instalación):
 
-- **Copy the directory** (shadcn style) — drop `src/components/ui/datatable/` into your project. No
-  stylesheet import needed; the SFC imports its own CSS.
-- **Install the package** — `npm install github:jorge-koki/datagrid-vue`, then:
+- **Copiar el directorio** (estilo shadcn): llevar `src/components/ui/datatable/` al proyecto. No
+  hace falta importar la hoja de estilos; el SFC importa su propio CSS.
+- **Instalar el paquete**: `npm install github:jorge-koki/datagrid-vue`, y después:
 
   ```ts
   import { DataTable, DataTableColumnToggle } from 'datagrid-vue'
   import 'datagrid-vue/style.css'
   ```
 
-## Before publishing to npm
+## Antes de publicar en npm
 
-Installing from GitHub already works, and name, license, author and repository are all set. What is
-left is in the [pre-publish checklist](./src/components/ui/datatable/README.md#pre-publish-checklist).
+Instalar desde GitHub ya funciona, y el nombre, la licencia, el autor y el repositorio están todos
+definidos. Lo que falta está en el
+[checklist previo a publicar](./src/components/ui/datatable/README.md#checklist-previo-a-publicar).
 
-## IDE setup
+## Configuración del editor
 
 [VS Code](https://code.visualstudio.com/) +
-[Vue (Official)](https://marketplace.visualstudio.com/items?itemName=Vue.volar), with Vetur disabled.
-TypeScript cannot type `.vue` imports on its own, which is why `vue-tsc` replaces `tsc` for type
-checking and the editor needs the Vue extension to make the language service aware of `.vue` types.
+[Vue (Official)](https://marketplace.visualstudio.com/items?itemName=Vue.volar), con Vetur
+deshabilitado. TypeScript no puede tipar los imports de `.vue` por su cuenta, y esa es la razón de
+que `vue-tsc` reemplace a `tsc` para verificar tipos y de que el editor necesite la extensión de Vue
+para que el language service conozca los tipos de los `.vue`.
 
-Browser devtools: the [Vue DevTools](https://devtools.vuejs.org/) extension, and Chrome's
-[Custom Object Formatters](http://bit.ly/object-formatters) so refs print readably.
+Herramientas del navegador: la extensión [Vue DevTools](https://devtools.vuejs.org/), y los
+[Custom Object Formatters](http://bit.ly/object-formatters) de Chrome, para que los refs se impriman
+de forma legible.
 
-## License
+## Licencia
 
-MIT © jorge-koki — see [LICENSE](./LICENSE).
+MIT © jorge-koki — ver [LICENSE](./LICENSE).

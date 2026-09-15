@@ -15,6 +15,15 @@ import type { ProjectRow } from './data'
  * cada una negocia locale y arma tablas de símbolos: es una de las formas más
  * rápidas de perder el presupuesto de 16ms. Construidos una vez a nivel de
  * módulo, `format` queda en una sola llamada barata.
+ *
+ * ## Los agregados no pasan por `format`
+ *
+ * Tres columnas declaran `aggregate`, así que las cabeceras de grupo muestran
+ * cifras reales. Lo que NO muestran es el formato de la columna: la firma de
+ * `format` pide una fila y un índice, y una cabecera de grupo no representa a
+ * ninguna fila en particular. Por eso el total de presupuesto aparece como un
+ * número pelado y el promedio de progreso con todos sus decimales. Es la
+ * limitación conocida, y la demo la deja a la vista en lugar de disimularla.
  */
 
 const currencyFormatter = new Intl.NumberFormat('en-US', {
@@ -45,16 +54,18 @@ export const projectColumns: readonly DataTableColumn<ProjectRow>[] = [
   },
   {
     key: 'name',
-    label: 'Project',
+    label: 'Proyecto',
     width: 190,
     minWidth: 120,
     resizable: true,
     editable: true,
     // Sin `editor`: el valor es un string y no hay `options`, así que se infiere `text`.
+    // Tampoco declara `aggregate`: un agregado se pinta en el offset de SU columna,
+    // y en la primera taparía el chevrón, la etiqueta y el contador del grupo.
   },
   {
     key: 'owner',
-    label: 'Owner',
+    label: 'Responsable',
     width: 70,
     resizable: true,
     align: 'center',
@@ -65,15 +76,18 @@ export const projectColumns: readonly DataTableColumn<ProjectRow>[] = [
   },
   {
     key: 'description',
-    label: 'Description',
+    label: 'Descripción',
     width: 280,
     minWidth: 140,
     resizable: true,
     editable: true,
+    // Texto libre: agrupar por esta columna produciría un grupo por fila. La
+    // bandera lo impide aunque alguien meta la clave en `groupBy` a mano.
+    groupable: false,
   },
   {
     key: 'status',
-    label: 'Status',
+    label: 'Estado',
     width: 130,
     resizable: true,
     editable: true,
@@ -81,10 +95,15 @@ export const projectColumns: readonly DataTableColumn<ProjectRow>[] = [
     // porque la columna declara `options`.
     renderer: 'select',
     options: STATUS_OPTIONS,
+    // `count` es el `COUNT(columna)` de SQL: cuenta las filas descendientes cuyo
+    // valor está presente, no las filas del grupo. Con este dataset las dos
+    // cuentas coinciden porque ninguna fila tiene el estado vacío, y ese es
+    // justamente el punto: son preguntas distintas que acá dan lo mismo.
+    aggregate: 'count',
   },
   {
     key: 'priority',
-    label: 'Priority',
+    label: 'Prioridad',
     width: 110,
     resizable: true,
     editable: true,
@@ -96,7 +115,7 @@ export const projectColumns: readonly DataTableColumn<ProjectRow>[] = [
   },
   {
     key: 'progress',
-    label: 'Progress',
+    label: 'Progreso',
     width: 120,
     resizable: true,
     editable: true,
@@ -106,10 +125,15 @@ export const projectColumns: readonly DataTableColumn<ProjectRow>[] = [
     min: 0,
     max: 100,
     step: 5,
+    // Con dos niveles de agrupación, este es el agregado donde se ve que un
+    // grupo padre promedia sobre TODAS sus filas y no sobre los promedios de sus
+    // subgrupos: las dos cuentas dan números distintos en cuanto los subgrupos
+    // tienen tamaños distintos.
+    aggregate: 'avg',
   },
   {
     key: 'budget',
-    label: 'Budget',
+    label: 'Presupuesto',
     width: 130,
     resizable: true,
     editable: true,
@@ -119,10 +143,13 @@ export const projectColumns: readonly DataTableColumn<ProjectRow>[] = [
     // `cellClass` también corre en el camino caliente: una comparación y nada más.
     cellClass: (value: CellValue): string | undefined =>
       typeof value === 'number' && value >= HIGH_BUDGET ? 'demo-cell-high-budget' : undefined,
+    // El total del grupo. La cabecera lo muestra SIN el formato de moneda de
+    // arriba, porque los agregados no pasan por `column.format`.
+    aggregate: 'sum',
   },
   {
     key: 'tags',
-    label: 'Tags',
+    label: 'Etiquetas',
     width: 220,
     resizable: true,
     // El renderer `tags` lee el array desde `ctx.raw`. No es editable: no existe
@@ -132,7 +159,7 @@ export const projectColumns: readonly DataTableColumn<ProjectRow>[] = [
   },
   {
     key: 'dueDate',
-    label: 'Due date',
+    label: 'Vencimiento',
     width: 130,
     resizable: true,
     editable: true,
@@ -143,7 +170,7 @@ export const projectColumns: readonly DataTableColumn<ProjectRow>[] = [
   },
   {
     key: 'active',
-    label: 'Active',
+    label: 'Activo',
     width: 90,
     resizable: true,
     editable: true,
@@ -151,7 +178,7 @@ export const projectColumns: readonly DataTableColumn<ProjectRow>[] = [
   },
   {
     key: 'locked',
-    label: 'Locked',
+    label: 'Bloqueado',
     width: 90,
     resizable: true,
     // Sin `editable`, la casilla se pinta deshabilitada. Es el indicador de qué

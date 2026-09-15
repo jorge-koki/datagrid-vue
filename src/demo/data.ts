@@ -59,23 +59,24 @@ function pickInt(random: () => number, min: number, max: number): number {
  * Estados posibles de un proyecto.
  *
  * Es la ÚNICA fuente de verdad: de acá salen las opciones que consumen el
- * renderer `select` y el editor desplegable, y también el tipo literal del campo
+ * renderer `select` y el editor desplegable, el texto de las cabeceras de grupo
+ * cuando se agrupa por esta columna, y también el tipo literal del campo
  * `status` de una fila. Duplicar la lista sería la forma más rápida de que un
  * valor de datos deje de tener opción asociada.
  */
 const STATUSES = [
-  { value: 'planning', label: 'Planning', color: COLOR_TOKENS.neutral },
-  { value: 'active', label: 'Active', color: COLOR_TOKENS.blue },
-  { value: 'blocked', label: 'Blocked', color: COLOR_TOKENS.red },
-  { value: 'review', label: 'In review', color: COLOR_TOKENS.amber },
-  { value: 'done', label: 'Done', color: COLOR_TOKENS.green },
+  { value: 'planning', label: 'Planificación', color: COLOR_TOKENS.neutral },
+  { value: 'active', label: 'Activo', color: COLOR_TOKENS.blue },
+  { value: 'blocked', label: 'Bloqueado', color: COLOR_TOKENS.red },
+  { value: 'review', label: 'En revisión', color: COLOR_TOKENS.amber },
+  { value: 'done', label: 'Terminado', color: COLOR_TOKENS.green },
 ] as const satisfies NonEmpty<CellOption>
 
 const PRIORITIES = [
-  { value: 'low', label: 'Low', color: COLOR_TOKENS.neutral },
-  { value: 'medium', label: 'Medium', color: COLOR_TOKENS.blue },
-  { value: 'high', label: 'High', color: COLOR_TOKENS.amber },
-  { value: 'critical', label: 'Critical', color: COLOR_TOKENS.red },
+  { value: 'low', label: 'Baja', color: COLOR_TOKENS.neutral },
+  { value: 'medium', label: 'Media', color: COLOR_TOKENS.blue },
+  { value: 'high', label: 'Alta', color: COLOR_TOKENS.amber },
+  { value: 'critical', label: 'Crítica', color: COLOR_TOKENS.red },
 ] as const satisfies NonEmpty<CellOption>
 
 const TAGS = [

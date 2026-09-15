@@ -1,27 +1,28 @@
 # DataTable
 
-A virtualized Vue 3 table that stays at 60fps with 100,000 rows, because the scroll hot path never
-touches the virtual DOM.
+Una tabla virtualizada para Vue 3 que sostiene 60fps con 100.000 filas, porque el camino caliente del
+scroll nunca toca el DOM virtual.
 
-Vue owns what changes rarely and benefits from being declarative: props, the header, the cell editor,
-the lifecycle. A plain-TypeScript pool of recycled DOM nodes owns what changes every frame: the body
-cells. Those cells are **not vnodes**. With ~30 visible rows by ~15 visible columns, a `v-for` body
-would cost ~450 vnode diffs per scroll frame and blow the 16ms budget before painting anything. The
-pool writes only the properties that actually changed, so a repaint with identical inputs performs
-zero DOM writes.
+Vue conserva lo que cambia poco y se beneficia de ser declarativo: las props, el header, el editor de
+celdas, el ciclo de vida. Un pool de nodos DOM reciclados, escrito en TypeScript plano, conserva lo
+que cambia en cada frame: las celdas del cuerpo. Esas celdas **no son vnodes**. Con unas 30 filas
+visibles por unas 15 columnas visibles, un cuerpo hecho con `v-for` costaría unos 450 diffs de vnode
+por frame de scroll y agotaría el presupuesto de 16ms antes de pintar nada. El pool escribe
+únicamente las propiedades que cambiaron, así que repintar con entradas idénticas produce cero
+escrituras en el DOM.
 
-The second half of the thesis is memory. `props` in Vue is `shallowReactive`, so `props.rows` hands
-back your original array — no row is ever wrapped in a Proxy. A deep `ref()` over 100k rows would
-create 100k proxies and charge you for them even when nobody scrolls.
+La otra mitad de la tesis es la memoria. En Vue, `props` es `shallowReactive`, así que `props.rows`
+devuelve el array original: ninguna fila se envuelve nunca en un Proxy. Un `ref()` profundo sobre
+100k filas crearía 100k proxies y los cobraría incluso mientras nadie scrollea.
 
 ---
 
-## Quick path
+## Camino rápido
 
-1. Get the code — copy `src/components/ui/datatable/` into your project, or install the package
-   (both paths in [Install](#install)).
-2. Import the component and, if you installed the package, the stylesheet.
-3. Pass `rows`, `columns` and `rowKey`. Give the wrapper a height.
+1. Conseguir el código: copiar `src/components/ui/datatable/` dentro del proyecto, o instalar el
+   paquete (las dos vías están en [Instalación](#instalación)).
+2. Importar el componente y, si se instaló el paquete, la hoja de estilos.
+3. Pasar `rows`, `columns` y `rowKey`. Darle una altura al contenedor.
 
 ```vue
 <script setup lang="ts">
@@ -47,35 +48,36 @@ const columns: readonly DataTableColumn<Invoice>[] = [
 </template>
 ```
 
-The component fills its container; it has no height of its own. Wrap it in something with a height or
-you will see an empty box.
+El componente llena su contenedor; no tiene altura propia. Sin un contenedor con altura solo se ve
+una caja vacía.
 
-That is already a working grid: cell selection and full keyboard navigation are on by default
-(`selectionMode: 'cell'`). Click the table and use the arrow keys. Turn it off with
-`selection-mode="none"`.
+Eso ya es una grilla funcionando: la selección por celda y la navegación completa con el teclado
+vienen encendidas (`selectionMode: 'cell'`). Basta con hacer clic en la tabla y usar las flechas. Se
+apagan con `selection-mode="none"`.
 
-> **Use `shallowRef` for `rows`, not `ref`.** A deep `ref` wraps every row in a reactive Proxy. The
-> table never needs per-row reactivity — only to know that the array was replaced.
+> **Para `rows` va `shallowRef`, no `ref`.** Un `ref` profundo envuelve cada fila en un Proxy
+> reactivo. La tabla nunca necesita reactividad por fila: solo necesita enterarse de que el array fue
+> reemplazado.
 
 ---
 
-## Install
+## Instalación
 
-### Path A — copy the directory (shadcn style)
+### Opción A — copiar el directorio (estilo shadcn)
 
-Copy `src/components/ui/datatable/` anywhere in your project. The directory is self-contained: every
-import inside it is relative, and its only runtime dependency is `vue`. No build aliases, no shared
-utilities from this repo.
+Copiar `src/components/ui/datatable/` a cualquier lugar del proyecto. El directorio es
+autocontenido: todo lo que importa adentro lo hace por rutas relativas y su única dependencia de
+runtime es `vue`. Sin alias de build, sin utilidades compartidas de este repositorio.
 
 ```ts
 import { DataTable, DataTableColumnToggle } from '@/components/ui/datatable'
 import type { DataTableColumn } from '@/components/ui/datatable'
 ```
 
-No stylesheet import needed on this path — `DataTable.vue` imports `./styles/datatable.css` itself
-and your bundler deduplicates it.
+Por esta vía no hace falta importar la hoja de estilos: `DataTable.vue` importa
+`./styles/datatable.css` por su cuenta y el bundler la deduplica.
 
-### Path B — install the package from GitHub
+### Opción B — instalar el paquete desde GitHub
 
 ```sh
 npm install github:jorge-koki/datagrid-vue
@@ -84,31 +86,33 @@ npm install github:jorge-koki/datagrid-vue
 ```ts
 import { DataTable, DataTableColumnToggle } from 'datagrid-vue'
 import type { DataTableColumn } from 'datagrid-vue'
-import 'datagrid-vue/style.css' // required on this path
+import 'datagrid-vue/style.css' // obligatorio por esta vía
 ```
 
-On this path the CSS is **extracted to a separate file**, never injected into the JS. Injected CSS
-breaks SSR (the bundle would touch `document` on import) and takes away your ability to redefine the
-`--dt-*` tokens before mount. That is why the explicit stylesheet import exists.
+Por esta vía el CSS se **extrae a un archivo aparte**, nunca se inyecta dentro del JS. El CSS
+inyectado rompe el SSR —el bundle tocaría `document` al importarse— y además quita la posibilidad de
+redefinir los tokens `--dt-*` antes de montar. Esa es la razón de que la importación explícita
+exista.
 
-The package ships ESM only, with `vue` as a peer dependency — it is never bundled. Two copies of Vue
-in one application break reactivity in ways that are close to undebuggable: effects register on one
-runtime and fire from the other.
+El paquete se publica solo como ESM, con `vue` como peer dependency: nunca se empaqueta. Dos copias
+de Vue en una misma aplicación rompen la reactividad de una forma casi imposible de depurar, porque
+los efectos se registran en un runtime y se disparan desde el otro.
 
-`dist/` is not committed, so the package builds itself at install time through the `prepare` script
-that npm runs for git dependencies. Nothing extra to do on your side; it just means the install takes
-a couple of seconds longer than a registry install would.
+`dist/` no está versionado, así que el paquete se construye a sí mismo al instalarse, mediante el
+script `prepare` que npm ejecuta para las dependencias de git. No hay nada extra que hacer del lado
+del consumidor; solo significa que la instalación tarda un par de segundos más que una desde el
+registro.
 
-**If your project does not already declare `*.css` modules for TypeScript**, add a
-`declare module '*.css';` to a `.d.ts`. The emitted `DataTable.vue.d.ts` carries the SFC's
-side-effect CSS import. Vite projects already have this through `vite/client`; so do Nuxt and most
-webpack + TS setups.
+**Si el proyecto no declara todavía los módulos `*.css` para TypeScript**, hay que agregar un
+`declare module '*.css';` a algún `.d.ts`. El `DataTable.vue.d.ts` emitido arrastra la importación
+con efecto secundario del CSS del SFC. Los proyectos Vite ya lo tienen a través de `vite/client`, y
+también Nuxt y la mayoría de las configuraciones de webpack con TS.
 
 ---
 
-## Quick start
+## Ejemplo completo
 
-A complete, runnable example with editing wired up:
+Un ejemplo ejecutable, con la edición conectada de punta a punta:
 
 ```vue
 <script setup lang="ts">
@@ -155,12 +159,12 @@ const columns: readonly DataTableColumn<Invoice>[] = [
 const columnVisibility = shallowRef<ColumnVisibilityState>({})
 const table = useTemplateRef<DataTableInstance>('table')
 
-// Veto: a paid invoice is read-only.
+// Veto: una factura paga es de solo lectura.
 function onBeforeEdit(event: BeforeEditEvent<Invoice>): void {
   if (event.row.status === 'paid') event.cancel()
 }
 
-// The table is controlled: it never writes to `rows`. This handler owns the write.
+// La tabla es controlada: nunca escribe sobre `rows`. La escritura es de este handler.
 function onEditCommit(event: EditCommitEvent<Invoice>): void {
   const next = rows.value.slice()
   next[event.rowIndex] = { ...event.row, [event.columnKey]: event.newValue }
@@ -190,97 +194,107 @@ function onEditCommit(event: EditCommitEvent<Invoice>): void {
 </template>
 ```
 
-> **`TRow` must be a `type`, not an `interface`.** The component is declared as
-> `generic="TRow extends Record<string, unknown>"`, and in TypeScript only type aliases get an
-> implicit index signature. `interface Invoice { … }` will not satisfy the constraint.
+> **`TRow` tiene que ser un `type`, no una `interface`.** El componente se declara como
+> `generic="TRow extends Record<string, unknown>"`, y en TypeScript solo los alias de tipo reciben
+> una firma de índice implícita. `interface Invoice { … }` no satisface la restricción.
 
 ---
 
 ## Props
 
-`rows`, `columns` and `rowKey` are required. Everything else has a default.
+`rows`, `columns` y `rowKey` son obligatorias. Todo lo demás tiene valor por defecto.
 
-| Prop                 | Type                                                             | Default                  | Description                                                                                                                                         |
-| -------------------- | ---------------------------------------------------------------- | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `rows`               | `readonly TRow[]`                                                | —                        | The full dataset. Never sliced, copied or made deeply reactive. The table only indexes inside the visible window.                                   |
-| `columns`            | `readonly DataTableColumn<TRow>[]`                               | —                        | Column definitions, in declaration order. See [Columns](#columns).                                                                                  |
-| `rowKey`             | `keyof TRow \| ((row: TRow, index: number) => string \| number)` | —                        | Row identity. Stamped as `data-row-key` so the DOM stays inspectable and testable. It never affects recycling — the pool recycles by viewport slot. |
-| `rowHeight`          | `number`                                                         | `40` / `30` when `dense` | Row height in px. A number, not a CSS value: the virtualizer divides by it every frame. Mirrored into `--dt-row-height`.                            |
-| `headerHeight`       | `number`                                                         | `44` / `34` when `dense` | Header height in px. Mirrored into `--dt-header-height`.                                                                                            |
-| `dense`              | `boolean`                                                        | `false`                  | Compact preset: shorter rows, smaller type, tighter padding.                                                                                        |
-| `overscan`           | `number`                                                         | `4`                      | Extra rows and columns painted outside the visible window. Higher costs paint time, hides blank edges during fast scrolling.                        |
-| `defaultColumnWidth` | `number`                                                         | `150`                    | Width in px for columns that do not declare their own.                                                                                              |
-| `virtualizeColumns`  | `boolean`                                                        | `true`                   | Paint only horizontally visible columns. Turn it off for narrow tables where the whole row fits — there the window math is pure overhead.           |
-| `theme`              | `'light' \| 'dark' \| 'auto'`                                    | `'auto'`                 | Color scheme. See [Theming](#theming).                                                                                                              |
-| `emptyText`          | `string`                                                         | `'No data'`              | Message shown when `rows` is empty.                                                                                                                 |
-| `stripe`             | `boolean`                                                        | `false`                  | Alternate background on odd rows.                                                                                                                   |
-| `bordered`           | `boolean`                                                        | `false`                  | Draw cell separators.                                                                                                                               |
-| `columnVisibility`   | `Readonly<Record<string, boolean>>`                              | _uncontrolled_           | `v-model:column-visibility`. A missing key resolves to `column.defaultVisible ?? true`.                                                             |
-| `columnOrder`        | `readonly string[]`                                              | _uncontrolled_           | `v-model:column-order`. Reconciled against the current columns before it is applied.                                                                |
-| `columnWidths`       | `Readonly<Record<string, number>>`                               | _uncontrolled_           | `v-model:column-widths`. Overrides `column.width`, always clamped by `minWidth` / `maxWidth`.                                                       |
-| `tableId`            | `string`                                                         | —                        | Unique id for this table in your application. Required for persistence — it is what separates one table's layout from another's.                    |
-| `persist`            | `boolean \| DataTablePersistOptions`                             | `false`                  | Persist layout across sessions. `true` means `localStorage` with defaults. See [Persistence](#column-visibility-order-and-persistence).             |
-| `selectionMode`      | `'none' \| 'cell' \| 'row'`                                      | `'cell'`                 | What a click and the keyboard select. See [Selection](#selection-and-keyboard-navigation).                                                          |
-| `activeCell`         | `CellPosition \| null`                                           | _uncontrolled_           | `v-model:active-cell`. The currently selected cell. `null` means "controlled, nothing selected".                                                    |
+| Prop                    | Tipo                                                             | Por defecto                   | Descripción                                                                                                                                                                    |
+| ----------------------- | ---------------------------------------------------------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `rows`                  | `readonly TRow[]`                                                | —                             | El dataset completo. Nunca se corta, ni se copia, ni se vuelve reactivo en profundidad. La tabla solo indexa dentro de la ventana visible.                                     |
+| `columns`               | `readonly DataTableColumn<TRow>[]`                               | —                             | Definiciones de columna, en orden de declaración. Ver [Columnas](#columnas).                                                                                                   |
+| `rowKey`                | `keyof TRow \| ((row: TRow, index: number) => string \| number)` | —                             | Identidad de una fila. Se estampa como `data-row-key` para que el DOM siga siendo inspeccionable y testeable. Nunca afecta al reciclado: el pool recicla por slot de viewport. |
+| `rowHeight`             | `number`                                                         | `40` / `30` con `dense`       | Altura de fila en px. Es un número y no un valor CSS porque el virtualizador divide por él en cada frame. Se replica en `--dt-row-height`.                                     |
+| `headerHeight`          | `number`                                                         | `44` / `34` con `dense`       | Altura del header en px. Se replica en `--dt-header-height`.                                                                                                                   |
+| `dense`                 | `boolean`                                                        | `false`                       | Preset compacto: filas más bajas, tipografía menor, padding más ajustado.                                                                                                      |
+| `overscan`              | `number`                                                         | `4`                           | Filas y columnas extra pintadas fuera de la ventana visible. Más alto cuesta tiempo de pintado y oculta bordes en blanco durante el scroll rápido.                             |
+| `defaultColumnWidth`    | `number`                                                         | `150`                         | Ancho en px para las columnas que no declaran el suyo.                                                                                                                         |
+| `virtualizeColumns`     | `boolean`                                                        | `true`                        | Pinta solo las columnas visibles en horizontal. Conviene apagarlo en tablas angostas donde la fila entera entra: ahí el cálculo de ventana es overhead puro.                   |
+| `theme`                 | `'light' \| 'dark' \| 'auto'`                                    | `'auto'`                      | Esquema de color. Ver [Temas](#temas).                                                                                                                                         |
+| `emptyText`             | `string`                                                         | `'No data'`                   | Mensaje que se muestra cuando `rows` está vacío.                                                                                                                               |
+| `stripe`                | `boolean`                                                        | `false`                       | Fondo alternado en las filas impares.                                                                                                                                          |
+| `bordered`              | `boolean`                                                        | `false`                       | Dibuja separadores de celda.                                                                                                                                                   |
+| `columnVisibility`      | `Readonly<Record<string, boolean>>`                              | _no controlado_               | `v-model:column-visibility`. Una clave ausente se resuelve con `column.defaultVisible ?? true`.                                                                                |
+| `columnOrder`           | `readonly string[]`                                              | _no controlado_               | `v-model:column-order`. Se reconcilia contra las columnas actuales antes de aplicarse.                                                                                         |
+| `columnWidths`          | `Readonly<Record<string, number>>`                               | _no controlado_               | `v-model:column-widths`. Pisa a `column.width` y siempre se acota por `minWidth` / `maxWidth`.                                                                                 |
+| `tableId`               | `string`                                                         | —                             | Identificador único de esta tabla dentro de la aplicación. Obligatorio para persistir: es lo que separa el layout de una tabla del de otra.                                    |
+| `persist`               | `boolean \| DataTablePersistOptions`                             | `false`                       | Persiste el layout entre sesiones. `true` significa `localStorage` con los valores por defecto. Ver [Persistencia](#visibilidad-orden-y-persistencia-de-columnas).             |
+| `selectionMode`         | `'none' \| 'cell' \| 'row'`                                      | `'cell'`                      | Qué seleccionan el clic y el teclado. Ver [Selección](#selección-y-navegación-con-el-teclado).                                                                                 |
+| `activeCell`            | `CellPosition \| null`                                           | _no controlado_               | `v-model:active-cell`. La celda seleccionada. `null` significa "controlado y sin selección".                                                                                   |
+| `groupBy`               | `readonly string[]`                                              | _no controlado_ (lista vacía) | `v-model:group-by`. Claves de columna por las que agrupar, en orden de anidamiento. Ver [Agrupación](#agrupación).                                                             |
+| `expandedGroups`        | `readonly string[]`                                              | _no controlado_               | `v-model:expanded-groups`. `groupId` de los grupos expandidos. Una lista vacía significa "controlado y todo colapsado".                                                        |
+| `groupsDefaultExpanded` | `boolean`                                                        | `true`                        | Estado inicial de un grupo del que todavía no se sabe nada. Deja de intervenir cuando `expandedGroups` está controlado.                                                        |
+| `showGroupCount`        | `boolean`                                                        | `true`                        | Si la cabecera de grupo muestra la insignia con cuántas filas contiene.                                                                                                        |
 
-### Controlled vs uncontrolled
+### Controlado y no controlado
 
-`columnVisibility`, `columnOrder`, `columnWidths` and `activeCell` each work two ways, and the
-component serves both without branching internally:
+`columnVisibility`, `columnOrder`, `columnWidths`, `activeCell`, `groupBy` y `expandedGroups`
+funcionan de dos maneras cada uno, y el componente sirve a las dos sin bifurcar su lógica interna:
 
-- **Uncontrolled** (prop is `undefined`): the state lives in an internal ref and the table manages
-  itself. This is the mode persistence uses.
-- **Controlled** (prop has a value): the prop is the truth. The component does **not** write the
-  internal ref, it only emits `update:*`, and you decide. If you ignore the event, nothing changes —
-  normal `v-model` semantics.
+- **No controlado** (la prop llega `undefined`): el estado vive en un ref interno y la tabla se
+  administra sola. Es el modo que usa la persistencia.
+- **Controlado** (la prop llega con valor): la prop es la verdad. El componente **no** escribe el ref
+  interno, solo emite `update:*`, y el padre decide. Si el padre ignora el evento, no cambia nada: es
+  la semántica normal de un v-model.
 
-The `update:*` event fires either way, so you can observe changes without taking ownership.
+El evento `update:*` se emite igual en los dos modos, así que se pueden observar los cambios sin
+tomar posesión del estado.
 
-> **`activeCell` distinguishes `undefined` from `null`.** `undefined` means uncontrolled; `null`
-> means controlled with nothing selected. If the check were on falsiness instead, a parent that
-> cleared the selection would silently hand control back to the component.
+> **`activeCell` distingue `undefined` de `null`.** `undefined` significa no controlado; `null`
+> significa controlado y sin nada seleccionado. Si la comparación fuera por valor falsy, un padre que
+> limpia la selección le devolvería el control al componente sin querer. Lo mismo vale para
+> `expandedGroups`, donde una lista vacía es un estado legítimo del modo controlado.
 
 ---
 
-## Events
+## Eventos
 
-| Event                     | Payload                             | When                                                                                    |
-| ------------------------- | ----------------------------------- | --------------------------------------------------------------------------------------- |
-| `beforeEdit`              | `BeforeEditEvent<TRow>`             | Before a cell editor opens. **Cancelable.**                                             |
-| `editCommit`              | `EditCommitEvent<TRow>`             | An edit produced a value the parent should persist. Only when the value really changed. |
-| `afterEdit`               | `AfterEditEvent<TRow>`              | An edit session ended, committed or not. Exactly once per opened editor.                |
-| `columnResize`            | `ColumnResizeEvent`                 | A resize drag ended with a different width. A click without a drag is not a resize.     |
-| `rowClick`                | `{ row: TRow; rowIndex: number }`   | Click anywhere on a painted row.                                                        |
-| `cellSelect`              | `CellSelectEvent<TRow>`             | The active cell moved to a real cell. Carries the row, column and resolved value.       |
-| `update:activeCell`       | `CellPosition \| null`              | The active cell changed, including to `null`. Fires before `cellSelect`.                |
-| `update:columnVisibility` | `Readonly<Record<string, boolean>>` | Visibility changed (UI, persistence load, or `resetLayout`).                            |
-| `update:columnOrder`      | `string[]`                          | Order changed.                                                                          |
-| `update:columnWidths`     | `Readonly<Record<string, number>>`  | Widths changed, including during a resize drag.                                         |
+| Evento                    | Payload                             | Cuándo                                                                                               |
+| ------------------------- | ----------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `beforeEdit`              | `BeforeEditEvent<TRow>`             | Antes de que se abra el editor de una celda. **Cancelable.**                                         |
+| `editCommit`              | `EditCommitEvent<TRow>`             | Una edición produjo un valor que el padre debería persistir. Solo cuando el valor cambió de verdad.  |
+| `afterEdit`               | `AfterEditEvent<TRow>`              | Terminó una sesión de edición, haya commiteado o no. Exactamente una vez por editor abierto.         |
+| `columnResize`            | `ColumnResizeEvent`                 | Un arrastre de redimensionado terminó con un ancho distinto. Un clic sin arrastre no es un resize.   |
+| `rowClick`                | `{ row: TRow; rowIndex: number }`   | Clic en cualquier punto de una fila de datos pintada. Una cabecera de grupo no lo dispara.           |
+| `cellSelect`              | `CellSelectEvent<TRow>`             | La celda activa se movió a una celda real. Lleva la fila, la columna y el valor ya resuelto.         |
+| `groupToggle`             | `GroupToggleEvent`                  | Se plegó o se desplegó un grupo puntual, por clic o por teclado. Ver [Agrupación](#agrupación).      |
+| `update:activeCell`       | `CellPosition \| null`              | Cambió la celda activa, incluso a `null`. Se emite antes de `cellSelect`.                            |
+| `update:columnVisibility` | `Readonly<Record<string, boolean>>` | Cambió la visibilidad (por la UI, por la carga de la persistencia o por `resetLayout`).              |
+| `update:columnOrder`      | `string[]`                          | Cambió el orden.                                                                                     |
+| `update:columnWidths`     | `Readonly<Record<string, number>>`  | Cambiaron los anchos, también durante el arrastre.                                                   |
+| `update:groupBy`          | `string[]`                          | Cambiaron las claves de agrupación (por la UI, por la carga de la persistencia o por `resetLayout`). |
+| `update:expandedGroups`   | `string[]`                          | Cambió el estado de expansión. Lleva la lista COMPLETA de expandidos, no el grupo que cambió.        |
 
-### The edit lifecycle
+### El ciclo de edición
 
 ```
-double-click / Enter / F2 / checkbox click
+doble clic / Enter / F2 / clic en una casilla
         │
         ▼
-   beforeEdit  ──── event.cancel() ────► nothing else fires. No editor, no afterEdit.
+   beforeEdit  ──── event.cancel() ────► no pasa nada más. Ni editor, ni afterEdit.
         │
         ▼
-   editor opens (or the checkbox value is applied directly)
+   se abre el editor (o se aplica directamente el valor de la casilla)
         │
-        ├── Enter / blur / select change / row scrolled out of view ──► commit
-        └── Escape ────────────────────────────────────────────────► discard
-        │
-        ▼
-   editCommit   (only if newValue differs from oldValue)
+        ├── Enter / blur / cambio del select / la fila sale de la ventana ──► commit
+        └── Escape ──────────────────────────────────────────────────────► se descarta
         │
         ▼
-   afterEdit    (always; `canceled: true` when discarded with Escape)
+   editCommit   (solo si newValue difiere de oldValue)
+        │
+        ▼
+   afterEdit    (siempre; `canceled: true` cuando se descartó con Escape)
 ```
 
-**How to cancel.** Call `event.cancel()` synchronously inside your `beforeEdit` listener. It is safe
-to call more than once, and `event.canceled` reflects it. This is the hook for permission checks,
-per-row locks and "this column is read-only right now".
+**Cómo cancelar.** Hay que llamar a `event.cancel()` de forma síncrona dentro del listener de
+`beforeEdit`. Es seguro llamarla más de una vez, y `event.canceled` lo refleja. Este es el punto de
+enganche para chequeos de permisos, bloqueos por fila y "esta columna es de solo lectura en este
+momento".
 
 ```ts
 function onBeforeEdit(event: BeforeEditEvent<Invoice>): void {
@@ -290,105 +304,113 @@ function onBeforeEdit(event: BeforeEditEvent<Invoice>): void {
 }
 ```
 
-There is no async escape hatch — the emit is synchronous and the decision has to be back before the
-listener returns. Anything that needs a round trip should gate on data you already have in the row.
+No hay escape asíncrono: la emisión es síncrona y la decisión tiene que estar tomada antes de que el
+listener retorne. Todo lo que necesite una ida y vuelta al servidor debería decidirse con datos que
+ya estén en la fila.
 
-**`editCommit` is the only event that asks you to write.** The table is controlled and never mutates
-`rows`. If you ignore `editCommit`, the cell shows its previous value on the next paint — which is
-the correct behavior for a controlled component, not a bug.
+**`editCommit` es el único evento que pide escribir.** La tabla es controlada y nunca muta `rows`. Si
+se ignora `editCommit`, la celda vuelve a mostrar su valor anterior en el próximo pintado, que es el
+comportamiento correcto de un componente controlado y no un bug.
 
-The new value is coerced back to the primitive type of the old value where that is unambiguous, so
-editing a numeric column hands you a `number`, not a `string`. A `<select>` hands back the typed
-`option.value`, so a parent that stored `1` does not get `"1"`.
+El valor nuevo se coacciona de vuelta al tipo primitivo del anterior donde eso no es ambiguo, así que
+editar una columna numérica entrega un `number` y no un `string`. Un `<select>` devuelve el
+`option.value` tipado, de modo que un padre que guardaba `1` no recibe `"1"`.
 
-**What opens and closes an editor**
+**Qué abre y qué cierra un editor**
 
-A single click does **not** open the editor — it selects. The full key map lives in
-[Selection and keyboard navigation](#selection-and-keyboard-navigation); this table is only the part
-that touches editing.
+Un clic simple **no** abre el editor: selecciona. El mapa de teclas completo está en
+[Selección y navegación con el teclado](#selección-y-navegación-con-el-teclado); esta tabla es solo
+la parte que toca la edición.
 
-| Input                                           | Effect                                                                         |
-| ----------------------------------------------- | ------------------------------------------------------------------------------ |
-| Double-click a cell                             | Open the editor                                                                |
-| `Enter` or `F2` on the active cell              | Open the editor; on a checkbox column, toggle the value instead                |
-| Type a printable character on the active cell   | Open the editor seeded with that character (not for `select` / `date`)         |
-| `Enter` in the editor                           | Commit, then move the selection one row down                                   |
-| `Escape` in the editor                          | Discard (still emits `afterEdit` with `canceled: true`) and keep the selection |
-| Blur the editor                                 | Commit                                                                         |
-| Change a `<select>` editor                      | Commit immediately                                                             |
-| Scroll the edited row out of the virtual window | Commit and close — the node backing that cell has been recycled                |
+| Entrada                                            | Efecto                                                                          |
+| -------------------------------------------------- | ------------------------------------------------------------------------------- |
+| Doble clic en una celda                            | Abre el editor                                                                  |
+| `Enter` o `F2` sobre la celda activa               | Abre el editor; en una columna de casillas, alterna el valor                    |
+| Escribir un carácter imprimible en la celda activa | Abre el editor sembrado con ese carácter (no en `select` ni en `date`)          |
+| `Enter` dentro del editor                          | Commitea y baja la selección una fila                                           |
+| `Escape` dentro del editor                         | Descarta (igual emite `afterEdit` con `canceled: true`) y conserva la selección |
+| Quitarle el foco al editor                         | Commitea                                                                        |
+| Cambiar un editor `<select>`                       | Commitea de inmediato                                                           |
+| Sacar la fila editada de la ventana virtual        | Commitea y cierra: el nodo que sostenía esa celda ya se recicló                 |
 
-While an editor is open the grid's own key handler stands down completely: arrows, `Home`, `PageUp`
-and the rest belong to the control. `Enter` and `Escape` stop propagating, so closing the editor
-cannot immediately reopen it.
+Mientras hay un editor abierto, el manejador de teclado de la grilla se aparta por completo: las
+flechas, `Home`, `PageUp` y las demás son del control. `Enter` y `Escape` detienen su propagación,
+así que cerrar el editor no puede reabrirlo en el acto.
 
 ---
 
-## Selection and keyboard navigation
+## Selección y navegación con el teclado
 
-The model is a spreadsheet's: **one click selects, two clicks edit.** Selecting to read a value or to
-start navigating is far more common than editing, and requiring a double-click for it would cost an
-extra gesture in the common case.
+El modelo es el de una planilla de cálculo: **un clic selecciona, dos clics editan.** Seleccionar
+para leer un valor o para empezar a navegar es mucho más frecuente que editar, y exigir doble clic
+para eso costaría un gesto de más en el caso común.
 
-Selection is a `CellPosition` (`{ rowIndex, columnKey }`) held by the component, not DOM focus. That
-matters here more than in an ordinary table: pool nodes are recycled as you scroll, so the focused
-element is not a reliable place to store "where the user is standing". The active position survives
-any repaint.
+La selección es una `CellPosition` (`{ rowIndex, columnKey }`) que guarda el componente, no el foco
+del DOM. Acá eso importa más que en una tabla común: los nodos del pool se reciclan al scrollear, así
+que el elemento enfocado no es un lugar confiable donde guardar "dónde está parado el usuario". La
+posición activa sobrevive a cualquier repintado.
+
+> **Con grupos activos, `rowIndex` indexa la secuencia VISIBLE**, no la prop `rows`. Los eventos
+> hacen el camino inverso. La distinción está desarrollada en
+> [Dos números distintos: posición visible e índice original](#dos-números-distintos-posición-visible-e-índice-original).
 
 ### `selectionMode`
 
-| Value    | Behavior                                                                                                                                                                                  |
-| -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `'cell'` | Default. The active **cell** gets `.dt-cell--active` and `aria-selected`; its row also gets `.dt-row--active`.                                                                            |
-| `'row'`  | The active **row** is the selected unit: it gets the ring and `aria-selected`; the cell gets neither. The active cell is still tracked, so arrow keys still know which column you are in. |
-| `'none'` | No pointer selection, no key handler registered at all, and the viewport is not focusable (`tabindex="-1"`).                                                                              |
+| Valor    | Comportamiento                                                                                                                                                                                                    |
+| -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `'cell'` | Por defecto. La **celda** activa recibe `.dt-cell--active` y `aria-selected`; su fila recibe además `.dt-row--active`.                                                                                            |
+| `'row'`  | La **fila** activa es la unidad seleccionada: recibe el anillo y `aria-selected`, y la celda no recibe ninguno de los dos. La celda activa se sigue registrando, para que las flechas sepan en qué columna están. |
+| `'none'` | Sin selección por puntero, sin ningún manejador de teclado registrado, y el viewport deja de ser enfocable (`tabindex="-1"`).                                                                                     |
 
-`'none'` is not an early return inside a handler — the listener object is empty, so Vue registers
-nothing. The exposed `selectCell()` still writes the state if you call it, so a programmatic
-selection remains possible; only the user-facing input paths are gone.
+`'none'` no es un early return dentro de un manejador: el objeto de listeners viene vacío y Vue no
+registra nada. El `selectCell()` expuesto sigue escribiendo el estado si se lo llama, así que una
+selección por código sigue siendo posible; lo que desaparece son las vías de entrada del usuario.
 
-### Keys
+### Teclas
 
-All of these act on the active cell and require the viewport to have focus.
+Todas actúan sobre la celda activa y requieren que el viewport tenga el foco.
 
-| Key                     | Effect                                                                                    |
-| ----------------------- | ----------------------------------------------------------------------------------------- |
-| `↑` `↓` `←` `→`         | Move one cell. **Clamps at the edges — it does not wrap.**                                |
-| `Tab` / `Shift`+`Tab`   | Move one cell in reading order. **Wraps to the next / previous row** at the end of a row. |
-| `Home`                  | First column of the current row                                                           |
-| `End`                   | Last column of the current row                                                            |
-| `Ctrl`/`Cmd`+`Home`     | First cell of the table                                                                   |
-| `Ctrl`/`Cmd`+`End`      | Last cell of the table                                                                    |
-| `PageUp` / `PageDown`   | Up or down by one viewport's worth of whole rows (minimum 1)                              |
-| `Enter` / `F2`          | Edit the active cell (toggles it, on a checkbox column)                                   |
-| Any printable character | Edit the active cell, seeded with that character                                          |
-| `Escape`                | With an editor open: discard. With no editor open: **nothing** — the selection is kept.   |
+| Tecla                         | Efecto                                                                                                 |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `↑` `↓` `←` `→`               | Mueve una celda. **Se acota en los bordes: no da la vuelta.**                                          |
+| `Tab` / `Shift`+`Tab`         | Mueve una celda en orden de lectura. **Pasa a la fila siguiente o anterior** al llegar al borde.       |
+| `Home`                        | Primera columna de la fila actual                                                                      |
+| `End`                         | Última columna de la fila actual                                                                       |
+| `Ctrl`/`Cmd`+`Home`           | Primera celda de la tabla                                                                              |
+| `Ctrl`/`Cmd`+`End`            | Última celda de la tabla                                                                               |
+| `PageUp` / `PageDown`         | Sube o baja un viewport completo de filas enteras (mínimo 1)                                           |
+| `Enter` / `F2`                | Edita la celda activa (la alterna, en una columna de casillas); sobre una cabecera de grupo, la pliega |
+| `Espacio`                     | Sobre una cabecera de grupo, la pliega; sobre una fila de datos es un carácter imprimible más          |
+| Cualquier carácter imprimible | Edita la celda activa, sembrada con ese carácter                                                       |
+| `Escape`                      | Con un editor abierto: descarta. Sin editor abierto: **nada**, la selección se conserva.               |
 
-Two deliberate asymmetries:
+Dos asimetrías deliberadas:
 
-- **Arrows clamp, `Tab` wraps.** Arrows are spatial — running off the right edge and reappearing on
-  the next row is disorienting. `Tab` is sequential, which is what it means in a form and in a
-  spreadsheet, and it is what lets you walk the whole grid without leaving the keyboard.
-- **`Escape` with no editor open keeps the selection.** Losing track of where you were standing is
-  more annoying than staying selected.
+- **Las flechas se acotan, `Tab` da la vuelta.** Las flechas son espaciales: pasarse del borde
+  derecho y reaparecer en la fila siguiente desorienta. `Tab` es secuencial, que es lo que significa
+  en un formulario y en una planilla, y es lo que permite recorrer la grilla entera sin soltar el
+  teclado.
+- **`Escape` sin editor abierto conserva la selección.** Perder de vista dónde estaba parado uno es
+  más molesto que seguir seleccionado.
 
-**Typing to edit** ignores modifier combinations so it cannot hijack browser shortcuts: the key must
-be exactly one character long, with no `Ctrl`, `Cmd` or `Alt`. `Shift` is allowed, since it only
-changes which character you get. The seeded character is **not** selected in the input, so what you
-type next appends instead of replacing. `select` and `date` editors ignore the seed and open on the
-current value — there is no sensible way to seed a dropdown or a date picker with one keystroke.
+**Escribir para editar** ignora las combinaciones con modificadores para no secuestrar los atajos del
+navegador: la tecla tiene que medir exactamente un carácter, sin `Ctrl`, `Cmd` ni `Alt`. `Shift` sí
+se admite, porque solo cambia qué carácter sale. El carácter sembrado **no** queda seleccionado
+dentro del input, así que lo que se escriba después se agrega en lugar de reemplazarlo. Los editores
+`select` y `date` ignoran la semilla y se abren con el valor actual: no hay forma sensata de sembrar
+un desplegable o un selector de fechas con una sola tecla.
 
-**Hidden columns are skipped.** Navigation walks the _resolved_ columns, which already exclude
-hidden ones and respect the current order. An arrow key never parks on a column you cannot see.
+**Las columnas ocultas se saltean.** La navegación recorre las columnas _resueltas_, que ya excluyen
+las ocultas y respetan el orden vigente. Una flecha nunca se estaciona en una columna que no se ve.
 
 ### Auto-scroll
 
-Keyboard navigation scrolls **the minimum necessary** to bring the target cell into view — it does
-not center it. Centering moves the viewport even when the cell was already visible, which turns every
-arrow keypress into a jump. With a minimal adjustment, moving inside the window scrolls nothing and
-reaching an edge advances exactly one row or one column.
+La navegación con el teclado desplaza **lo mínimo necesario** para traer la celda destino a la vista;
+no la centra. Centrar mueve el viewport incluso cuando la celda ya estaba visible, y eso convierte
+cada flecha en un salto. Con el ajuste mínimo, moverse dentro de la ventana no desplaza nada y llegar
+a un borde avanza exactamente una fila o una columna.
 
-### Wiring it up
+### Cómo se conecta
 
 ```vue
 <script setup lang="ts">
@@ -415,84 +437,97 @@ function onCellSelect(event: CellSelectEvent<Invoice>): void {
 </template>
 ```
 
-`update:activeCell` fires on every change, including to `null`. `cellSelect` fires only when the new
-position resolves to a real row and a visible column, and it carries the row, the column definition
-and the value already read through the column's `accessor` — so a details panel does not have to look
-anything up.
+`update:activeCell` se emite ante cualquier cambio, incluido el paso a `null`. `cellSelect` se emite
+solo cuando la posición nueva resuelve a una fila real y a una columna visible, y lleva la fila, la
+definición de columna y el valor ya leído por el `accessor` de la columna, así que un panel de
+detalle no tiene que buscar nada.
 
-Neither event fires when the selection is set to the cell that is already active.
+Ninguno de los dos se emite cuando la selección se fija en la celda que ya estaba activa.
 
-### How selection interacts with editing
+### Cómo se relacionan selección y edición
 
-- Selecting never opens an editor, and opening an editor never moves the selection.
-- The editor still goes through `beforeEdit`, so a veto stops it and leaves the cell selected.
-- `Enter` inside the editor commits **and moves the selection one row down**, spreadsheet style. The
-  move happens whether or not the parent persists the value — it is navigation, not editing.
-- Scrolling the edited row out of the virtual window commits and closes the editor; the selection
-  stays on that cell.
+- Seleccionar nunca abre un editor, y abrir un editor nunca mueve la selección.
+- El editor sigue pasando por `beforeEdit`, así que un veto lo detiene y deja la celda seleccionada.
+- `Enter` dentro del editor commitea **y baja la selección una fila**, como en una planilla. El
+  movimiento ocurre persista o no el padre el valor: es navegación, no edición.
+- Sacar la fila editada de la ventana virtual commitea y cierra el editor; la selección se queda en
+  esa celda.
 
-### Accessibility
+### Accesibilidad
 
-The scrolling viewport is the grid. Roles and indices are written once per node where they are
-structural, and only when they change where they are not — `aria-rowindex` lives on the row rather
-than on each cell, which is the same information for a screen reader at a fifteenth of the writes.
+El viewport que scrollea es la grilla. Los roles y los índices se escriben una vez por nodo donde son
+estructurales, y solo cuando cambian donde no lo son: `aria-rowindex` vive en la fila y no en cada
+celda, que es la misma información para un lector de pantalla a la quinceava parte de las escrituras.
 
-| Element        | Attributes                                                                                                                                                     |
-| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `.dt-viewport` | `role="grid"`, `aria-rowcount` (data rows **+ 1** for the header), `aria-colcount` (visible columns), `tabindex="0"` unless `selectionMode` is `'none'`        |
-| `.dt-row`      | `role="row"`, `aria-rowindex` (1-based, and offset by the header row: data row `0` reports `2`), `aria-selected` in `'row'` mode                               |
-| `.dt-cell`     | `role="gridcell"`, `aria-colindex` (1-based over the **visible** columns, so a hidden column takes no slot), `aria-selected` in `'cell'` mode, `tabindex="-1"` |
+| Elemento               | Atributos                                                                                                                                                                                                       |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.dt-viewport`         | `role="grid"` —o `role="treegrid"` con agrupación activa—, `aria-rowcount` (entradas visibles **+ 1** por el header), `aria-colcount` (columnas visibles), `tabindex="0"` salvo con `selectionMode` en `'none'` |
+| `.dt-row`              | `role="row"`, `aria-rowindex` (base 1, corrido por la fila de header: la fila de datos `0` reporta `2`), `aria-selected` en modo `'row'`, `aria-level` con agrupación activa                                    |
+| `.dt-row.dt-group-row` | Además: `aria-expanded`, `aria-level` (base 1, igual a `depth + 1`), `aria-posinset` y `aria-setsize` entre sus hermanos de nivel                                                                               |
+| `.dt-cell`             | `role="gridcell"`, `aria-colindex` (base 1 sobre las columnas **visibles**, así que una columna oculta no ocupa slot), `aria-selected` en modo `'cell'`, `tabindex="-1"`                                        |
 
-Cells carry `tabindex="-1"` so they are focusable by script and click without entering the tab order
-— with ~450 visible cells, joining the tab order would make the table impossible to tab past.
+Las celdas llevan `tabindex="-1"` para poder recibir el foco por código y por clic sin entrar en el
+orden de tabulación: con unas 450 celdas visibles, entrar en ese orden haría imposible tabular más
+allá de la tabla.
 
-> **Known gap.** The header is rendered outside the `role="grid"` element and carries no
-> `role="row"` / `role="columnheader"`. `aria-rowcount` and `aria-rowindex` both count a header row
-> that assistive technology cannot find inside the grid. Column names are therefore not announced
-> with the cells. Fixing it means moving the header inside the grid or wiring `aria-describedby` per
-> column; until then, treat the header as visual-only.
+> **Hueco conocido.** El header se renderiza fuera del elemento con `role="grid"` y no lleva
+> `role="row"` ni `role="columnheader"`. Tanto `aria-rowcount` como `aria-rowindex` cuentan una fila
+> de header que la tecnología asistiva no puede encontrar dentro de la grilla. Por eso los nombres de
+> las columnas no se anuncian junto con las celdas. Resolverlo implica mover el header adentro de la
+> grilla o cablear un `aria-describedby` por columna; hasta entonces, conviene tratar al header como
+> puramente visual.
 
 ---
 
-## Exposed methods
+## Métodos expuestos
 
-Reach for these through a template ref when the declarative props are not enough.
+Se llegan a través de un template ref cuando las props declarativas no alcanzan.
 
 ```ts
 const table = useTemplateRef<DataTableInstance>('table')
 ```
 
-| Method                | Description                                                                                                     |
-| --------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `scrollToRow(index)`  | Scroll until `index` is the first fully visible row. Clamped to the dataset.                                    |
-| `scrollToColumn(key)` | Scroll until that column sits at the left edge. No-op for an unknown key.                                       |
-| `scrollToCell(pos)`   | Scroll the minimum needed to bring that cell into view. Does not center, does not move the selection.           |
-| `selectCell(pos)`     | Set the active cell, or clear it with `null`. **Also scrolls it into view**, unlike an internal selection.      |
-| `refresh()`           | Invalidate every cached cell value **and schedule a repaint on the next frame**.                                |
-| `resetLayout()`       | Drop the stored layout and return visibility, order and widths to their defaults. This is your "reset columns". |
-| `flushPersistence()`  | Write the debounced layout immediately. Unmount already flushes on its own.                                     |
+| Método                 | Descripción                                                                                                                           |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `scrollToRow(index)`   | Desplaza hasta que `index` sea la primera fila completamente visible. Se acota. Con grupos, `index` recorre la secuencia visible.     |
+| `scrollToColumn(key)`  | Desplaza hasta que esa columna quede en el borde izquierdo. No hace nada con una clave desconocida.                                   |
+| `scrollToCell(pos)`    | Desplaza lo mínimo necesario para traer esa celda a la vista. No centra y no mueve la selección.                                      |
+| `selectCell(pos)`      | Fija la celda activa, o la limpia con `null`. **Además la trae a la vista**, a diferencia de una selección interna.                   |
+| `refresh()`            | Invalida todos los valores de celda cacheados, rehace el árbol de grupos **y agenda un repintado en el próximo frame**.               |
+| `resetLayout()`        | Descarta el layout guardado y vuelve visibilidad, orden, anchos y agrupación a sus valores por defecto. Es el "restablecer columnas". |
+| `flushPersistence()`   | Escribe de inmediato el layout pendiente por el debounce. El desmontaje ya vuelca lo pendiente por su cuenta.                         |
+| `toggleGroup(groupId)` | Invierte el estado de un grupo por su `groupId`. Ver [Agrupación](#agrupación).                                                       |
+| `expandAllGroups()`    | Expande todos los grupos del árbol actual.                                                                                            |
+| `collapseAllGroups()`  | Colapsa todos los grupos del árbol actual.                                                                                            |
 
-`selectCell` scrolls and the internal click/keyboard path does not need to, because code calling it —
-a search result, a deep link — has no way of knowing whether that cell was inside the window. It
-emits `update:activeCell` and `cellSelect` exactly like a click would.
+`selectCell` desplaza y el camino interno de clic y teclado no lo necesita, porque el código que la
+llama —un resultado de búsqueda, un enlace profundo— no tiene forma de saber si esa celda estaba
+dentro de la ventana. Emite `update:activeCell` y `cellSelect` exactamente igual que un clic.
 
-**When you actually need `refresh()`.** The paint cache is keyed by the raw cell value, so a changed
-value repaints itself — _on the next frame that gets scheduled_. Frames are scheduled by scrolling,
-resizing, and by changes to `rows`, `columns`, `stripe`, `virtualizeColumns`, row height, the
-resolved columns, the selection mode, the active cell, or the editing cell. Two consequences:
+**Cuándo hace falta `refresh()` de verdad.** El caché de pintado se indexa por el valor crudo de la
+celda, así que un valor que cambió se repinta solo, _en el próximo frame que alguien agende_. Los
+frames los agendan el scroll, el cambio de tamaño y los cambios en `rows`, `columns`, `stripe`,
+`virtualizeColumns`, la altura de fila, las columnas resueltas, el modo de selección, la celda activa,
+la celda en edición y la vista aplanada. De ahí salen dos consecuencias:
 
-- If you mutate a row object **in place** and nothing else changes, no frame is scheduled and the
-  screen does not update. Call `refresh()`, or replace the array (the controlled pattern).
-- If `format` or `cellClass` start returning something different **without their arguments
-  changing** — because they close over a locale, an exchange rate, a selection set — the cache is
-  right about its inputs and wrong about its output. `refresh()` is how you tell it.
+- Si se muta un objeto de fila **en el lugar** y nada más cambia, no se agenda ningún frame y la
+  pantalla no se actualiza. Hay que llamar a `refresh()`, o reemplazar el array (el patrón
+  controlado).
+- Si `format` o `cellClass` empiezan a devolver algo distinto **sin que cambien sus argumentos**
+  —porque cierran sobre un locale, una cotización, un conjunto de selección—, el caché tiene razón
+  sobre sus entradas y se equivoca sobre su salida. `refresh()` es la forma de avisarle.
+
+Con agrupación activa hay una tercera: los contadores y los agregados salen del árbol de grupos, que
+se reconstruye por IDENTIDAD de `rows`. Una mutación en el lugar tampoco la mueve, así que sin
+`refresh()` las cabeceras seguirían anunciando los totales anteriores mientras las celdas ya muestran
+los nuevos. `refresh()` cubre las tres cosas de una vez.
 
 ---
 
-## Columns
+## Columnas
 
-A column is configuration, not state. It is read on every paint, which puts `format` and `cellClass`
-directly on the scroll hot path.
+Una columna es configuración, no estado. Se lee en cada pintado, lo que deja a `format` y a
+`cellClass` directamente sobre el camino caliente del scroll.
 
 ```ts
 interface DataTableColumn<TRow> {
@@ -515,167 +550,180 @@ interface DataTableColumn<TRow> {
   min?: number
   max?: number
   step?: number
+  groupable?: boolean
+  aggregate?: ColumnAggregation<TRow>
 }
 ```
 
-| Field                   | Default                                      | Notes                                                                                                       |
-| ----------------------- | -------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `key`                   | —                                            | Unique id, and the default data key (`row[key]`).                                                           |
-| `label`                 | `key`                                        | Header text.                                                                                                |
-| `width`                 | `defaultColumnWidth` (150)                   | Always clamped to `[max(32, minWidth), min(4000, maxWidth)]`.                                               |
-| `minWidth` / `maxWidth` | `32` / `4000`                                | Applied when resolving the width and while resizing.                                                        |
-| `resizable`             | `false`                                      | Shows a drag handle on the header edge.                                                                     |
-| `align`                 | the renderer's `defaultAlign`, else `'left'` | An explicit `align` always wins. Applied as a class, not an inline style.                                   |
-| `editable`              | `false`                                      | Must be exactly `true` for a cell to be editable.                                                           |
-| `format`                | —                                            | Raw value → the string written to the cell. **Must be pure and cheap.**                                     |
-| `cellClass`             | —                                            | Extra CSS class on the cell element. Also on the hot path.                                                  |
-| `accessor`              | `row[key]`                                   | Reads the value from the row. Returns `CellValue` — it cannot return an object or an array.                 |
-| `renderer`              | `'text'`                                     | A registered renderer name, or an implementation. Unknown names fall back to `'text'` rather than throwing. |
-| `hideable`              | `true`                                       | `false` pins the column out of `DataTableColumnToggle`.                                                     |
-| `defaultVisible`        | `true`                                       | Initial visibility. Persistence and the v-model both outrank it.                                            |
-| `editor`                | inferred (see below)                         | The control that opens on edit.                                                                             |
-| `options`               | —                                            | Feeds the `badge` / `select` / `tags` renderers **and** the `select` editor. One source of truth.           |
-| `min`/`max`/`step`      | —                                            | Forwarded to the `number` editor's input attributes.                                                        |
+| Campo                   | Por defecto                                    | Notas                                                                                                                                          |
+| ----------------------- | ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `key`                   | —                                              | Id único, y también la clave de datos por defecto (`row[key]`).                                                                                |
+| `label`                 | `key`                                          | Texto del header.                                                                                                                              |
+| `width`                 | `defaultColumnWidth` (150)                     | Siempre acotado a `[max(32, minWidth), min(4000, maxWidth)]`.                                                                                  |
+| `minWidth` / `maxWidth` | `32` / `4000`                                  | Se aplican al resolver el ancho y durante el redimensionado.                                                                                   |
+| `resizable`             | `false`                                        | Muestra un handle de arrastre en el borde del header.                                                                                          |
+| `align`                 | el `defaultAlign` del renderer, si no `'left'` | Un `align` explícito siempre gana. Se aplica como clase, no como estilo inline.                                                                |
+| `editable`              | `false`                                        | Tiene que ser exactamente `true` para que la celda se pueda editar.                                                                            |
+| `format`                | —                                              | Valor crudo → el string que se escribe en la celda. **Debe ser puro y barato.** No se aplica a los agregados.                                  |
+| `cellClass`             | —                                              | Clase CSS extra sobre el elemento de celda. También está en el camino caliente.                                                                |
+| `accessor`              | `row[key]`                                     | Lee el valor desde la fila. Devuelve `CellValue`: no puede devolver un objeto ni un array.                                                     |
+| `renderer`              | `'text'`                                       | Nombre de un renderer registrado, o una implementación. Un nombre desconocido cae en `'text'` en lugar de lanzar.                              |
+| `hideable`              | `true`                                         | `false` deja la columna fuera de `DataTableColumnToggle`.                                                                                      |
+| `defaultVisible`        | `true`                                         | Visibilidad inicial. La persistencia y el v-model tienen prioridad sobre esto.                                                                 |
+| `editor`                | inferido (ver más abajo)                       | El control que se abre al editar.                                                                                                              |
+| `options`               | —                                              | Alimenta los renderers `badge` / `select` / `tags`, **el** editor `select` y la etiqueta de las cabeceras de grupo. Una sola fuente de verdad. |
+| `min`/`max`/`step`      | —                                              | Se trasladan a los atributos del input del editor `number`.                                                                                    |
+| `groupable`             | `true`                                         | `false` hace que una clave suya dentro de `groupBy` se descarte. No oculta la columna. Ver [Agrupación](#agrupación).                          |
+| `aggregate`             | —                                              | Agregación que esta columna muestra en las cabeceras de grupo: una incluida o una función propia.                                              |
 
-### `renderer` and `editor` are two independent axes
+### `renderer` y `editor` son dos ejes independientes
 
-How a cell **looks** and how it is **edited** are separate decisions. A badge can be read-only, and a
-plain text cell can open a dropdown. Coupling them would force a renderer per combination.
+Cómo se **ve** una celda y cómo se **edita** son decisiones separadas. Un badge puede ser de solo
+lectura y una celda de texto plano puede abrir un desplegable. Acoplarlos obligaría a inventar un
+renderer por cada combinación.
 
 ```ts
-// Looks like a flat badge (no chevron), but edits through a dropdown.
+// Se ve como un badge liso (sin chevron), pero se edita con un desplegable.
 { key: 'priority', renderer: 'badge', editor: 'select', editable: true, options: PRIORITIES }
 
-// Looks like a dropdown (badge + chevron) but is not editable at all.
+// Se ve como un desplegable (badge + chevron) y no es editable en absoluto.
 { key: 'status', renderer: 'select', options: STATUSES }
 ```
 
-### Editor inference
+### Inferencia del editor
 
-When `column.editor` is absent, the type is inferred from the **current cell value**, in this order:
+Cuando falta `column.editor`, el tipo se infiere a partir del **valor actual de la celda**, en este
+orden:
 
-| #   | Condition                     | Editor     |
-| --- | ----------------------------- | ---------- |
-| 1   | `column.editor` is set        | that one   |
-| 2   | value is a `boolean`          | `checkbox` |
-| 3   | value is a `number`           | `number`   |
-| 4   | value is a `Date`             | `date`     |
-| 5   | `column.options` is non-empty | `select`   |
-| 6   | otherwise                     | `text`     |
+| #   | Condición                      | Editor     |
+| --- | ------------------------------ | ---------- |
+| 1   | `column.editor` está definido  | ese        |
+| 2   | el valor es `boolean`          | `checkbox` |
+| 3   | el valor es `number`           | `number`   |
+| 4   | el valor es `Date`             | `date`     |
+| 5   | `column.options` no está vacío | `select`   |
+| 6   | en cualquier otro caso         | `text`     |
 
-Value type beats `options` deliberately: a boolean column with two options is still a checkbox, not a
-two-item dropdown. And `options` beats the text fallback because a declared list is an explicit
-intent to constrain the possible values.
+El tipo del valor le gana a `options` a propósito: una columna booleana con dos opciones sigue siendo
+una casilla y no un desplegable de dos ítems. Y `options` le gana al fallback de texto porque una
+lista declarada es una intención explícita de acotar los valores posibles.
 
-The `checkbox` editor has no floating control — the checkbox lives in the cell. Clicking it is an
-_intent_: the pool reverts the visual state immediately and sends the change through the same
-`beforeEdit` → `editCommit` → `afterEdit` pipeline, so a veto cannot be bypassed through it.
+El editor `checkbox` no tiene control flotante: la casilla vive dentro de la celda. Hacerle clic es
+una _intención_: el pool revierte el estado visual de inmediato y manda el cambio por la misma
+tubería `beforeEdit` → `editCommit` → `afterEdit`, así que un veto no se puede esquivar por ahí.
 
-The `date` editor round-trips in UTC on both sides. Mixing local time and UTC is the classic source
-of the "date shifted by one day" bug.
+El editor `date` va y vuelve en UTC de los dos lados. Mezclar hora local y UTC es el origen clásico
+del bug de "la fecha se corrió un día".
 
 ---
 
 ## Renderers
 
-A renderer is a **stateless strategy**: `create` builds a cell's internal structure once, `update`
-mutates it on every repaint. One shared instance per name serves every cell.
+Un renderer es una **estrategia sin estado**: `create` construye la estructura interna de una celda
+una vez, y `update` la muta en cada repintado. Una única instancia compartida por nombre atiende a
+todas las celdas.
 
-Eight are registered out of the box. Set one with `renderer: '<name>'`.
+Vienen ocho registrados. Se elige uno con `renderer: '<nombre>'`.
 
-### `text` — the default
+### `text` — el que viene por defecto
 
-Writes the value as plain text. Uses `column.format` when present, otherwise the built-in
-representation: `Date` → ISO string, everything else → `String(value)`.
+Escribe el valor como texto plano. Usa `column.format` cuando existe y, si no, la representación
+incluida: `Date` → string ISO, y todo lo demás → `String(value)`.
 
-Objects and arrays arrive already stringified (the value path narrows to `CellValue`), so they show
-as `[object Object]`. That is deliberate: a blank cell would hide the problem, this one points at a
-column that needs an `accessor` or a `format`.
+Los objetos y los arrays llegan ya convertidos a string (el camino del valor se estrecha a
+`CellValue`), así que se muestran como `[object Object]`. Es deliberado: una celda en blanco
+escondería el problema, y esta señala una columna que necesita un `accessor` o un `format`.
 
-### `number` — right-aligned, thousands separators
+### `number` — alineado a la derecha, con separador de miles
 
-Accepts a `number`; a numeric string is parsed. `null`, `undefined` and `NaN` render as an **empty
-string**, not `"NaN"` — in a money column `NaN` reads as corrupted data. `defaultAlign: 'right'`, so
-the header aligns with the cells without asking.
+Acepta un `number`; un string numérico se parsea. `null`, `undefined` y `NaN` se renderizan como
+**string vacío**, no como `"NaN"`: en una columna de dinero, `NaN` se lee como dato corrupto.
+`defaultAlign: 'right'`, así que el header se alinea con las celdas sin que nadie lo pida.
 
-The `Intl.NumberFormat` is built once at module scope. Building one inside `update` would mean one
-instance per cell per frame.
+El `Intl.NumberFormat` se construye una sola vez, a nivel de módulo. Construirlo dentro de `update`
+significaría una instancia por celda y por frame.
 
-### `badge` — a colored pill
+### `badge` — una píldora de color
 
-Resolves the value against `column.options`, first by identity then by string form (a backend may
-return `"1"` where the options declare `1`). Unknown values render the **raw value with the neutral
-color** — never a blank cell; a state the UI does not know about is still data the user needs. With
-no `options` at all it behaves as a neutral badge showing the value.
+Resuelve el valor contra `column.options`, primero por identidad y después por su forma de texto (un
+backend puede devolver `"1"` donde las opciones declaran `1`). Los valores desconocidos se renderizan
+con **el valor crudo y el color neutro**, nunca con una celda en blanco: un estado que la UI no
+conoce sigue siendo un dato que el usuario necesita. Sin `options` se comporta como un badge neutro
+que muestra el valor.
 
-Color is written as one custom property, `--dt-badge-color`; the stylesheet derives the tinted
-background from it.
+El color se escribe como una única custom property, `--dt-badge-color`; la hoja de estilos deriva de
+ahí el fondo teñido.
 
-### `select` — badge plus a chevron
+### `select` — badge más un chevron
 
-Same value handling as `badge`, plus a chevron that signals "this opens". It does **not** open
-anything by itself — the dropdown is the `select` _editor_. The chevron SVG is built once in `create`
-and never touched again.
+El mismo manejo de valores que `badge`, más un chevron que señala "esto abre". Por sí solo **no**
+abre nada: el desplegable es el _editor_ `select`. El SVG del chevron se construye una vez en
+`create` y no se vuelve a tocar.
 
-### `progress` — an SVG ring with a percentage
+### `progress` — un anillo SVG con un porcentaje
 
-Accepts `0`–`100`; a numeric string is parsed. Out-of-range values are clamped. `null`, `undefined`
-and `NaN` are treated as `0` — an empty ring reads as "no progress", a blank cell reads as broken.
+Acepta de `0` a `100`; un string numérico se parsea. Los valores fuera de rango se acotan. `null`,
+`undefined` y `NaN` se tratan como `0`: un anillo vacío se lee como "sin progreso" y una celda en
+blanco se lee como algo roto.
 
-The label is `column.format` when present, otherwise `` `${Math.round(percent)}%` ``. The ring color
-comes from thresholds: `≥100` green, `≥60` blue, `≥30` amber, below that red.
+La etiqueta es `column.format` cuando existe y, si no, `` `${Math.round(percent)}%` ``. El color del
+anillo sale de umbrales: `≥100` verde, `≥60` azul, `≥30` ámbar, y por debajo rojo.
 
-### `avatar` — initials or a photo
+### `avatar` — iniciales o una foto
 
-Accepts a `string` name, or an object `{ name, src }` read from `ctx.raw`. With `src` it shows the
-image; without it, up to two initials (first letter of the first and the last word). Anything else is
-stringified and used as the name. An empty name leaves a neutral circle with no initials, which reads
-as "unassigned".
+Acepta un `string` con el nombre, o un objeto `{ name, src }` leído desde `ctx.raw`. Con `src`
+muestra la imagen; sin él, hasta dos iniciales (la primera letra de la primera y de la última
+palabra). Cualquier otra cosa se convierte a string y se usa como nombre. Un nombre vacío deja un
+círculo neutro sin iniciales, que se lee como "sin asignar".
 
-Because it needs the object shape, **do not give this column an `accessor`** — an accessor returns
-`CellValue`, which cannot express an object. Put `{ name, src }` on the row under `column.key`.
+Como necesita la forma de objeto, **a esta columna no hay que darle un `accessor`**: un accessor
+devuelve `CellValue`, que no puede expresar un objeto. El `{ name, src }` va en la fila, bajo
+`column.key`.
 
-The color is a stable djb2 hash of the name against a fixed palette, not a counter or a row index.
-That is the only way the same person keeps the same color across sessions and, above all, after the
-pool recycles the node — a position-derived color would make avatars flicker while scrolling.
+El color es un hash djb2 estable del nombre contra una paleta fija, no un contador ni un índice de
+fila. Es la única manera de que la misma persona conserve el mismo color entre sesiones y, sobre
+todo, después de que el pool recicle el nodo: un color derivado de la posición haría parpadear los
+avatares durante el scroll.
 
-### `checkbox` — a real `<input type="checkbox">`
+### `checkbox` — un `<input type="checkbox">` de verdad
 
-Accepts a `boolean`; anything else is read by truthiness. `null` / `undefined` produce the
-**indeterminate** state, which is visually distinct from unchecked — "not answered yet" is not the
-same as "answered no". The input is `disabled` unless the column is `editable`.
+Acepta un `boolean`; cualquier otra cosa se lee por verdad lógica. `null` y `undefined` producen el
+estado **indeterminado**, que es visualmente distinto de "sin marcar": "todavía sin responder" no es
+lo mismo que "respondido que no". El input está `disabled` salvo que la columna sea `editable`.
 
-A native input is used so keyboard support, the accessibility role, the indeterminate state and
-screen-reader announcements come in correct by default.
+Se usa un input nativo para que el soporte de teclado, el rol de accesibilidad, el estado
+indeterminado y los anuncios del lector de pantalla salgan correctos por defecto.
 
-### `tags` — several pills from a list value
+### `tags` — varias píldoras a partir de un valor de lista
 
-Reads an array from `ctx.raw`; each entry is resolved against `column.options` for its label and
-color. A non-array value is treated as a single-item list, so a column can go from single to multiple
-without changing renderer. Empty, `null` and `''` draw nothing — an empty list is a legitimate state.
-Unknown entries show their raw text in the neutral color.
+Lee un array desde `ctx.raw`; cada entrada se resuelve contra `column.options` para obtener su
+etiqueta y su color. Un valor que no es un array se trata como una lista de un solo elemento, así que
+una columna puede pasar de simple a múltiple sin cambiar de renderer. Vacío, `null` y `''` no dibujan
+nada: una lista vacía es un estado legítimo. Las entradas desconocidas muestran su texto crudo con el
+color neutro.
 
-It is the only built-in that may create nodes in `update`, because the pill count depends on the
-data. It applies the same discipline one level down: pills are pooled per cell, grow only past the
-high-water mark, and surplus pills are hidden rather than removed.
+Es el único renderer incluido que puede crear nodos dentro de `update`, porque la cantidad de
+píldoras depende de los datos. Aplica la misma disciplina un nivel más abajo: las píldoras se poolean
+por celda, crecen solo cuando se supera la marca máxima histórica, y las sobrantes se ocultan en
+lugar de eliminarse.
 
-### Writing a custom renderer
+### Escribir un renderer propio
 
-**The hard rule: `create` runs once per cell node, `update` runs every repaint and must only mutate
-what `create` built.** Inside `update` you must not:
+**La regla dura: `create` corre una vez por nodo de celda, `update` corre en cada repintado y solo
+debe mutar lo que `create` construyó.** Dentro de `update` no se debe:
 
-- create nodes,
-- read layout (`getBoundingClientRect`, `offsetWidth`, `getComputedStyle`),
-- write anything that did not change.
+- crear nodos,
+- leer layout (`getBoundingClientRect`, `offsetWidth`, `getComputedStyle`),
+- escribir nada que no haya cambiado.
 
-All three have the same root: `update` runs per visible cell per frame. Creating nodes makes garbage
-the GC later charges you for as a dropped frame; reading layout forces a synchronous reflow in the
-middle of painting; writing redundantly invalidates style for nothing.
+Las tres cosas tienen la misma raíz: `update` corre por cada celda visible y por cada frame. Crear
+nodos genera basura que el recolector cobra más tarde como un frame perdido; leer layout fuerza un
+reflow síncrono en mitad del pintado; escribir de más invalida estilos para nada.
 
-Keep per-cell state in a `WeakMap` keyed by the handle, and cache the last value you wrote so a
-redundant write is a real no-op.
+El estado por celda conviene guardarlo en un `WeakMap` indexado por el handle, y cachear el último
+valor escrito para que una escritura redundante sea de verdad un no-op.
 
-**Per-column (simplest — `TRow` is concrete):**
+**Por columna (lo más simple: `TRow` es concreto):**
 
 ```ts
 import type { CellRenderContext, CellRenderer, CellRendererHandle } from 'datagrid-vue'
@@ -701,7 +749,7 @@ const barRenderer: CellRenderer<Invoice> = {
     if (!state) return
     const percent = typeof ctx.value === 'number' ? Math.min(100, Math.max(0, ctx.value)) : 0
     const width = `${percent}%`
-    if (state.width === width) return // skip the redundant write
+    if (state.width === width) return // se saltea la escritura redundante
     state.width = width
     state.bar.style.width = width
   },
@@ -714,7 +762,7 @@ const barRenderer: CellRenderer<Invoice> = {
 const column: DataTableColumn<Invoice> = { key: 'total', renderer: barRenderer }
 ```
 
-**Registered globally (usable by name from any table):**
+**Registrado globalmente (usable por nombre desde cualquier tabla):**
 
 ```ts
 import { registerRenderer } from 'datagrid-vue'
@@ -724,114 +772,542 @@ registerRenderer('bar', () => ({
   type: 'bar',
   defaultAlign: 'right',
   create(cell: HTMLElement): CellRendererHandle {
-    /* same as above */
+    /* igual que arriba */
   },
-  // Note the generic `update`: a registered renderer serves every row shape.
+  // Notar el `update` genérico: un renderer registrado atiende cualquier forma de fila.
   update<TRow>(handle: CellRendererHandle, ctx: CellRenderContext<TRow>): void {
-    /* same as above */
+    /* igual que arriba */
   },
   destroy(handle: CellRendererHandle): void {
-    /* same as above */
+    /* igual que arriba */
   },
 }))
 
 const column: DataTableColumn<Invoice> = { key: 'total', renderer: 'bar' }
 ```
 
-A registered renderer **cannot** depend on the row shape — and that is correct. If it needs to know
-`TRow`, it belongs on a specific column, not in the global registry. Re-registering a name replaces
-the factory and drops the memoized instance; existing nodes rebuild themselves as soon as the type
-changes.
+Un renderer registrado **no puede** depender de la forma de la fila, y está bien que sea así. Si
+necesita conocer `TRow`, su lugar es una columna concreta y no el registro global. Volver a registrar
+un nombre reemplaza la fábrica y descarta la instancia memoizada; los nodos existentes se
+reconstruyen apenas cambia el tipo.
 
-What `update` receives:
+Lo que recibe `update`:
 
-| Field       | Type                    | Notes                                                                          |
-| ----------- | ----------------------- | ------------------------------------------------------------------------------ |
-| `value`     | `CellValue`             | Already read through `column.accessor`, narrowed to a primitive / `Date`.      |
-| `raw`       | `unknown`               | The unnormalized value. This is where arrays and objects survive. Validate it. |
-| `row`       | `TRow`                  | The whole row, for renderers that need more than one column.                   |
-| `rowIndex`  | `number`                | Index into the `rows` prop.                                                    |
-| `column`    | `DataTableColumn<TRow>` | With its `format` and `options`.                                               |
-| `isEditing` | `boolean`               | Whether this cell currently has the editor over it.                            |
+| Campo       | Tipo                    | Notas                                                                             |
+| ----------- | ----------------------- | --------------------------------------------------------------------------------- |
+| `value`     | `CellValue`             | Ya leído por `column.accessor`, estrechado a un primitivo o a `Date`.             |
+| `raw`       | `unknown`               | El valor sin normalizar. Es donde sobreviven los arrays y los objetos. Validarlo. |
+| `row`       | `TRow`                  | La fila completa, para los renderers que necesitan más de una columna.            |
+| `rowIndex`  | `number`                | Índice dentro de la prop `rows`.                                                  |
+| `column`    | `DataTableColumn<TRow>` | Con su `format` y sus `options`.                                                  |
+| `isEditing` | `boolean`               | Si esta celda tiene el editor abierto encima.                                     |
 
-You can also compose on top of the built-ins — they are all exported as instances (`badgeRenderer`,
-`avatarRenderer`, …) plus `createTextRenderer()` and `resolveRenderer()`.
+También se puede componer sobre los incluidos: todos se exportan como instancias (`badgeRenderer`,
+`avatarRenderer`, …) junto con `createTextRenderer()` y `resolveRenderer()`.
 
 ---
 
-## Theming
+## Agrupación
 
-Every color is declared as `var(--ui-*, <fallback>)`. If the host application defines the
-**NuxtUI v3** tokens, the table adopts them with zero configuration; if not, the fallback keeps it
-presentable on its own. The extra `--dt-*` indirection lets you override a single table token without
-touching the global theme.
+Agrupar convierte la lista plana de filas en un árbol: una cabecera por grupo, sus filas debajo, y la
+posibilidad de plegarlas. Por dentro, lo que el virtualizador recorre deja de ser `rows` y pasa a ser
+una **vista aplanada**: un array derivado donde cada entrada es una cabecera de grupo o una fila de
+datos. Eso es lo que permite que la posición vertical siga siendo un índice y que el costo por frame
+siga siendo constante.
+
+Con `groupBy` vacío —el valor por defecto— la tabla no paga absolutamente nada por esta función: no
+se construye ningún árbol, no se aplana nada y el pool recorre el mismo camino de siempre sobre
+`rows`.
+
+### El ejemplo mínimo
+
+```vue
+<script setup lang="ts">
+import { shallowRef } from 'vue'
+import { DataTable } from 'datagrid-vue'
+import type { DataTableColumn, GroupToggleEvent } from 'datagrid-vue'
+
+type Invoice = { id: number; customer: string; region: string; total: number }
+
+const rows = shallowRef<readonly Invoice[]>([
+  { id: 1, customer: 'Acme', region: 'LATAM', total: 1200 },
+  { id: 2, customer: 'Globex', region: 'EMEA', total: 380 },
+])
+
+const columns: readonly DataTableColumn<Invoice>[] = [
+  { key: 'customer', label: 'Customer', width: 220 },
+  { key: 'region', label: 'Region', width: 140 },
+  { key: 'total', label: 'Total', width: 140, renderer: 'number', aggregate: 'sum' },
+]
+
+// Se agrupa por región. La cabecera de cada grupo muestra el total de la columna.
+const groupBy = shallowRef<readonly string[]>(['region'])
+
+function onGroupToggle(event: GroupToggleEvent): void {
+  console.log(event.groupId, event.expanded)
+}
+</script>
+
+<template>
+  <div style="height: 480px">
+    <DataTable
+      v-model:group-by="groupBy"
+      :rows="rows"
+      :columns="columns"
+      row-key="id"
+      @group-toggle="onGroupToggle"
+    />
+  </div>
+</template>
+```
+
+### Las props de agrupación
+
+| Prop                    | Tipo                | Por defecto     | Qué hace                                                                                                                                                             |
+| ----------------------- | ------------------- | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `groupBy`               | `readonly string[]` | lista vacía     | `v-model:group-by`. Claves de columna en orden de anidamiento. `['status', 'priority']` produce un primer nivel por estado y, dentro de cada uno, uno por prioridad. |
+| `expandedGroups`        | `readonly string[]` | _no controlado_ | `v-model:expanded-groups`. `groupId` de los grupos expandidos.                                                                                                       |
+| `groupsDefaultExpanded` | `boolean`           | `true`          | Estado inicial de un grupo del que todavía no se sabe nada.                                                                                                          |
+| `showGroupCount`        | `boolean`           | `true`          | Si la cabecera muestra la insignia con la cantidad de filas descendientes.                                                                                           |
+
+`groupBy` se sanea antes de usarse: se descartan las claves que no nombran ninguna columna, las de
+columnas con `groupable: false` y los duplicados. Un duplicado no es teórico: crearía un nivel entero
+de grupos de un solo hijo. Si después del saneo no queda ninguna clave, la tabla vuelve al camino sin
+agrupación y `role` vuelve a ser `grid`.
+
+El orden de los grupos es el de su **primera aparición**, y dentro de un grupo las filas conservan su
+orden original. Agrupar no reordena nada por su cuenta: quien quiera un orden lo aplica sobre `rows`,
+que es donde ya lo tenía.
+
+### `groupId`: una identidad por camino
+
+Cada grupo tiene un `groupId` construido como un camino de `columna:valor`, con los niveles unidos
+por `/`:
+
+```
+status:open
+status:open/priority:high
+```
+
+Los valores que no son strings llevan una marca de tipo delante, para que el `1` numérico y el `'1'`
+de texto nunca caigan en el mismo grupo:
+
+| Valor              | Segmento            |
+| ------------------ | ------------------- |
+| `'open'`           | `status:open`       |
+| `1`                | `status:#1`         |
+| `true`             | `status:?true`      |
+| `null`             | `status:~null`      |
+| `undefined`        | `status:~undefined` |
+| una fecha          | `status:@<ISO>`     |
+| una fecha inválida | `status:@invalid`   |
+
+Que el id sea un camino y no un contador es lo que lo vuelve estable entre sesiones: un contador se
+desplazaría en cuanto llegara una fila nueva. Esa estabilidad es la que hace posible persistir qué
+grupos quedaron colapsados.
+
+`null` y `undefined` conservan **buckets distintos**, porque son valores distintos y en muchos
+dominios esa diferencia significa algo. Lo que comparten es la etiqueta: los dos se muestran como
+`(empty)`.
+
+La etiqueta de la cabecera se resuelve primero contra `column.options`, así una columna de estados
+agrupa bajo `Open` y no bajo `open`. La lista de opciones ya es la fuente de verdad de cómo se llama
+cada valor de cara al usuario.
+
+### Agregados por columna
+
+Una columna declara qué muestra en las cabeceras de grupo con `column.aggregate`. Sin `aggregate`, la
+columna no aporta nada a la cabecera.
+
+| Agregación | Qué devuelve                                                                                                                  |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `'sum'`    | Suma de los números finitos. `null` si el grupo no tiene ninguno, en lugar de un `0` que se confundiría con un total real.    |
+| `'avg'`    | Promedio de los números finitos. Divide por la cantidad de NÚMEROS, no por la cantidad de filas. `null` si no hay ninguno.    |
+| `'count'`  | Cantidad de filas descendientes cuyo valor no es `null` ni `undefined`. Es el `COUNT(columna)` de SQL, no el `COUNT(*)`.      |
+| `'min'`    | Mínimo entre los números finitos y, si el grupo no tiene ninguno, entre las fechas válidas. `null` si no hay nada comparable. |
+| `'max'`    | Máximo, con la misma regla que `'min'`.                                                                                       |
+
+Para la cantidad total de filas del grupo —el `COUNT(*)`— ya está la insignia de la cabecera, que
+`showGroupCount` controla. Son dos preguntas distintas y responden distinto a propósito.
+
+Los booleanos y los strings cuentan como presentes pero no entran en `sum` ni en `min` / `max`: sumar
+booleanos es una decisión de dominio que le corresponde a una función propia, no a un valor por
+defecto que después nadie recuerda.
+
+**Una agregación propia** es una función que recibe todas las filas descendientes del grupo y la
+clave de la columna:
+
+```ts
+import type { AggregationFn, DataTableColumn } from 'datagrid-vue'
+
+type Invoice = { id: number; region: string; total: number; status: 'draft' | 'sent' | 'paid' }
+
+// Cuántas facturas del grupo están pagas, sobre el total. Corre una vez por grupo
+// y por reconstrucción del aplanado, nunca por frame.
+const paidRatio: AggregationFn<Invoice> = (rows) => {
+  if (rows.length === 0) return null
+  const paid = rows.filter((row) => row.status === 'paid').length
+  return `${paid}/${rows.length}`
+}
+
+const columns: readonly DataTableColumn<Invoice>[] = [
+  { key: 'region', label: 'Region', width: 140 },
+  { key: 'total', label: 'Total', width: 140, renderer: 'number', aggregate: 'sum' },
+  { key: 'status', label: 'Status', width: 140, aggregate: paidRatio },
+]
+```
+
+La firma es `(rows: readonly TRow[], columnKey: string) => CellValue`. Recibe las filas **originales**
+y no los agregados ya cerrados de los subgrupos, que es la única forma de que una agregación propia
+sea correcta en niveles anidados.
+
+Las filas solo se juntan cuando al menos una columna declara una función; con agregaciones incluidas
+únicamente, el árbol no guarda ni una referencia de más. Y apenas termina el cálculo, los
+acumuladores sueltan las filas que habían juntado: sin eso, el árbol conservaría una referencia por
+fila y por nivel durante toda la vida de la vista.
+
+> **Un agregado se pinta en el offset horizontal de SU columna**, encima de la cabecera y con fondo
+> propio, para que la cifra caiga justo debajo del encabezado al que pertenece. Como consecuencia, un
+> agregado declarado en la **primera** columna taparía el chevron, la etiqueta y la insignia del
+> grupo. Las columnas de agregado conviene dejarlas hacia la derecha.
+
+### Varios niveles: un padre agrega sobre TODOS sus descendientes
+
+Con más de una clave en `groupBy`, cada nivel intermedio también muestra sus agregados, y los calcula
+sobre todas sus filas descendientes, **no** sobre los agregados ya cerrados de sus hijos.
+
+Para `sum`, `min` y `max` daría lo mismo, porque son asociativas. Para `avg` no, y ahí es donde se ve
+la diferencia. Con un grupo `open` que tiene tres filas de `10` en `priority: high` y una de `100` en
+`priority: low`:
+
+| Grupo                       | `avg` correcto            | El error habitual |
+| --------------------------- | ------------------------- | ----------------- |
+| `status:open/priority:high` | `10`                      | `10`              |
+| `status:open/priority:low`  | `100`                     | `100`             |
+| `status:open`               | `(10+10+10+100)/4 = 32,5` | `(10+100)/2 = 55` |
+
+El promedio de los promedios de dos subgrupos de tamaños distintos no es el promedio del conjunto, y
+esa versión ingenua es la que aparece en más de una grilla del mercado. Acá cada fila alimenta a los
+acumuladores de todos los grupos de su camino, uno por nivel de anidamiento, así que cada grupo ve
+todas sus filas de primera mano. El costo total es O(filas × niveles) —niveles es 1, 2 o 3 en la
+práctica—, nunca O(filas × grupos).
+
+Lo mismo vale para una agregación propia: en un nivel intermedio recibe todas las filas
+descendientes, no las de sus subgrupos ya agregadas.
+
+Un grupo colapsado **conserva su contador y sus agregados intactos**: plegar es una decisión de
+presentación y no puede cambiar lo que el grupo dice de sí mismo.
+
+### Estado expandido y colapsado
+
+Igual que el trío de columnas, la expansión funciona de dos maneras, y la diferencia entre las dos no
+es cosmética.
+
+**No controlado** (`expandedGroups` llega `undefined`). La tabla guarda internamente solo las
+EXCEPCIONES a `groupsDefaultExpanded`. Con el valor por defecto en `true` y diez mil grupos, ese
+conjunto tiene tantas entradas como grupos haya colapsado el usuario, que son unos pocos. Igual se
+emite la lista completa de expandidos en `update:expandedGroups`, para poder escucharla sin tomar
+posesión del estado.
+
+**Controlado** (`expandedGroups` llega con valor, incluida la lista vacía). La prop es la verdad
+literal: un id que no está en la lista está colapsado. Y **`groupsDefaultExpanded` deja de
+intervenir**, porque el padre ya está diciendo el estado de cada grupo, uno por uno. Un grupo nuevo
+—que aparece porque llegaron filas con un valor que antes no existía— nace colapsado hasta que el
+padre lo agregue a la lista.
+
+```vue
+<script setup lang="ts">
+import { shallowRef } from 'vue'
+
+// Controlado: la tabla no cambia esto sola, solo emite lo que el padre debería adoptar.
+const expandedGroups = shallowRef<readonly string[]>(['region:LATAM'])
+</script>
+
+<template>
+  <DataTable
+    v-model:group-by="groupBy"
+    v-model:expanded-groups="expandedGroups"
+    :rows="rows"
+    :columns="columns"
+    row-key="id"
+  />
+</template>
+```
+
+Los eventos, en orden:
+
+| Acción                             | `update:expandedGroups`                    | `groupToggle`           |
+| ---------------------------------- | ------------------------------------------ | ----------------------- |
+| Clic o teclado sobre una cabecera  | La lista completa de expandidos resultante | `{ groupId, expanded }` |
+| `expandAllGroups()`                | Todos los ids del árbol actual             | —                       |
+| `collapseAllGroups()`              | Lista vacía                                | —                       |
+| Restauración desde la persistencia | La lista completa de expandidos resultante | —                       |
+
+`groupToggle` describe un cambio **puntual** y por eso solo lo dispara el plegado de un grupo
+concreto; expandir o colapsar todo no emite uno por grupo. `update:expandedGroups` se emite antes que
+`groupToggle` en el mismo tick.
+
+En modo controlado, un toggle **no** cambia el estado por su cuenta: solo anuncia el estado que el
+padre debería adoptar. Si el padre ignora el evento, el grupo se queda como estaba. Es exactamente la
+misma semántica que `update:columnVisibility`.
+
+### Teclado
+
+Con la celda activa parada sobre una cabecera de grupo, cuatro teclas cambian de significado:
+
+| Tecla              | Sobre una cabecera de grupo                                                                                                    |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
+| `Enter`            | Pliega o despliega el grupo. No abre ningún editor: un grupo no tiene celdas que editar.                                       |
+| `Espacio`          | Pliega o despliega el grupo, y no siembra un editor.                                                                           |
+| `→` (`ArrowRight`) | Si el grupo está **colapsado**, lo expande. Si ya estaba abierto, no hay nada que abrir y la tecla vuelve a mover una columna. |
+| `←` (`ArrowLeft`)  | Si el grupo está **expandido**, lo colapsa. Si ya estaba cerrado, mueve una columna hacia atrás.                               |
+
+Es el comportamiento de un `treegrid`, y por eso el `role` del viewport pasa a `treegrid` mientras
+hay agrupación activa: es lo que hace que un lector de pantalla anuncie `aria-expanded` y
+`aria-level`, que con `grid` simplemente ignoraría.
+
+El resto de las teclas no cambia. `↓` desde una cabecera aterriza en la entrada visible siguiente,
+que suele ser su primera fila de datos. Una cabecera de grupo **se puede seleccionar**, así que
+`update:activeCell` se emite con su posición, pero `cellSelect` **no**: no hay ninguna fila detrás de
+ella de la que informar.
+
+Lo mismo con el clic: un clic sobre una cabecera la pliega y no emite `rowClick`.
+
+### Persistencia
+
+La agrupación se guarda junto con el resto del layout, bajo la bandera `include.grouping`, que viene
+en `true`:
+
+```ts
+const persist: DataTablePersistOptions = {
+  include: { visibility: true, widths: true, order: true, grouping: false },
+}
+```
+
+Es una bandera propia y no una ampliación silenciosa de otra: un consumidor que ya tenía escrito
+`include: { order: true, widths: true }` esperaba que eso fuera una lista cerrada, y colgar la
+agrupación de `order` —que es lo más parecido— le cambiaría el comportamiento sin que haya tocado
+nada.
+
+Se persisten dos claves, las dos opcionales dentro de `PersistedTableState`:
+
+| Clave             | Qué guarda                                                    |
+| ----------------- | ------------------------------------------------------------- |
+| `groupBy`         | Las claves de agrupación, en orden.                           |
+| `collapsedGroups` | Los `groupId` que quedaron **colapsados**, no los expandidos. |
+
+Se guarda el conjunto colapsado porque el valor por defecto es expandido: con miles de grupos, la
+lista de excepciones tiene unas pocas entradas y la de expandidos tendría miles.
+
+Que las dos claves sean opcionales es lo que permitió sumar esta función **sin subir la versión del
+esquema**. Un payload escrito antes de que la agrupación existiera no las trae, y una tabla que nunca
+agrupó tampoco las escribe: su payload sigue siendo byte por byte el de siempre, así que nadie pierde
+su layout guardado al actualizar la librería.
+
+**Cómo se reconcilia lo guardado.** El estado leído del almacenamiento está desactualizado por
+definición, así que nunca se aplica tal cual:
+
+| Situación                                                                                 | Qué pasa al cargar                                                                                                                                                      |
+| ----------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `groupBy` nombra una columna que ya no existe                                             | La clave se descarta. Si no queda ninguna, la tabla arranca sin agrupar.                                                                                                |
+| `groupBy` nombra una columna que hoy tiene `groupable: false`                             | La clave se descarta.                                                                                                                                                   |
+| Un `groupId` colapsado cuyo camino de columnas **no es prefijo** de la agrupación vigente | Se descarta. Un `status:open/priority:high` no puede corresponder a ningún grupo si hoy se agrupa solo por `['status']`.                                                |
+| Un `groupId` colapsado cuyo **valor** ya no existe en los datos                           | Se conserva. Los datos cambian entre sesiones, y descartar el estado de un grupo porque hoy no hay filas con ese valor lo haría reaparecer expandido en cuanto vuelvan. |
+| Un `groupId` malformado                                                                   | Se descarta. La falla es segura: el grupo simplemente vuelve a aparecer expandido.                                                                                      |
+
+El orden de aplicación importa y está fijado: primero `groupBy`, después el conjunto colapsado. El
+árbol de grupos se reconstruye de forma síncrona al cambiar `groupBy`, y el conjunto colapsado se
+resuelve contra los grupos que ese árbol tiene. Aplicarlo al revés lo resolvería contra el árbol
+viejo.
+
+`resetLayout()` limpia también la agrupación y el conjunto colapsado, además de visibilidad, orden y
+anchos.
+
+### Dos números distintos: posición visible e índice original
+
+Esta es la única parte de la agrupación que se puede usar mal en silencio, y conviene leerla entera.
+
+**`CellPosition.rowIndex` indexa la SECUENCIA VISIBLE.** Todo lo que consume una posición dentro del
+componente la interpreta así:
+
+- `v-model:active-cell`
+- `selectCell(pos)` y `scrollToCell(pos)`
+- `scrollToRow(index)`
+
+**Los EVENTOS reportan el índice dentro de la prop `rows`.** Todos, sin excepción:
+
+- `cellSelect`
+- `rowClick`
+- `beforeEdit`, `afterEdit` y `editCommit`
+
+**Sin agrupación los dos números son idénticos** y no hay nada que distinguir. Con agrupación no:
+la secuencia visible intercala cabeceras y esconde a los hijos de los grupos colapsados, así que la
+posición vertical de una celda deja de ser su índice en el dataset. Una fila que se ve en la posición
+7 puede ser la 340 de `rows`, o puede no ser una fila de datos en absoluto.
+
+> **Este es el error que corrompe datos.** Si se usa el `rowIndex` de un evento como si fuera una
+> posición visible, o al revés, la escritura cae sobre otra fila del dataset. Nada lo delata: la
+> tabla sigue funcionando, el valor aparece, y el problema no se ve hasta que alguien mira los datos.
+
+La regla práctica es corta: **el índice de un evento se usa para escribir en `rows`; una
+`CellPosition` se usa para mover la vista.** Nunca al revés.
+
+```ts
+// ✓ Correcto: `event.rowIndex` es un índice de `rows`, también con grupos activos.
+function onEditCommit(event: EditCommitEvent<Invoice>): void {
+  const next = rows.value.slice()
+  next[event.rowIndex] = { ...event.row, [event.columnKey]: event.newValue }
+  rows.value = next
+}
+
+// ✗ Incorrecto: `activeCell.rowIndex` es una posición de la vista aplanada.
+// Con grupos, esta lectura devuelve la fila equivocada, o `undefined` sobre una cabecera.
+const selectedRow = rows.value[activeCell.value?.rowIndex ?? 0]
+```
+
+Que la posición interna sea la visible es deliberado y no un descuido: todo lo que la consume dentro
+del componente —la geometría del editor, el auto-scroll, el movimiento con flechas— es geométrico, y
+una posición que no se pueda traducir a píxeles sin una búsqueda no serviría para nada de eso. Una
+cabecera de grupo, además, no tiene índice en `rows` y aun así se puede seleccionar y recorrer con el
+teclado.
+
+### Limitación conocida: `column.format` no se aplica a los agregados
+
+Un agregado se escribe en la cabecera con la representación por defecto del valor, **sin pasar por el
+`format` de su columna**. La razón es la firma: `format` pide `(value, row, rowIndex)`, y una cabecera
+de grupo no representa a ninguna fila en particular.
+
+En la práctica esto significa que una columna de moneda que muestra `$1,200` en sus celdas muestra
+`1200` pelado en la cabecera de su grupo, y que un `avg` sobre una columna de porcentajes muestra
+todos sus decimales. Una columna de fechas con `min` o `max` muestra el string ISO completo.
+
+No hay hoy un punto de enganche para formatear un agregado. La alternativa disponible es una
+**agregación propia que devuelva el string ya armado**, ya que `AggregationFn` puede devolver
+cualquier `CellValue`, texto incluido:
+
+```ts
+const money = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' })
+
+// En lugar de `aggregate: 'sum'`, una función que suma y formatea de una vez.
+const total: AggregationFn<Invoice> = (rows) =>
+  money.format(rows.reduce((sum, row) => sum + row.total, 0))
+```
+
+El costo de esa salida es que el valor deja de ser un número: si algo aguas arriba consumiera el
+agregado como dato, recibiría texto. Para la cabecera, que es presentación, no cambia nada.
+
+### Clases CSS de un grupo
+
+Las cabeceras las pinta el pool, fuera del render de Vue, así que **las reglas que las apunten tienen
+que ser globales**: un `<style scoped>` nunca se les aplica.
+
+| Clase o token             | Qué es                                                                                                        |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `.dt-group-row`           | La fila que hace de cabecera. Ocupa la misma caja que una fila de datos: mismo alto, misma posición absoluta. |
+| `.dt-group-row--expanded` | Presente mientras el grupo muestra su contenido. Es lo que gira el chevron por CSS.                           |
+| `.dt-group-header`        | El contenedor del chevron, la etiqueta y la insignia. Se extiende por todo el tramo visible.                  |
+| `.dt-group-chevron`       | El SVG del chevron. Gira con una transición de 120ms, resuelta por el compositor.                             |
+| `.dt-group-label`         | El texto del grupo, ya resuelto contra `column.options`.                                                      |
+| `.dt-group-count`         | La insignia con la cantidad de filas descendientes. Se oculta con `showGroupCount: false`.                    |
+| `.dt-group-aggregate`     | Una cifra de agregado, posicionada en el offset de su columna y por encima de la cabecera.                    |
+| `--dt-group-indent`       | Sangría por nivel de anidamiento. `16px`, o `12px` con `dense`.                                               |
+| `--dt-group-depth`        | Nivel de anidamiento de esa fila. Lo escribe el pool, una sola propiedad por fila.                            |
+
+La sangría es un `padding-left` calculado a partir de esas dos custom properties, y no divs
+anidados: es una escritura de propiedad contra crear y destruir nodos cada vez que un slot pasa de un
+nivel a otro.
+
+### Qué cuesta agrupar
+
+| Operación                          | Cuándo ocurre                                              | Costo                                                              |
+| ---------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------ |
+| Construir el árbol y los agregados | Cambia la identidad de `rows`, de `columns` o de `groupBy` | O(filas × niveles), una vez                                        |
+| Emitir la vista aplanada           | Cambia el árbol o el estado de expansión                   | O(entradas visibles)                                               |
+| Plegar un grupo                    | Un clic o una tecla                                        | Solo la emisión: el árbol ya está y no se recalcula ni un agregado |
+| Scrollear                          | Cada frame                                                 | Nada: aplanar no depende del scroll                                |
+
+Las dos derivaciones están separadas justamente para esto. Con una sola, cada clic en un chevron
+costaría la reconstrucción completa del árbol.
+
+---
+
+## Temas
+
+Todos los colores se declaran como `var(--ui-*, <fallback>)`. Si la aplicación anfitriona define los
+tokens de **NuxtUI v3**, la tabla los adopta sin ninguna configuración; si no, el fallback la deja
+presentable por su cuenta. La indirección extra `--dt-*` permite además sobrescribir el token de una
+sola tabla sin tocar el tema global.
 
 ```css
-/* Override one token for one table, anywhere in your CSS. */
+/* Sobrescribir un token para una tabla, desde cualquier punto del CSS. */
 .invoices .dt-root {
   --dt-primary: #6366f1;
-  --dt-row-height: 36px; /* presentation only — see the warning below */
+  --dt-row-height: 36px; /* solo presentación — ver el aviso de más abajo */
 }
 ```
 
 ### Tokens
 
-| Token                  | Light default | Dark default | Picks up                           |
-| ---------------------- | ------------- | ------------ | ---------------------------------- |
-| `--dt-bg`              | `#ffffff`     | `#111827`    | `--ui-bg`                          |
-| `--dt-bg-muted`        | `#f9fafb`     | `#1f2937`    | `--ui-bg-muted`                    |
-| `--dt-bg-elevated`     | `#f3f4f6`     | `#1f2937`    | `--ui-bg-elevated`                 |
-| `--dt-bg-accented`     | `#e5e7eb`     | `#374151`    | `--ui-bg-accented`                 |
-| `--dt-border`          | `#e5e7eb`     | `#374151`    | `--ui-border`                      |
-| `--dt-border-accented` | `#d1d5db`     | `#4b5563`    | `--ui-border-accented`             |
-| `--dt-text`            | `#111827`     | `#f9fafb`    | `--ui-text`                        |
-| `--dt-text-muted`      | `#6b7280`     | `#9ca3af`    | `--ui-text-muted`                  |
-| `--dt-text-dimmed`     | `#9ca3af`     | `#6b7280`    | `--ui-text-dimmed`                 |
-| `--dt-primary`         | `#00c16a`     | same         | `--ui-primary`                     |
-| `--dt-radius`          | `0.375rem`    | same         | `--ui-radius`                      |
-| `--dt-color-blue`      | `#1d4ed8`     | `#60a5fa`    | —                                  |
-| `--dt-color-red`       | `#b91c1c`     | `#f87171`    | —                                  |
-| `--dt-color-amber`     | `#b45309`     | `#fbbf24`    | —                                  |
-| `--dt-color-green`     | `#15803d`     | `#4ade80`    | —                                  |
-| `--dt-color-purple`    | `#7e22ce`     | `#c084fc`    | —                                  |
-| `--dt-color-neutral`   | `#4b5563`     | `#9ca3af`    | —                                  |
-| `--dt-tint-strength`   | `14%`         | `20%`        | —                                  |
-| `--dt-row-height`      | `40px`        | same         | written inline from `rowHeight`    |
-| `--dt-header-height`   | `44px`        | same         | written inline from `headerHeight` |
-| `--dt-font-size`       | `0.875rem`    | same         | —                                  |
-| `--dt-cell-px`         | `0.75rem`     | same         | —                                  |
+| Token                  | Por defecto en claro | Por defecto en oscuro | Adopta                                 |
+| ---------------------- | -------------------- | --------------------- | -------------------------------------- |
+| `--dt-bg`              | `#ffffff`            | `#111827`             | `--ui-bg`                              |
+| `--dt-bg-muted`        | `#f9fafb`            | `#1f2937`             | `--ui-bg-muted`                        |
+| `--dt-bg-elevated`     | `#f3f4f6`            | `#1f2937`             | `--ui-bg-elevated`                     |
+| `--dt-bg-accented`     | `#e5e7eb`            | `#374151`             | `--ui-bg-accented`                     |
+| `--dt-border`          | `#e5e7eb`            | `#374151`             | `--ui-border`                          |
+| `--dt-border-accented` | `#d1d5db`            | `#4b5563`             | `--ui-border-accented`                 |
+| `--dt-text`            | `#111827`            | `#f9fafb`             | `--ui-text`                            |
+| `--dt-text-muted`      | `#6b7280`            | `#9ca3af`             | `--ui-text-muted`                      |
+| `--dt-text-dimmed`     | `#9ca3af`            | `#6b7280`             | `--ui-text-dimmed`                     |
+| `--dt-primary`         | `#00c16a`            | igual                 | `--ui-primary`                         |
+| `--dt-radius`          | `0.375rem`           | igual                 | `--ui-radius`                          |
+| `--dt-color-blue`      | `#1d4ed8`            | `#60a5fa`             | —                                      |
+| `--dt-color-red`       | `#b91c1c`            | `#f87171`             | —                                      |
+| `--dt-color-amber`     | `#b45309`            | `#fbbf24`             | —                                      |
+| `--dt-color-green`     | `#15803d`            | `#4ade80`             | —                                      |
+| `--dt-color-purple`    | `#7e22ce`            | `#c084fc`             | —                                      |
+| `--dt-color-neutral`   | `#4b5563`            | `#9ca3af`             | —                                      |
+| `--dt-tint-strength`   | `14%`                | `20%`                 | —                                      |
+| `--dt-row-height`      | `40px`               | igual                 | se escribe inline desde `rowHeight`    |
+| `--dt-header-height`   | `44px`               | igual                 | se escribe inline desde `headerHeight` |
+| `--dt-font-size`       | `0.875rem`           | igual                 | —                                      |
+| `--dt-cell-px`         | `0.75rem`            | igual                 | —                                      |
+| `--dt-group-indent`    | `16px`               | igual                 | — (`12px` con `dense`)                 |
 
-The status palette exists so `CellOption.color` can be a theme token rather than a hard-coded hex.
-Use the exported `COLOR_TOKENS` map (`COLOR_TOKENS.red` → `'var(--dt-color-red)'`) so a rename in the
-stylesheet propagates from one place. `CellOption.color` also accepts any CSS color.
+La paleta de estados existe para que `CellOption.color` pueda ser un token del tema en lugar de un
+hexadecimal fijo. Conviene usar el mapa exportado `COLOR_TOKENS` (`COLOR_TOKENS.red` →
+`'var(--dt-color-red)'`), así un renombre en la hoja de estilos se propaga desde un solo lugar.
+`CellOption.color` también acepta cualquier color CSS.
 
-Badges use a **tinted background with saturated text**, not a solid fill with white text, on purpose:
-a solid fill would require guaranteeing text contrast against six colors plus whatever a consumer
-brings, which in practice means computing luminance. With a tint, the text keeps the accent color —
-already chosen to be legible on the theme background — and the tint never covers it.
+Los badges usan **fondo teñido con texto saturado** y no un relleno sólido con texto blanco, a
+propósito: un relleno sólido obligaría a garantizar el contraste del texto contra seis colores más lo
+que traiga el consumidor, lo que en la práctica significa calcular luminancia. Con el tinte, el texto
+conserva el color de acento —ya elegido para ser legible sobre el fondo del tema— y el tinte nunca lo
+tapa.
 
-Renderers write three more custom properties per cell: `--dt-badge-color`, `--dt-progress-color`,
-`--dt-avatar-color`. Restyle a renderer by redefining how the stylesheet consumes them.
+Los renderers escriben tres custom properties más por celda: `--dt-badge-color`,
+`--dt-progress-color` y `--dt-avatar-color`. Para re-estilar un renderer, se redefine cómo las
+consume la hoja de estilos.
 
-> **`rowHeight` is a prop, not a CSS token.** The virtualizer divides scroll offset by row height
-> every frame; reading that number from CSS would need a `getComputedStyle` per frame, which forces
-> layout. The prop is the source of truth and `--dt-row-height` is its mirror. Setting only the CSS
-> variable desynchronizes geometry from math. Same for `--dt-header-height`.
+> **`rowHeight` es una prop, no un token CSS.** El virtualizador divide el offset de scroll por la
+> altura de fila en cada frame; leer ese número desde CSS exigiría un `getComputedStyle` por frame,
+> que fuerza layout. La prop es la fuente de verdad y `--dt-row-height` es su espejo. Definir solo la
+> variable CSS desincroniza la geometría de la matemática. Lo mismo vale para `--dt-header-height`.
 
-### Light and dark
+### Claro y oscuro
 
-Three ways to reach dark, and none of them can override an explicit light choice:
+Tres caminos hacia el modo oscuro, y ninguno de ellos puede pisar una elección explícita de claro:
 
-1. `theme="dark"` on the component (`data-theme="dark"` on the root).
-2. A `.dark` class on `<html>`, for an app-level toggle — with `theme="auto"`.
-3. `prefers-color-scheme: dark`, scoped as `:root:not(.light)` so an app that forces light wins over
-   the system preference.
+1. `theme="dark"` en el componente (`data-theme="dark"` sobre la raíz).
+2. Una clase `.dark` en `<html>`, para un toggle a nivel aplicación, con `theme="auto"`.
+3. `prefers-color-scheme: dark`, acotado como `:root:not(.light)` para que una aplicación que fuerza
+   el modo claro le gane a la preferencia del sistema.
 
-`theme="light"` matches none of the three, so it always wins.
+`theme="light"` no coincide con ninguno de los tres, así que siempre gana.
 
-`DataTableColumnToggle` is a separate component that can be mounted outside `.dt-root`, so it follows
-the **document** (`.dark` / `.light` class, or the system preference) rather than the table's `theme`
-prop. If you drive the document class alongside the prop, the two stay in sync:
+`DataTableColumnToggle` es un componente aparte que se puede montar fuera de `.dt-root`, así que
+sigue al **documento** (clase `.dark` / `.light`, o la preferencia del sistema) y no a la prop `theme`
+de la tabla. Manejando la clase del documento junto con la prop, los dos quedan sincronizados:
 
 ```ts
 watchEffect(() => {
@@ -841,48 +1317,52 @@ watchEffect(() => {
 })
 ```
 
-### Dense
+### El preset `dense`
 
-`dense` is a preset, not a single knob: row height `40 → 30`, header `44 → 34`, font `0.875 → 0.8125rem`,
-cell padding `0.75 → 0.5rem`. An explicit `rowHeight` / `headerHeight` still wins.
+`dense` no es una sola perilla: altura de fila `40 → 30`, header `44 → 34`, tipografía
+`0.875 → 0.8125rem`, padding de celda `0.75 → 0.5rem` y sangría de grupo `16 → 12px`. Un `rowHeight`
+o un `headerHeight` explícitos siguen ganando.
 
-### Selection styling
+### Estilos de la selección
 
-Selection introduces no new tokens — it is drawn entirely from `--dt-primary` and `--dt-bg-accented`,
-so restyling the accent restyles the selection.
+La selección no introduce ningún token nuevo: se dibuja enteramente con `--dt-primary` y
+`--dt-bg-accented`, así que re-estilar el acento re-estila la selección.
 
-| Hook                             | What it does                                                                                                                                       |
-| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `.dt-cell--active`               | The active cell. `box-shadow: inset 0 0 0 2px var(--dt-primary)` plus `z-index: 1`.                                                                |
-| `.dt-row--active`                | The row containing the active cell. Background `--dt-bg-accented`, in **both** `'cell'` and `'row'` mode.                                          |
-| `.dt-header-cell--active`        | The header of the active column. Accented background plus a 2px underline in `--dt-primary`.                                                       |
-| `[data-selection]` on `.dt-root` | Mirrors `selectionMode` (`none` / `cell` / `row`). The stylesheet uses it to move the ring: in `'row'` mode the row gets it and the cell drops it. |
+| Enganche                         | Qué hace                                                                                                                                                   |
+| -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.dt-cell--active`               | La celda activa. `box-shadow: inset 0 0 0 2px var(--dt-primary)` más `z-index: 1`.                                                                         |
+| `.dt-row--active`                | La fila que contiene la celda activa. Fondo `--dt-bg-accented`, en **los dos** modos, `'cell'` y `'row'`. También aplica a una cabecera de grupo.          |
+| `.dt-header-cell--active`        | El header de la columna activa. Fondo acentuado más un subrayado de 2px en `--dt-primary`.                                                                 |
+| `[data-selection]` en `.dt-root` | Replica `selectionMode` (`none` / `cell` / `row`). La hoja de estilos lo usa para mover el anillo: en modo `'row'` lo recibe la fila y la celda lo pierde. |
 
-The ring is `box-shadow: inset`, not `border` and not `outline`, and the choice is load-bearing:
+El anillo es un `box-shadow: inset`, y no un `border` ni un `outline`. La elección sostiene algo:
 
-- A `border` would change the cell's box and shift its content by 2px as the selection moves.
-- An `outline` draws outside the box, so the neighbouring cell — which is absolutely positioned right
-  against it — would paint over half of it.
+- Un `border` cambiaría la caja de la celda y correría su contenido 2px cada vez que la selección se
+  mueve.
+- Un `outline` se dibuja por fuera de la caja, así que la celda vecina —que está posicionada en
+  absoluto justo al lado— pintaría encima de la mitad.
 
-`inset` box-shadow draws inside the existing box, costs no layout, and composites. `z-index: 1` lifts
-the active cell above its neighbours so the ring is not clipped by the next cell's background.
+El `box-shadow: inset` se dibuja dentro de la caja existente, no cuesta layout y compone. El
+`z-index: 1` levanta la celda activa por encima de sus vecinas para que el anillo no quede recortado
+por el fondo de la siguiente.
 
-Because `.dt-row--active` and `.dt-row--stripe` have the same specificity and a row can be both, the
-active rule is declared **after** the stripe rule and wins on source order. If you override either,
-keep that ordering.
+Como `.dt-row--active` y `.dt-row--stripe` tienen la misma especificidad y una fila puede ser las
+dos, la regla de activa se declara **después** de la de stripe y gana por orden de aparición. Al
+sobrescribir cualquiera de las dos, conviene conservar ese orden.
 
-### Styling cells from your own CSS
+### Estilar celdas desde el CSS propio
 
-`column.cellClass` returns a class name that lands on the `.dt-cell` element. **That rule must be
-global.** Body rows and cells are created with `document.createElement` by the pool, outside Vue's
-render, so they never carry the `data-v-*` attribute that `<style scoped>` keys on — a scoped rule
-targeting them simply never applies.
+`column.cellClass` devuelve un nombre de clase que aterriza en el elemento `.dt-cell`. **Esa regla
+tiene que ser global.** Las filas y las celdas del cuerpo las crea el pool con
+`document.createElement`, fuera del render de Vue, así que nunca llevan el atributo `data-v-*` en el
+que se apoya `<style scoped>`: una regla con alcance que las apunte simplemente no se aplica nunca.
+Lo mismo vale para las cabeceras de grupo y sus agregados.
 
 ---
 
-## Column visibility, order, and persistence
+## Visibilidad, orden y persistencia de columnas
 
-### The v-model trio
+### El trío de v-model
 
 ```vue
 <DataTable
@@ -893,57 +1373,58 @@ targeting them simply never applies.
 />
 ```
 
-Bind only what you want to own. In practice you usually bind `column-visibility` (so
-`DataTableColumnToggle` can share it) and leave order and widths to the component.
+Conviene atar solo lo que se quiera poseer. En la práctica se suele atar `column-visibility` —para
+que `DataTableColumnToggle` pueda compartirlo— y dejarle el orden y los anchos al componente.
 
-`DataTableColumnToggle` is optional UI over the same state:
+`DataTableColumnToggle` es UI opcional sobre ese mismo estado:
 
 ```vue
 <DataTableColumnToggle v-model="visibility" :columns="columns" label="Columns" />
 ```
 
-| Prop         | Type                                | Default     |
+| Prop         | Tipo                                | Por defecto |
 | ------------ | ----------------------------------- | ----------- |
 | `columns`    | `readonly DataTableColumn<TRow>[]`  | —           |
 | `modelValue` | `Readonly<Record<string, boolean>>` | —           |
 | `label`      | `string`                            | `'Columns'` |
 
-Only columns with `hideable !== false` are listed. **The last visible column cannot be hidden** — its
-checkbox is disabled rather than silently rejecting the click, because a table with zero columns is
-not a user preference, it is a broken state with no way back except clearing storage. Escape closes
-the panel, arrow keys move focus between options, a click outside closes it.
+Solo se listan las columnas con `hideable !== false`. **La última columna visible no se puede
+ocultar**: su casilla queda deshabilitada en lugar de rechazar el clic en silencio, porque una tabla
+con cero columnas no es una preferencia del usuario, es un estado roto sin vuelta atrás salvo
+borrando el almacenamiento. Escape cierra el panel, las flechas mueven el foco entre las opciones, y
+un clic afuera lo cierra.
 
-### Persistence
+### Persistencia
 
 ```vue
-<!-- localStorage with defaults -->
+<!-- localStorage con los valores por defecto -->
 <DataTable table-id="invoices" persist … />
 ```
 
 ```ts
-// Or configured
+// O configurada
 const persist: DataTablePersistOptions = {
   enabled: true,
-  adapter: myAdapter, // default: localStorage
-  debounce: 300, // ms; collapses a whole resize drag into one write
-  version: 1, // bump to invalidate old layouts
-  include: { visibility: true, widths: true, order: true },
+  adapter: myAdapter, // por defecto: localStorage
+  debounce: 300, // ms; colapsa un arrastre de resize entero en una sola escritura
+  version: 1, // subirla invalida los layouts viejos
+  include: { visibility: true, widths: true, order: true, grouping: true },
 }
 ```
 
-| Detail            | Behavior                                                                                                                                               |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Storage key       | `datatable:{tableId}`                                                                                                                                  |
-| Missing `tableId` | Persistence is **disabled** and a `console.warn` fires once. It never throws.                                                                          |
-| Load timing       | On mount, before saving is enabled — otherwise the default state would overwrite the saved one.                                                        |
-| Save timing       | Debounced (300ms default). Flushed on unmount, and on demand via `flushPersistence()`.                                                                 |
-| Version mismatch  | The saved payload is discarded entirely.                                                                                                               |
-| Corrupt payload   | Shape-validated after `JSON.parse`; anything unexpected means "start fresh", never an exception.                                                       |
-| Storage failures  | Quota exceeded, private mode, SSR: all absorbed. A preference that fails to save is an annoyance; a table that fails to render because of it is a bug. |
+| Detalle                   | Comportamiento                                                                                                                                       |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Clave de almacenamiento   | `datatable:{tableId}`                                                                                                                                |
+| `tableId` ausente         | La persistencia queda **desactivada** y se emite un `console.warn` una sola vez. Nunca lanza.                                                        |
+| Momento de la carga       | Al montar, antes de habilitar el guardado: de lo contrario el estado por defecto pisaría al guardado.                                                |
+| Momento del guardado      | Con debounce (300ms por defecto). Se vuelca al desmontar, y a pedido con `flushPersistence()`.                                                       |
+| Versión que no coincide   | El payload guardado se descarta entero.                                                                                                              |
+| Payload corrupto          | Se valida la forma después del `JSON.parse`; cualquier cosa inesperada significa "empezar de cero", nunca una excepción.                             |
+| Fallas del almacenamiento | Cuota agotada, modo privado, SSR: todas se absorben. Una preferencia que no se guarda es una molestia; una tabla que no renderiza por eso es un bug. |
 
-### Custom storage adapter
+### Adapter de almacenamiento propio
 
-Implement three methods. They may be sync or async.
+Se implementan tres métodos. Pueden ser síncronos o asíncronos.
 
 ```ts
 import type { DataTableStorageAdapter, PersistedTableState } from 'datagrid-vue'
@@ -967,11 +1448,12 @@ const remoteAdapter: DataTableStorageAdapter = {
 }
 ```
 
-`save` and `remove` must **absorb their own failures**, never propagate them. Whatever `load` returns
-is validated and reconciled before it reaches the table, so a malformed response degrades to
-defaults. `createLocalStorageAdapter()` is exported if you want to wrap or compose the default.
+`save` y `remove` deben **absorber sus propias fallas**, nunca propagarlas. Todo lo que devuelva
+`load` se valida y se reconcilia antes de llegar a la tabla, así que una respuesta malformada degrada
+a los valores por defecto. `createLocalStorageAdapter()` está exportado, por si conviene envolver o
+componer el adapter por defecto.
 
-The persisted payload is flat and holds only keys, never column definitions:
+El payload persistido es plano y guarda solo claves, nunca definiciones de columna:
 
 ```ts
 interface PersistedTableState {
@@ -979,102 +1461,115 @@ interface PersistedTableState {
   columnVisibility: Record<string, boolean>
   columnWidths: Record<string, number>
   columnOrder: string[]
+  // Solo aparecen si hay agrupación que guardar. Ver Agrupación → Persistencia.
+  groupBy?: string[]
+  collapsedGroups?: string[]
 }
 ```
 
-### Reconciliation — read this one
+### Reconciliación — esta conviene leerla
 
-**Saved state is out of date by definition.** Between the session where a user arranged their table
-and the session where they come back, you added columns, deleted others and renamed a key. Applying
-saved state verbatim produces silent, hard-to-trace failures. So it is never applied verbatim: it is
-reconciled against today's columns first.
+**El estado guardado está desactualizado por definición.** Entre la sesión en que el usuario acomodó
+su tabla y la sesión en que vuelve, se agregaron columnas, se borraron otras y se renombró alguna
+clave. Aplicar el estado guardado tal cual produce fallas silenciosas y difíciles de rastrear. Por
+eso nunca se aplica tal cual: primero se reconcilia contra las columnas de hoy.
 
-| What changed between deploys           | What happens on load                                                                                                                                                                                         |
-| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **A column was added**                 | It appears **visible** (`defaultVisible ?? true`), positioned **where you declared it** relative to the rest — never hidden just because the saved map predates it, and never dropped at an arbitrary index. |
-| **A column was removed**               | Its key is dropped from the order, the visibility map and the width map. No ghost slots.                                                                                                                     |
-| **`minWidth` / `maxWidth` tightened**  | The saved width is **re-clamped to today's bounds** (and to the global `32 … 4000`), so an old layout cannot reintroduce an illegal one.                                                                     |
-| **A saved width is `NaN`/`Infinity`**  | Discarded, not clamped — there is no sensible position for a non-finite number inside a range.                                                                                                               |
-| **The saved order has duplicate keys** | Deduplicated. A duplicated key would make one column occupy two pool slots.                                                                                                                                  |
-| **The saved order has unknown keys**   | Dropped.                                                                                                                                                                                                     |
-| **`version` does not match**           | The whole payload is discarded and the table starts from defaults.                                                                                                                                           |
+| Qué cambió entre deploys                                         | Qué pasa al cargar                                                                                                                                                                                         |
+| ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Se agregó una columna**                                        | Aparece **visible** (`defaultVisible ?? true`), ubicada **donde fue declarada** respecto de las demás; nunca oculta solo porque el mapa guardado es anterior a ella, ni tirada en una posición arbitraria. |
+| **Se eliminó una columna**                                       | Su clave se descarta del orden, del mapa de visibilidad y del de anchos. Sin slots fantasma.                                                                                                               |
+| **Se ajustaron `minWidth` / `maxWidth`**                         | El ancho guardado se **vuelve a acotar a los límites de hoy** (y al global `32 … 4000`), así que un layout viejo no puede reintroducir uno ilegal.                                                         |
+| **Un ancho guardado es `NaN` / `Infinity`**                      | Se descarta, no se acota: no hay una posición sensata para un número no finito dentro de un rango.                                                                                                         |
+| **El orden guardado tiene claves duplicadas**                    | Se deduplican. Una clave duplicada haría que una misma columna ocupe dos slots del pool.                                                                                                                   |
+| **El orden guardado tiene claves desconocidas**                  | Se descartan.                                                                                                                                                                                              |
+| **`groupBy` nombra una columna que no existe o no es agrupable** | La clave se descarta; los grupos colapsados que dependían de ella también.                                                                                                                                 |
+| **`version` no coincide**                                        | El payload entero se descarta y la tabla arranca desde los valores por defecto.                                                                                                                            |
 
-The invariant: the reconciled order contains **exactly once** every key of the current columns — no
-more, no fewer. The same reconciliation runs on a `columnOrder` prop you pass yourself, because a
-v-model can carry stale keys just as easily as storage can.
+La invariante: el orden reconciliado contiene **exactamente una vez** cada clave de las columnas
+actuales, ni una de más ni una de menos. La misma reconciliación corre sobre una prop `columnOrder`
+pasada a mano, porque un v-model puede traer claves viejas con la misma facilidad que el
+almacenamiento. Lo mismo vale para `groupBy`.
 
-When you make a change that should invalidate saved layouts entirely (a column means something
-different now, widths were rebalanced), bump `persist.version`.
+Cuando se hace un cambio que debería invalidar los layouts guardados por completo —una columna
+significa otra cosa ahora, se rebalancearon los anchos—, hay que subir `persist.version`.
 
 ---
 
-## Performance notes
+## Notas de rendimiento
 
-### What makes it fast
+### Qué la hace rápida
 
-| Mechanism                           | Effect                                                                                                                                                                        |
-| ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Body cells are not vnodes           | No per-frame vnode diff. The pool writes only changed properties.                                                                                                             |
-| Node recycling by viewport slot     | The pool grows with the visible count and never shrinks during scroll.                                                                                                        |
-| Write-only-if-changed everywhere    | Every node caches what was last painted on it. A repaint with the same inputs writes nothing.                                                                                 |
-| Raw-value paint cache               | If a cell already shows this value, for this row and column, `format`, `cellClass` and `update` are all skipped.                                                              |
-| `transform`, not `top` / `left`     | Positioning resolves on the compositor and does not invalidate document layout.                                                                                               |
-| One delegated listener per event    | Not 450 listener registrations per frame.                                                                                                                                     |
-| `shallowRef` / shallow props        | 100k rows cost zero proxies. Window math is O(1): one division per frame, independent of row count.                                                                           |
-| Header scroll is a single transform | The header is Vue-rendered but never re-diffed while scrolling.                                                                                                               |
-| Selection resolved by comparison    | The active position is destructured once per frame; each cell compares two values it already holds. Moving the selection writes to exactly the two cells whose state changed. |
+| Mecanismo                                   | Efecto                                                                                                                                                                      |
+| ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Las celdas del cuerpo no son vnodes         | Sin diff de vnodes por frame. El pool escribe solo las propiedades que cambiaron.                                                                                           |
+| Reciclado de nodos por slot de viewport     | El pool crece con la cantidad visible y nunca encoge durante el scroll.                                                                                                     |
+| Escribir solo si cambió, en todas partes    | Cada nodo cachea lo último que se pintó sobre él. Repintar con las mismas entradas no escribe nada.                                                                         |
+| Caché de pintado por valor crudo            | Si una celda ya muestra ese valor, para esa fila y esa columna, se saltean `format`, `cellClass` y `update`.                                                                |
+| `transform`, no `top` / `left`              | El posicionamiento se resuelve en el compositor y no invalida el layout del documento.                                                                                      |
+| Un listener delegado por evento             | No 450 registros de listener por frame.                                                                                                                                     |
+| `shallowRef` y props superficiales          | 100k filas cuestan cero proxies. La matemática de la ventana es O(1): una división por frame, independiente de la cantidad de filas.                                        |
+| El scroll del header es un único transform  | El header lo renderiza Vue, pero no se vuelve a diferenciar mientras se scrollea.                                                                                           |
+| La selección se resuelve por comparación    | La posición activa se desestructura una vez por frame; cada celda compara dos valores que ya tiene. Mover la selección escribe exactamente en las dos celdas que cambiaron. |
+| El árbol de grupos vive aparte del aplanado | Agrupar y agregar cuestan una pasada cuando cambian los datos; plegar solo vuelve a emitir la vista, y el scroll no toca ninguna de las dos cosas.                          |
 
-### What you can do to make it slow
+### Qué la puede volver lenta
 
-These are the realistic ways to give the performance back, in rough order of how often they happen:
+Estas son las formas realistas de devolver el rendimiento, más o menos en el orden en que ocurren:
 
-1. **An expensive `format`.** It runs per visible cell per frame that the cell's value changed. The
-   classic mistake is constructing an `Intl.NumberFormat` or `Intl.DateTimeFormat` inside it — that
-   negotiates a locale and builds symbol tables, times ~450 cells. Build formatters **once at module
-   scope** and call them inside `format`.
+1. **Un `format` caro.** Corre por celda visible y por frame en que el valor de la celda cambió. El
+   error clásico es construir un `Intl.NumberFormat` o un `Intl.DateTimeFormat` adentro: eso negocia
+   un locale y arma tablas de símbolos, multiplicado por unas 450 celdas. Los formateadores se
+   construyen **una vez, a nivel de módulo**, y se llaman desde `format`.
 
    ```ts
-   // ✗ one instance per cell, per frame
+   // ✗ una instancia por celda, por frame
    format: (value) => new Intl.NumberFormat('en-US').format(Number(value))
 
-   // ✓ one instance, ever
+   // ✓ una instancia, para siempre
    const money = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' })
    format: (value) => (typeof value === 'number' ? money.format(value) : '')
    ```
 
-   The same applies to `cellClass`: keep it to comparisons, no allocation, no string building beyond
-   returning a constant.
+   Lo mismo vale para `cellClass`: comparaciones y nada más, sin asignar y sin armar strings más allá
+   de devolver una constante.
 
-2. **A `ref()` over the rows instead of `shallowRef()`.** A deep `ref` wraps every row in a Proxy.
-   For 100k rows that is 100k proxies allocated up front, plus dependency tracking on every property
-   read the paint path performs. Use `shallowRef` and replace the array to signal a change.
+2. **Un `ref()` sobre las filas en lugar de un `shallowRef()`.** Un `ref` profundo envuelve cada fila
+   en un Proxy. Para 100k filas eso son 100k proxies asignados de entrada, más el tracking de
+   dependencias en cada lectura de propiedad que haga el camino de pintado. Corresponde `shallowRef`
+   y reemplazar el array para señalar un cambio.
 
-3. **An allocating custom renderer.** Creating nodes, building arrays or objects, or template
-   literals in `update` produces garbage the GC collects during a scroll — which is exactly a dropped
-   frame. Cache the last written value and return early. Never read layout in `update`
-   (`offsetWidth`, `getBoundingClientRect`, `getComputedStyle`): that forces a synchronous reflow in
-   the middle of painting.
+3. **Un renderer propio que asigna.** Crear nodos, armar arrays u objetos, o usar plantillas de
+   string dentro de `update` genera basura que el recolector limpia durante un scroll, que es
+   exactamente un frame perdido. Conviene cachear el último valor escrito y salir temprano. Nunca
+   leer layout dentro de `update` (`offsetWidth`, `getBoundingClientRect`, `getComputedStyle`): eso
+   fuerza un reflow síncrono en mitad del pintado.
 
-4. **A new `columns` array identity on every render.** Column definitions are compared by reference
-   in the cell cache. Rebuilding them inside a `computed` that also depends on unrelated state
-   invalidates every cell. Define them at module scope, or in a `computed` that depends only on what
-   actually changes them.
+4. **Una identidad nueva del array `columns` en cada render.** Las definiciones de columna se
+   comparan por referencia en el caché de celdas. Reconstruirlas dentro de un `computed` que además
+   depende de estado sin relación invalida todas las celdas. Corresponde definirlas a nivel de
+   módulo, o en un `computed` que dependa solo de lo que realmente las cambia.
 
-5. **A huge `overscan`.** It is a straight multiplier on cells painted per frame. `4` is the default
-   for a reason; `50` will not feel smoother.
+5. **Un `overscan` enorme.** Es un multiplicador directo sobre las celdas pintadas por frame. El `4`
+   por defecto tiene su razón; `50` no se va a sentir más suave.
 
-6. **`virtualizeColumns` left on for a narrow table.** If all columns fit on screen, the window math
-   and the slice are pure overhead. Turn it off.
+6. **`virtualizeColumns` encendido en una tabla angosta.** Si todas las columnas entran en pantalla,
+   el cálculo de ventana y el recorte son overhead puro. Conviene apagarlo.
 
-7. **Non-uniform row heights.** Not supported — the O(1) window math depends on a single fixed row
-   height. Don't try to fake it with CSS; the virtualizer's geometry would stop matching the DOM.
+7. **Alturas de fila no uniformes.** No están soportadas: la matemática O(1) de la ventana depende de
+   una única altura fija. No conviene falsearlas con CSS, porque la geometría del virtualizador
+   dejaría de coincidir con el DOM.
+
+8. **Una agregación propia cara.** Corre una vez por grupo y por reconstrucción del árbol, no por
+   frame, pero un árbol con miles de grupos multiplica ese costo por miles. Y si además recorre las
+   filas del grupo, el total es O(filas × niveles) por reconstrucción. Con las agregaciones incluidas
+   alcanza casi siempre, y no juntan las filas.
 
 ---
 
-## Testing
+## Tests
 
-La suite vive en `src/components/ui/datatable/__tests__/` y corre con
-[Vitest](https://vitest.dev) sobre `happy-dom`.
+La suite vive en `src/components/ui/datatable/__tests__/` y corre con [Vitest](https://vitest.dev)
+sobre `happy-dom`.
 
 ```bash
 npm test           # una corrida
@@ -1112,6 +1607,7 @@ fija estos invariantes:
 | `avatar` y `tags` mutan sin asignar dentro de `update`                          | La basura del camino caliente la cobra el recolector con un frame perdido   |
 | Cambiar el tipo de renderer en un slot reciclado **reconstruye** la estructura  | Un slot puede pasar de `badge` a `progress` durante el scroll horizontal    |
 | Los índices ARIA se escriben **por fila**, no por celda                         | Misma información para el lector de pantalla, quince veces menos escrituras |
+| Un slot que pasa de fila de datos a cabecera de grupo **recicla** su nodo       | Plegar un grupo mueve de tipo a varios slots a la vez, en mitad del scroll  |
 
 ### Estas aserciones son estructurales
 
@@ -1123,96 +1619,100 @@ número.** El modo de falla que protegen no lanza ninguna excepción: romper el 
 la tabla renderizando, con el mismo aspecto, y solo scrollea peor. Ningún otro test lo nota. Subir la
 constante hasta que vuelva el verde apaga exactamente la alarma que hay que escuchar.
 
-Si el cambio es una mejora real —menos escrituras que antes— bajá la constante y actualizá el
-comentario con el razonamiento nuevo. Si es un aumento, el comentario tiene que explicar qué se
-compró a cambio.
+Si el cambio es una mejora real —menos escrituras que antes— corresponde bajar la constante y
+actualizar el comentario con el razonamiento nuevo. Si es un aumento, el comentario tiene que
+explicar qué se compró a cambio.
 
 ### El resto de la suite
 
-| Archivo                       | Qué cubre                                                                               |
-| ----------------------------- | --------------------------------------------------------------------------------------- |
-| `useVirtualWindow.test.ts`    | Matemática de la ventana: 100k filas, scroll negativo, overscroll, overscan             |
-| `useColumnLayout.test.ts`     | Offsets acumulados, acotado de anchos, orden, y la búsqueda binaria por fuerza bruta    |
-| `reconcile.test.ts`           | Estado guardado contra columnas que cambiaron; payloads corruptos                       |
-| `useTablePersistence.test.ts` | Orden carga/guardado, debounce, volcado al desmontar, degradación en SSR y modo privado |
-| `useCellEditor.test.ts`       | Veto de `beforeEdit`, coacción de tipos, y que `rows` nunca se muta                     |
-| `selection.test.ts`           | Teclado completo, auto-scroll en píxeles exactos, columnas ocultas                      |
-| `renderers.test.ts`           | Valores inesperados en cada renderer incluido                                           |
+| Archivo                       | Qué cubre                                                                                         |
+| ----------------------------- | ------------------------------------------------------------------------------------------------- |
+| `useVirtualWindow.test.ts`    | Matemática de la ventana: 100k filas, scroll negativo, overscroll, overscan                       |
+| `useColumnLayout.test.ts`     | Offsets acumulados, acotado de anchos, orden, y la búsqueda binaria por fuerza bruta              |
+| `reconcile.test.ts`           | Estado guardado contra columnas que cambiaron; payloads corruptos                                 |
+| `useTablePersistence.test.ts` | Orden carga/guardado, debounce, volcado al desmontar, degradación en SSR y modo privado           |
+| `useCellEditor.test.ts`       | Veto de `beforeEdit`, coacción de tipos, y que `rows` nunca se muta                               |
+| `selection.test.ts`           | Teclado completo, auto-scroll en píxeles exactos, columnas ocultas                                |
+| `renderers.test.ts`           | Valores inesperados en cada renderer incluido                                                     |
+| `grouping.test.ts`            | Aplanado, agregados anidados, expansión controlada, y que `editCommit` reporta el índice ORIGINAL |
 
 ---
 
-## Limitations
+## Limitaciones
 
-Stated plainly. None of these are implemented:
+Dicho sin vueltas. Nada de esto está implementado:
 
-| Not implemented                              | Notes                                                                                                                                                                             |
-| -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Sorting**                                  | No sort state, no sort indicators, no click-to-sort. Sort `rows` yourself and pass the sorted array.                                                                              |
-| **Filtering / search**                       | Same: filter upstream and pass the filtered array.                                                                                                                                |
-| **Range selection**                          | Selection is exactly one cell (or one row). No `Shift`+click, no `Shift`+arrow range, no `Ctrl`+click multi-select, no copy of a block.                                           |
-| **Multi-row selection with checkboxes**      | No `selectedRows` model and no built-in checkbox column. `'row'` selection mode marks one row at a time; `rowClick` and `cellSelect` are the hooks if you need to build your own. |
-| **Grouping / pivoting**                      | No group headers, no aggregation, no expand/collapse.                                                                                                                             |
-| **Drag-to-reorder columns**                  | The `columnOrder` v-model exists and is fully reconciled, but no drag UI ships with it. Resizing does have a drag handle.                                                         |
-| **Row virtualization with variable heights** | `rowHeight` is fixed per table. Variable heights would replace the O(1) division with a measured offset index.                                                                    |
-| **Frozen / pinned columns**                  | Every column scrolls.                                                                                                                                                             |
-| **Multi-select editor**                      | The `tags` renderer displays lists; there is no editor that edits one.                                                                                                            |
-| **SSR of the body**                          | The header and the shell render fine; the body is painted on mount, client-side only.                                                                                             |
+| Sin implementar                                   | Notas                                                                                                                                                                                                                                                                                                            |
+| ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Ordenamiento**                                  | Sin estado de orden, sin indicadores y sin clic para ordenar. Hay que ordenar `rows` por fuera y pasar el array ya ordenado.                                                                                                                                                                                     |
+| **Filtrado y búsqueda**                           | Lo mismo: filtrar aguas arriba y pasar el array ya filtrado.                                                                                                                                                                                                                                                     |
+| **Selección de rangos**                           | La selección es exactamente una celda (o una fila). Sin `Shift`+clic, sin rango con `Shift`+flechas, sin multiselección con `Ctrl`+clic, sin copiar un bloque.                                                                                                                                                   |
+| **Selección de varias filas con casillas**        | No hay modelo `selectedRows` ni columna de casillas incluida. El modo `'row'` marca una fila por vez; `rowClick` y `cellSelect` son los enganches para construir la propia.                                                                                                                                      |
+| **Pivoteo**                                       | La agrupación **sí** está implementada (ver [Agrupación](#agrupación)); pivotear no, y queda **deliberadamente fuera de alcance**: exige una matriz de columnas derivadas de los datos, lo que rompe el supuesto de que las columnas son configuración estática sobre el que se apoya todo el camino de pintado. |
+| **Formato de los agregados**                      | `column.format` no se aplica a las cifras de las cabeceras de grupo. Ver [la limitación conocida](#limitación-conocida-columnformat-no-se-aplica-a-los-agregados).                                                                                                                                               |
+| **Reordenar columnas arrastrando**                | El v-model `columnOrder` existe y está completamente reconciliado, pero no viene ninguna UI de arrastre. El redimensionado sí tiene su handle.                                                                                                                                                                   |
+| **Virtualización de filas con alturas variables** | `rowHeight` es fijo por tabla. Las alturas variables reemplazarían la división O(1) por un índice de offsets medidos.                                                                                                                                                                                            |
+| **Columnas fijas o congeladas**                   | Todas las columnas scrollean.                                                                                                                                                                                                                                                                                    |
+| **Editor de selección múltiple**                  | El renderer `tags` muestra listas; no hay ningún editor que edite una.                                                                                                                                                                                                                                           |
+| **SSR del cuerpo**                                | El header y el armazón renderizan bien; el cuerpo se pinta al montar, solo del lado del cliente.                                                                                                                                                                                                                 |
 
-### Per-cell Vue components — deliberately not supported
+### Componentes Vue por celda — deliberadamente no soportado
 
-You cannot put a Vue component inside a body cell, and that is the whole architecture, not an
-oversight. A vnode-backed cell means Vue owns the scroll hot path again: mounting and unmounting
-component instances as rows recycle, running the scheduler inside the frame budget, and paying vnode
-diffing for ~450 cells per frame. That is precisely the cost this component exists to avoid.
+No se puede poner un componente Vue dentro de una celda del cuerpo, y eso es la arquitectura entera,
+no un descuido. Una celda respaldada por un vnode significa que Vue vuelve a ser dueño del camino
+caliente del scroll: montar y desmontar instancias de componente a medida que las filas se reciclan,
+correr el scheduler dentro del presupuesto del frame, y pagar el diff de vnodes por unas 450 celdas
+por frame. Es exactamente el costo que este componente existe para evitar.
 
-The replacement is the renderer protocol: `create` once, `update` per frame, mutating plain DOM. It
-covers the same ground — badges, rings, avatars, inputs — at a fraction of the cost, and it is
-exported and documented so you are not blocked. The header **is** Vue-rendered, because it is a
-handful of nodes that re-diff only when the column configuration changes.
+El reemplazo es el protocolo de renderers: `create` una vez, `update` por frame, mutando DOM plano.
+Cubre el mismo terreno —badges, anillos, avatares, inputs— a una fracción del costo, y está exportado
+y documentado para que nadie quede bloqueado. El header **sí** lo renderiza Vue, porque son un puñado
+de nodos que se vuelven a diferenciar solo cuando cambia la configuración de columnas.
 
 ---
 
-## Pre-publish checklist
+## Checklist previo a publicar
 
-Installing from GitHub already works. Everything below is what is left before pushing to **npm**.
+Instalar desde GitHub ya funciona. Todo lo que sigue es lo que falta antes de empujar a **npm**.
 
-Already done — nothing to do:
+Ya hecho, nada que tocar:
 
-- [x] **Name** `datagrid-vue`, **version** `0.1.0`, **description** and **keywords**.
-- [x] **License** MIT, declared in `package.json` and present as a `LICENSE` file.
-- [x] **Author** `jorge-koki`; **`repository`**, **`homepage`** and **`bugs`** all point at
+- [x] **Nombre** `datagrid-vue`, **versión** `0.1.0`, **descripción** y **keywords**.
+- [x] **Licencia** MIT, declarada en `package.json` y presente como archivo `LICENSE`.
+- [x] **Autor** `jorge-koki`; **`repository`**, **`homepage`** y **`bugs`** apuntan todos a
       `jorge-koki/datagrid-vue`.
-- [x] **`private`** removed, so `npm publish` will work.
-- [x] **`prepare`** script, so `npm install github:jorge-koki/datagrid-vue` builds `dist/` on install
-      without committing build output.
+- [x] **`private`** eliminado, así `npm publish` va a funcionar.
+- [x] Script **`prepare`**, para que `npm install github:jorge-koki/datagrid-vue` construya `dist/` al
+      instalar, sin versionar la salida del build.
 
-Still open:
+Todavía pendiente:
 
-- [ ] **Check the name is free on npm** — `npm view datagrid-vue`. If it is taken, publish under a
-      scope (`@jorge-koki/datagrid-vue`) and update every import in this README.
-- [ ] **Decide on the Vue range.** `peerDependencies.vue` is `^3.5.0 || >=3.6.0-0`, which admits 3.6
-      release candidates because that is what this repo develops against. Narrow it to `^3.5.0` if
-      you would rather not promise support for prereleases.
-- [ ] **Know what `prepare` costs you.** It also runs on every local `npm install` in this repo, and
-      a build failure fails the install. The alternative is committing `dist/` and dropping the
+- [ ] **Verificar que el nombre esté libre en npm** — `npm view datagrid-vue`. Si está tomado, hay que
+      publicar bajo un scope (`@jorge-koki/datagrid-vue`) y actualizar cada import de este README.
+- [ ] **Decidir el rango de Vue.** `peerDependencies.vue` es `^3.5.0 || >=3.6.0-0`, que admite las
+      release candidates de 3.6 porque es contra lo que este repositorio desarrolla. Conviene
+      angostarlo a `^3.5.0` si no se quiere prometer soporte para prereleases.
+- [ ] **Saber qué cuesta `prepare`.** También corre en cada `npm install` local de este repositorio, y
+      una falla del build hace fallar la instalación. La alternativa es versionar `dist/` y sacar el
       script.
-- [ ] **Add a CHANGELOG** if you plan to ship more than one version.
+- [ ] **Agregar un CHANGELOG** si se planea publicar más de una versión.
 
-Publishing to npm needs no extra step: `npm publish` runs `prepare`, which builds `dist/`, and
-`files: ["dist"]` keeps everything else out of the tarball.
+Publicar a npm no necesita ningún paso extra: `npm publish` corre `prepare`, que construye `dist/`, y
+`files: ["dist"]` deja todo lo demás afuera del tarball.
 
 ---
 
-## Reference: what the package exports
+## Referencia: qué exporta el paquete
 
-| Export                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Kind                                          |
-| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------- |
-| `DataTable` (also the default export), `DataTableColumnToggle`                                                                                                                                                                                                                                                                                                                                                                                                                                                        | Components                                    |
-| `COLOR_TOKENS`, `ColorTokenName`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | Status palette map and its key type           |
-| `registerRenderer`, `resolveRenderer`, `createTextRenderer`, `TEXT_RENDERER_TYPE`                                                                                                                                                                                                                                                                                                                                                                                                                                     | Renderer registry                             |
-| `textRenderer`, `numberRenderer`, `badgeRenderer`, `selectRenderer`, `progressRenderer`, `avatarRenderer`, `checkboxRenderer`, `tagsRenderer`                                                                                                                                                                                                                                                                                                                                                                         | Built-in renderer instances, for composing on |
-| `createLocalStorageAdapter`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | The default storage adapter                   |
-| `DataTableProps`, `DataTableColumn`, `DataTableInstance`, `DataTableTheme`, `CellValue`, `CellAlign`, `CellOption`, `CellEditorType`, `CellPosition`, `CellRenderer`, `CellRenderContext`, `CellRendererHandle`, `AnyCellRenderer`, `CellRendererFactory`, `SelectionMode`, `CellSelectEvent`, `BeforeEditEvent`, `AfterEditEvent`, `EditCommitEvent`, `ColumnResizeEvent`, `ColumnVisibilityState`, `ColumnWidthState`, `DataTablePersistOptions`, `DataTableStorageAdapter`, `PersistedTableState`, `VirtualWindow` | Types                                         |
+| Export                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Tipo                                                             |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| `DataTable` (también el export por defecto), `DataTableColumnToggle`                                                                                                                                                                                                                                                                                                                                                                                                                                                  | Componentes                                                      |
+| `COLOR_TOKENS`, `ColorTokenName`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | Mapa de la paleta de estados y el tipo de su clave               |
+| `registerRenderer`, `resolveRenderer`, `createTextRenderer`, `TEXT_RENDERER_TYPE`                                                                                                                                                                                                                                                                                                                                                                                                                                     | Registro de renderers                                            |
+| `textRenderer`, `numberRenderer`, `badgeRenderer`, `selectRenderer`, `progressRenderer`, `avatarRenderer`, `checkboxRenderer`, `tagsRenderer`                                                                                                                                                                                                                                                                                                                                                                         | Instancias de los renderers incluidos, para componer sobre ellas |
+| `createLocalStorageAdapter`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | El adapter de almacenamiento por defecto                         |
+| `DataTableProps`, `DataTableColumn`, `DataTableInstance`, `DataTableTheme`, `CellValue`, `CellAlign`, `CellOption`, `CellEditorType`, `CellPosition`, `CellRenderer`, `CellRenderContext`, `CellRendererHandle`, `AnyCellRenderer`, `CellRendererFactory`, `SelectionMode`, `CellSelectEvent`, `BeforeEditEvent`, `AfterEditEvent`, `EditCommitEvent`, `ColumnResizeEvent`, `ColumnVisibilityState`, `ColumnWidthState`, `DataTablePersistOptions`, `DataTableStorageAdapter`, `PersistedTableState`, `VirtualWindow` | Tipos                                                            |
+| `GroupByState`, `GroupRow`, `DataRow`, `FlatRow`, `GroupToggleEvent`, `BuiltInAggregation`, `AggregationFn`, `ColumnAggregation`                                                                                                                                                                                                                                                                                                                                                                                      | Tipos de la agrupación                                           |
 
-The composables and the node pool are **not** exported. They are implementation details, and
-exporting them would turn them into API that has to be supported forever.
+Los composables y el pool de nodos **no** se exportan. Son detalles de implementación, y exportarlos
+los convertiría en API que después habría que sostener para siempre.

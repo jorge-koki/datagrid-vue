@@ -9,8 +9,16 @@ import type { ShallowRef } from 'vue'
  * la lista se renderiza con Vue y un reemplazo es una sola invalidación.
  */
 
-/** Etapa del ciclo de edición o de selección que produjo la entrada. */
-export type DemoLogKind = 'select' | 'before' | 'veto' | 'commit' | 'after' | 'cancel' | 'info'
+/** Etapa del ciclo de edición, de selección o de agrupación que produjo la entrada. */
+export type DemoLogKind =
+  | 'select'
+  | 'before'
+  | 'veto'
+  | 'commit'
+  | 'after'
+  | 'cancel'
+  | 'group'
+  | 'info'
 
 /** Una línea de la bitácora. */
 export type DemoLogEntry = {

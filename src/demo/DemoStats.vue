@@ -22,7 +22,14 @@ const props = defineProps<{
   host: HTMLElement | null
   /** Cantidad de filas del dataset, para contrastarla con las pintadas. */
   rowCount: number
-  /** Celda activa, para que la selección se vea sin abrir las devtools. */
+  /**
+   * Celda activa, para que la selección se vea sin abrir las devtools.
+   *
+   * Su `rowIndex` es una posición de la SECUENCIA VISIBLE. Con agrupación activa
+   * cuenta también las cabeceras, así que no coincide con el índice del dataset
+   * que reportan `cellSelect` o `editCommit`. Por eso la etiqueta dice
+   * "posición" y no "fila".
+   */
   activeCell: CellPosition | null
 }>()
 
@@ -75,8 +82,8 @@ const formatter = new Intl.NumberFormat('en-US')
 /** Descripción legible de la celda activa. */
 const activeLabel = computed(() => {
   const cell = props.activeCell
-  if (!cell) return 'none'
-  return `row ${formatter.format(cell.rowIndex)} · ${cell.columnKey}`
+  if (!cell) return 'ninguna'
+  return `${formatter.format(cell.rowIndex)} · ${cell.columnKey}`
 })
 </script>
 
@@ -88,23 +95,23 @@ const activeLabel = computed(() => {
     </div>
     <div class="demo-stat">
       <span class="demo-stat-value">{{ formatter.format(props.rowCount) }}</span>
-      <span class="demo-stat-label">rows in data</span>
+      <span class="demo-stat-label">filas en los datos</span>
     </div>
     <div class="demo-stat">
       <span class="demo-stat-value">{{ paintedRows }}</span>
-      <span class="demo-stat-label">rows in DOM</span>
+      <span class="demo-stat-label">filas en el DOM</span>
     </div>
     <div class="demo-stat">
       <span class="demo-stat-value">{{ paintedCells }}</span>
-      <span class="demo-stat-label">cells in DOM</span>
+      <span class="demo-stat-label">celdas en el DOM</span>
     </div>
     <div class="demo-stat">
       <span class="demo-stat-value">{{ formatter.format(totalNodes) }}</span>
-      <span class="demo-stat-label">total nodes</span>
+      <span class="demo-stat-label">nodos totales</span>
     </div>
     <div class="demo-stat demo-stat--wide">
       <span class="demo-stat-value demo-stat-value--text">{{ activeLabel }}</span>
-      <span class="demo-stat-label">active cell</span>
+      <span class="demo-stat-label">celda activa (posición · columna)</span>
     </div>
   </div>
 </template>

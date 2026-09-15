@@ -147,6 +147,20 @@ body {
   background: var(--dt-bg-accented);
 }
 
+/*
+ * Expandir y colapsar solo significan algo con una agrupación activa. El botón
+ * se deshabilita en lugar de ocultarse para que la barra no cambie de ancho al
+ * elegir un preset: un control que aparece y desaparece corre a todos los demás.
+ */
+.demo-button:disabled {
+  color: var(--dt-text-dimmed);
+  cursor: not-allowed;
+}
+
+.demo-button:disabled:hover {
+  background: var(--dt-bg-elevated);
+}
+
 .demo-field input[type='checkbox'] {
   accent-color: var(--dt-primary);
   margin: 0;
@@ -173,6 +187,21 @@ body {
   font-size: 0.75rem;
   line-height: 1.4;
   text-align: center;
+}
+
+/*
+ * Aviso contextual: solo aparece con una agrupación activa, y aclara qué cuentan
+ * los contadores del panel de estadísticas cuando la vista deja de ser plana.
+ */
+.demo-note {
+  margin: 0;
+  max-width: 88ch;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--dt-border);
+  border-left: 3px solid var(--dt-color-amber);
+  border-radius: var(--dt-radius);
+  background: var(--dt-bg);
+  color: var(--dt-text-muted);
 }
 
 /* ------------------------------------------------------------------ Tabla */
@@ -310,6 +339,13 @@ body {
   color: var(--dt-color-purple);
   background: color-mix(in srgb, var(--dt-color-purple) 16%, transparent);
 }
+
+/*
+ * `group` no declara color y se queda con el neutro del caso base. Es
+ * deliberado: los otros seis marcan etapas del ciclo de edición, donde el color
+ * distingue un commit de un veto de un cancel. Plegar un grupo no es una etapa
+ * de nada, y teñirlo competiría por la atención con los que sí lo son.
+ */
 
 .demo-log-message {
   overflow: hidden;
