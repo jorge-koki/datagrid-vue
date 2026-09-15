@@ -462,7 +462,12 @@ function focusViewport(position: CellPosition): void {
     return
   }
 
-  viewport.focus()
+  // `preventScroll` no es un detalle: por defecto, enfocar un elemento lo
+  // desplaza a la vista, y el viewport puede ser más alto que la ventana. Sin
+  // esto, hacer clic en una celda movería el scroll de la PÁGINA para encuadrar
+  // la tabla, justo debajo del puntero del usuario. El foco acá se toma para
+  // habilitar el teclado, no para llevar a nadie a ningún lado.
+  viewport.focus({ preventScroll: true })
 }
 
 /**

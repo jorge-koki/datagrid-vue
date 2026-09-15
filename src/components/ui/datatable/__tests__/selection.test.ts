@@ -15,7 +15,7 @@
  * usuario.
  */
 
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { VueWrapper } from '@vue/test-utils'
 import { mountTable } from './harness'
 import type { GridRow, TableHarness, TableProps } from './harness'
@@ -486,6 +486,22 @@ describe('focus ring — opt-in, and never a second ring', () => {
 
       harness.unmount()
     }
+  })
+
+  it('takes focus without scrolling the page to the table', async () => {
+    // Enfocar un elemento lo desplaza a la vista por defecto. Como el viewport
+    // puede ser más alto que la ventana, sin `preventScroll` un clic en una
+    // celda movería el scroll de la página para encuadrar la tabla, debajo del
+    // puntero del usuario. El foco se toma para habilitar el teclado, nada más.
+    const harness = await mountGrid({})
+    const focus = vi.spyOn(harness.viewport, 'focus')
+
+    await harness.clickCell(2, 'name')
+
+    expect(focus).toHaveBeenCalledWith({ preventScroll: true })
+
+    focus.mockRestore()
+    harness.unmount()
   })
 
   it('does not add a second ring: the active cell keeps carrying exactly one', async () => {
