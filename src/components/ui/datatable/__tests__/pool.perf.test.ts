@@ -1219,3 +1219,72 @@ describe('ARIA structure — the header inside the grid costs nothing per frame'
     expect(harness.grid.querySelector('.dt-header-inner')?.getAttribute('aria-rowindex')).toBe('1')
   })
 })
+
+/**
+ * El aviso por renderer desconocido, medido dentro del camino caliente.
+ *
+ * ## Qué está en juego
+ *
+ * `resolveRenderer` corre una vez por columna VISIBLE y por frame, así que un
+ * `console.warn` sin memoria emitiría unos novecientos mensajes por segundo con
+ * quince columnas a 60 fps: dejaría la consola inutilizable y se comería el
+ * presupuesto de pintado que el resto de este archivo protege.
+ *
+ * Por eso se mide lo mismo dos veces, desde los dos lados:
+ *
+ * - la aplicación CORRECTA —todas las columnas con un renderer registrado— no
+ *   llega nunca a la consola, porque la comprobación vive dentro de la rama de
+ *   fallo y no antes de la búsqueda en el registro;
+ * - la aplicación con un typo avisa UNA vez y después atraviesa treinta frames
+ *   sin volver a hacerlo, conservando el presupuesto de seis escrituras por fila
+ *   entrante que mide el bloque de scroll vertical.
+ */
+describe('unknown renderer warning — the hot path pays nothing for it', () => {
+  it('a scroll over registered renderers never reaches the console', () => {
+    const fixture = createPoolFixture({
+      rows: makeRows(200),
+      columns: [...RENDERER_COLUMNS],
+      visibleRows: 12,
+    })
+    fixture.paint()
+    fixture.paint()
+
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    // Ocho renderers por doce filas y treinta frames. Si la deduplicación
+    // viviera ANTES de la búsqueda en el registro, seguiría sin avisar, pero el
+    // camino de éxito pagaría una búsqueda de más por columna y por frame.
+    for (let step = 1; step <= 30; step += 1) fixture.paint({ start: step })
+
+    expect(warn).not.toHaveBeenCalled()
+    fixture.destroy()
+  })
+
+  it('a column with an unknown renderer keeps the exact same per-frame budget', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    // Mismas tres columnas de texto que mide el bloque de scroll vertical, con
+    // un typo en la primera: cae en `text`, que es lo que ya usaba.
+    const columns: readonly DataTableColumn<DemoRow>[] = [
+      { key: 'name', renderer: 'txet' },
+      { key: 'id' },
+      { key: 'amount' },
+    ]
+    const fixture = createPoolFixture({ rows: makeRows(200), columns, visibleRows: 10 })
+    fixture.paint()
+    fixture.paint()
+
+    const measured = measureDomWrites(fixture.container, () => fixture.paint({ start: 1 }))
+
+    // El presupuesto no se movió ni una escritura: el aviso es aditivo sobre la
+    // consola, no sobre el DOM.
+    expect(measured.counts.total, measured.report).toBe(ENTERING_ROW_WRITES)
+    expect(measured.counts.textContent, measured.report).toBe(3)
+    expect(measured.counts.style, measured.report).toBe(1)
+    expect(measured.counts.attribute, measured.report).toBe(2)
+
+    // Treinta frames más sobre la misma columna equivocada: ni un mensaje extra.
+    for (let step = 2; step <= 31; step += 1) fixture.paint({ start: step })
+
+    expect(warn).toHaveBeenCalledTimes(1)
+    fixture.destroy()
+  })
+})

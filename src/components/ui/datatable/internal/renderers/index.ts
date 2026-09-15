@@ -75,11 +75,62 @@ export function createTextRenderer<TRow>(): CellRenderer<TRow> {
 }
 
 /**
+ * Nombres desconocidos que ya se reportaron por consola.
+ *
+ * Solo lo toca la rama de fallo de {@link resolveRenderer}. Un nombre que sí
+ * está registrado no lee ni escribe este conjunto: el camino de éxito no paga
+ * nada por esta función.
+ */
+const warnedUnknownNames = new Set<string>()
+
+/**
+ * Avisa UNA sola vez por cada nombre de renderer desconocido.
+ *
+ * ## Por qué la deduplicación es obligatoria
+ *
+ * `resolveRenderer` se ejecuta una vez por columna y por frame. Con quince
+ * columnas a 60 fps, un `console.warn` sin memoria emitiría unos novecientos
+ * mensajes por segundo: dejaría la consola de las devtools inutilizable y se
+ * comería el presupuesto de pintado que el componente promete cuidar. El aviso
+ * sería peor que el silencio que viene a corregir.
+ *
+ * El conjunto no se limpia nunca: vive lo que vive el módulo. Un nombre
+ * desconocido no se arregla solo, así que repetir el mensaje no aportaría
+ * información nueva. El registro sí puede crecer más tarde con
+ * `registerRenderer`, y a partir de ese momento el nombre deja de entrar en esta
+ * rama por sí mismo.
+ */
+function warnUnknownRenderer(name: string): void {
+  if (warnedUnknownNames.has(name)) return
+  warnedUnknownNames.add(name)
+
+  const registered = [...factories.keys()].sort().join(', ')
+
+  console.warn(
+    `[DataTable] \`column.renderer: '${name}'\` no corresponde a ningún renderer registrado. ` +
+      `La celda se pintó con \`${TEXT_RENDERER_TYPE}\`, así que el valor se ve como texto plano.\n` +
+      `Renderers registrados: ${registered}.\n` +
+      `Si es un error de tipeo, corregir el nombre comparándolo con esa lista. ` +
+      `Si es un renderer propio, registrarlo antes de montar la tabla con ` +
+      `\`registerRenderer('${name}', () => miRenderer)\`, o pasar la instancia ` +
+      `directamente en \`column.renderer\`. Ver "Escribir un renderer propio" en el README.`,
+  )
+}
+
+/**
  * Resuelve lo que declara `column.renderer` a una instancia concreta.
  *
  * Un nombre desconocido cae al renderer de texto en lugar de lanzar: esto corre
  * dentro del pintado, y una excepción por frame dejaría la tabla en blanco en
- * vez de mostrar el dato tal cual.
+ * vez de mostrar el dato tal cual. Pero caer en silencio tampoco sirve: un
+ * nombre que nadie registró NUNCA es un estado legítimo, siempre es un error, y
+ * la única pista visible sería una columna que se ve como texto plano. Por eso
+ * en desarrollo se avisa por consola, una vez por nombre.
+ *
+ * El aviso vive dentro de la rama de fallo y detrás de `import.meta.env.DEV`. La
+ * rama de éxito —la que corre por columna y por frame en toda aplicación
+ * correcta— no gana ni una instrucción: el `Set` de nombres ya reportados se
+ * consulta DESPUÉS de que la búsqueda en el registro falló, nunca antes.
  */
 export function resolveRenderer<TRow>(
   spec: string | CellRenderer<TRow> | undefined,
@@ -91,7 +142,14 @@ export function resolveRenderer<TRow>(
   if (cached) return cached
 
   const factory = factories.get(name)
-  if (!factory) return textRenderer
+  if (!factory) {
+    // `import.meta.env.DEV` lo reemplaza Vite por un literal al compilar, así
+    // que el bundle publicado queda con `if (false)` y el minificador borra la
+    // llamada junto con la función y el `Set`. Un consumidor en producción no
+    // paga ni el código ni la comprobación.
+    if (import.meta.env.DEV) warnUnknownRenderer(name)
+    return textRenderer
+  }
 
   const instance = factory()
   instances.set(name, instance)

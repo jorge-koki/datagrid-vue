@@ -8,13 +8,14 @@
  * celda vacía es indistinguible de un dato faltante y esconde el problema.
  */
 
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   avatarRenderer,
   badgeRenderer,
   checkboxRenderer,
   numberRenderer,
   progressRenderer,
+  registerRenderer,
   resolveRenderer,
   revertCheckbox,
   selectRenderer,
@@ -22,6 +23,7 @@ import {
   textRenderer,
   TEXT_RENDERER_TYPE,
 } from '../internal/renderers'
+import type { CellRendererHandle } from '../types'
 import type { AnyCellRenderer } from '../internal/renderers'
 import { toCellValue } from '../internal/values'
 import type { CellOption, CellRenderContext, DataTableColumn } from '../types'
@@ -75,19 +77,143 @@ function render(
   }
 }
 
-describe('resolveRenderer — unknown names degrade to text', () => {
+/**
+ * Silencia `console.warn` y devuelve el espía para inspeccionar las llamadas.
+ *
+ * El tipo de retorno queda INFERIDO a propósito: escribirlo obligaría a nombrar
+ * el tipo interno del espía de Vitest, que cambia entre versiones menores.
+ * `ConsoleWarnSpy` lo deriva de esta misma función y sobrevive a esos cambios.
+ */
+function spyOnConsoleWarn() {
+  return vi.spyOn(console, 'warn').mockImplementation(() => {})
+}
+
+/** El espía instalado sobre `console.warn`. */
+type ConsoleWarnSpy = ReturnType<typeof spyOnConsoleWarn>
+
+/** Texto del primer aviso emitido, o cadena vacía si no hubo ninguno. */
+function firstWarning(spy: ConsoleWarnSpy): string {
+  return String(spy.mock.calls[0]?.[0] ?? '')
+}
+
+/**
+ * Nombres desconocidos que degradan a texto, con el aviso que los explica.
+ *
+ * ## Por qué estos tests dependen del orden
+ *
+ * La deduplicación del aviso vive en un `Set` de módulo que nunca se limpia: es
+ * lo que impide que un nombre equivocado emita un mensaje por columna y por
+ * frame. Eso hace que el PRIMER `resolveRenderer` de un nombre dado sea el único
+ * que avisa, y que un test que vuelva a pedir ese mismo nombre ya no vea nada.
+ *
+ * Por eso cada test usa un nombre propio, salvo el que verifica justamente la
+ * deduplicación, que reutiliza a propósito el del test anterior. Cambiar el
+ * orden de este bloque o reciclar un nombre entre tests rompe esa dependencia.
+ */
+describe('resolveRenderer — unknown names degrade to text, and say so once', () => {
+  let warn: ConsoleWarnSpy
+
+  beforeEach(() => {
+    // `restoreMocks` está activo en la configuración de Vitest, así que el
+    // espía se desinstala solo al terminar cada test.
+    warn = spyOnConsoleWarn()
+  })
+
   it('returns the text renderer when the column declares none', () => {
     expect(resolveRenderer(undefined).type).toBe(TEXT_RENDERER_TYPE)
+    // Una columna sin `renderer` es el caso normal, no un error: no avisa.
+    expect(warn).not.toHaveBeenCalled()
   })
 
   it('returns the text renderer for a name nobody registered', () => {
     // Una columna con un typo en el nombre del renderer tiene que mostrar el
-    // dato igual, no dejar la celda en blanco.
+    // dato igual, no dejar la celda en blanco. El aviso es ADITIVO: se suma al
+    // fallback, no lo reemplaza ni lo cambia.
     expect(resolveRenderer('does-not-exist').type).toBe(TEXT_RENDERER_TYPE)
+    // Y es exactamente la MISMA instancia que devuelve el camino sin `renderer`:
+    // el aviso no introdujo un segundo renderer de texto por la rama de fallo.
+    expect(resolveRenderer('does-not-exist')).toBe(textRenderer)
+    // Dos resoluciones, un solo aviso.
+    expect(warn).toHaveBeenCalledTimes(1)
+  })
+
+  it('warns exactly once, naming the unknown renderer, the fallback and the registry', () => {
+    // Nombre propio: el bloque anterior ya consumió el suyo.
+    expect(resolveRenderer('badeg').type).toBe(TEXT_RENDERER_TYPE)
+
+    expect(warn).toHaveBeenCalledTimes(1)
+    const message = firstWarning(warn)
+    // El prefijo que ya usa el aviso de `persist`: un solo patrón para buscar
+    // todo lo que emite la librería.
+    expect(message).toContain('[DataTable]')
+    // El nombre equivocado, entre comillas.
+    expect(message).toContain("'badeg'")
+    // El síntoma visible queda explicado.
+    expect(message).toContain(`\`${TEXT_RENDERER_TYPE}\``)
+    // Y la lista de nombres válidos, para que el typo salte por comparación.
+    expect(message).toContain('avatar, badge, checkbox, number, progress, select, tags, text')
+    // Cómo registrar uno propio, sin tener que abrir la documentación.
+    expect(message).toContain('registerRenderer')
+  })
+
+  it('does not warn again for the SAME unknown name', () => {
+    // `resolveRenderer` corre una vez por columna y por frame: sin memoria, un
+    // solo nombre equivocado emitiría cientos de mensajes por segundo.
+    for (let call = 0; call < 200; call += 1) {
+      expect(resolveRenderer('badeg').type).toBe(TEXT_RENDERER_TYPE)
+    }
+
+    expect(warn).not.toHaveBeenCalled()
+  })
+
+  it('warns again for a DIFFERENT unknown name', () => {
+    // La memoria es por nombre, no un interruptor global: un segundo typo en
+    // otra columna sigue siendo un error distinto y merece su propio aviso.
+    expect(resolveRenderer('pogress').type).toBe(TEXT_RENDERER_TYPE)
+
+    expect(warn).toHaveBeenCalledTimes(1)
+    expect(firstWarning(warn)).toContain("'pogress'")
+  })
+
+  it('never warns for a built-in name', () => {
+    const builtIn = [
+      'text',
+      'number',
+      'badge',
+      'select',
+      'progress',
+      'avatar',
+      'checkbox',
+      'tags',
+    ] as const
+
+    for (const name of builtIn) {
+      expect(resolveRenderer(name).type).toBe(name)
+    }
+
+    expect(warn).not.toHaveBeenCalled()
+  })
+
+  it('never warns for a renderer registered at runtime', () => {
+    registerRenderer('bar', () => ({
+      type: 'bar',
+      create(cell: HTMLElement): CellRendererHandle {
+        return { root: cell }
+      },
+      update(): void {},
+    }))
+
+    expect(resolveRenderer('bar').type).toBe('bar')
+    // Y tampoco en el segundo pintado, que ya sale del caché de instancias.
+    expect(resolveRenderer('bar').type).toBe('bar')
+    expect(warn).not.toHaveBeenCalled()
   })
 
   it('returns a custom renderer instance untouched', () => {
     expect(resolveRenderer(badgeRenderer).type).toBe('badge')
+    // Una instancia pasada directamente no pasa por el registro: no hay nada
+    // desconocido que reportar.
+    expect(warn).not.toHaveBeenCalled()
   })
 })
 

@@ -855,27 +855,27 @@ interface DataTableColumn<TRow> {
 }
 ```
 
-| Campo                   | Por defecto                                    | Notas                                                                                                                                                |
-| ----------------------- | ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `key`                   | —                                              | Id único, y también la clave de datos por defecto (`row[key]`).                                                                                      |
-| `label`                 | `key`                                          | Texto del header.                                                                                                                                    |
-| `width`                 | `defaultColumnWidth` (150)                     | Siempre acotado a `[max(32, minWidth), min(4000, maxWidth)]`.                                                                                        |
-| `minWidth` / `maxWidth` | `32` / `4000`                                  | Se aplican al resolver el ancho y durante el redimensionado.                                                                                         |
-| `resizable`             | `false`                                        | Muestra un handle de arrastre en el borde del header.                                                                                                |
-| `align`                 | el `defaultAlign` del renderer, si no `'left'` | Un `align` explícito siempre gana. Se aplica como clase, no como estilo inline.                                                                      |
-| `editable`              | `false`                                        | Tiene que ser exactamente `true` para que la celda se pueda editar.                                                                                  |
-| `format`                | —                                              | Valor crudo → el string que se escribe en la celda. **Debe ser puro y barato.** No se aplica a los agregados: para eso está `formatAggregate`.       |
-| `formatAggregate`       | —                                              | Valor agregado → el string que se escribe en la cabecera de grupo. Ver [Formato de los agregados](#formato-de-los-agregados).                        |
-| `cellClass`             | —                                              | Clase CSS extra sobre el elemento de celda. También está en el camino caliente.                                                                      |
-| `accessor`              | `row[key]`                                     | Lee el valor desde la fila. Devuelve `CellValue`: no puede devolver un objeto ni un array.                                                           |
-| `renderer`              | `'text'`                                       | Nombre de un renderer registrado, o una implementación. Un nombre desconocido cae en `'text'` en lugar de lanzar.                                    |
-| `hideable`              | `true`                                         | `false` deja la columna fuera de `DataTableColumnToggle`.                                                                                            |
-| `defaultVisible`        | `true`                                         | Visibilidad inicial. La persistencia y el v-model tienen prioridad sobre esto.                                                                       |
-| `editor`                | inferido (ver más abajo)                       | El control que se abre al editar. `'slot'` lo delega al slot `#editor`. Ver [Componentes de terceros](#componentes-de-terceros-dentro-de-una-celda). |
-| `options`               | —                                              | Alimenta los renderers `badge` / `select` / `tags`, **el** editor `select` y la etiqueta de las cabeceras de grupo. Una sola fuente de verdad.       |
-| `min`/`max`/`step`      | —                                              | Se trasladan a los atributos del input del editor `number`.                                                                                          |
-| `groupable`             | `true`                                         | `false` hace que una clave suya dentro de `groupBy` se descarte. No oculta la columna. Ver [Agrupación](#agrupación).                                |
-| `aggregate`             | —                                              | Agregación que esta columna muestra en las cabeceras de grupo: una incluida o una función propia.                                                    |
+| Campo                   | Por defecto                                    | Notas                                                                                                                                                                                                                     |
+| ----------------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `key`                   | —                                              | Id único, y también la clave de datos por defecto (`row[key]`).                                                                                                                                                           |
+| `label`                 | `key`                                          | Texto del header.                                                                                                                                                                                                         |
+| `width`                 | `defaultColumnWidth` (150)                     | Siempre acotado a `[max(32, minWidth), min(4000, maxWidth)]`.                                                                                                                                                             |
+| `minWidth` / `maxWidth` | `32` / `4000`                                  | Se aplican al resolver el ancho y durante el redimensionado.                                                                                                                                                              |
+| `resizable`             | `false`                                        | Muestra un handle de arrastre en el borde del header.                                                                                                                                                                     |
+| `align`                 | el `defaultAlign` del renderer, si no `'left'` | Un `align` explícito siempre gana. Se aplica como clase, no como estilo inline.                                                                                                                                           |
+| `editable`              | `false`                                        | Tiene que ser exactamente `true` para que la celda se pueda editar.                                                                                                                                                       |
+| `format`                | —                                              | Valor crudo → el string que se escribe en la celda. **Debe ser puro y barato.** No se aplica a los agregados: para eso está `formatAggregate`.                                                                            |
+| `formatAggregate`       | —                                              | Valor agregado → el string que se escribe en la cabecera de grupo. Ver [Formato de los agregados](#formato-de-los-agregados).                                                                                             |
+| `cellClass`             | —                                              | Clase CSS extra sobre el elemento de celda. También está en el camino caliente.                                                                                                                                           |
+| `accessor`              | `row[key]`                                     | Lee el valor desde la fila. Devuelve `CellValue`: no puede devolver un objeto ni un array.                                                                                                                                |
+| `renderer`              | `'text'`                                       | Nombre de un renderer registrado, o una implementación. Un nombre desconocido cae en `'text'` en lugar de lanzar, y **avisa por consola en desarrollo**. Ver [Un nombre desconocido avisa](#un-nombre-desconocido-avisa). |
+| `hideable`              | `true`                                         | `false` deja la columna fuera de `DataTableColumnToggle`.                                                                                                                                                                 |
+| `defaultVisible`        | `true`                                         | Visibilidad inicial. La persistencia y el v-model tienen prioridad sobre esto.                                                                                                                                            |
+| `editor`                | inferido (ver más abajo)                       | El control que se abre al editar. `'slot'` lo delega al slot `#editor`. Ver [Componentes de terceros](#componentes-de-terceros-dentro-de-una-celda).                                                                      |
+| `options`               | —                                              | Alimenta los renderers `badge` / `select` / `tags`, **el** editor `select` y la etiqueta de las cabeceras de grupo. Una sola fuente de verdad.                                                                            |
+| `min`/`max`/`step`      | —                                              | Se trasladan a los atributos del input del editor `number`.                                                                                                                                                               |
+| `groupable`             | `true`                                         | `false` hace que una clave suya dentro de `groupBy` se descarte. No oculta la columna. Ver [Agrupación](#agrupación).                                                                                                     |
+| `aggregate`             | —                                              | Agregación que esta columna muestra en las cabeceras de grupo: una incluida o una función propia.                                                                                                                         |
 
 ### `renderer` y `editor` son dos ejes independientes
 
@@ -1143,6 +1143,42 @@ Lo que recibe `update`:
 
 También se puede componer sobre los incluidos: todos se exportan como instancias (`badgeRenderer`,
 `avatarRenderer`, …) junto con `createTextRenderer()` y `resolveRenderer()`.
+
+### Un nombre desconocido avisa
+
+Una columna que declara `renderer: '<nombre>'` con un nombre que nadie registró **cae en `text`**: la
+celda muestra el valor como texto plano y la tabla sigue funcionando. Eso es deliberado —resolver el
+renderer ocurre dentro del pintado, y lanzar ahí dejaría la tabla en blanco en lugar de mostrar el
+dato—, pero degradar en silencio esconde el error: lo único visible es una columna que se ve distinta
+de lo esperado.
+
+Por eso, **en desarrollo**, el primer renderer desconocido emite un `console.warn` con el nombre que
+falló, la lista completa de nombres registrados y cómo registrar uno propio:
+
+```
+[DataTable] `column.renderer: 'badeg'` no corresponde a ningún renderer registrado. La celda se
+pintó con `text`, así que el valor se ve como texto plano.
+Renderers registrados: avatar, badge, checkbox, number, progress, select, tags, text.
+Si es un error de tipeo, corregir el nombre comparándolo con esa lista. Si es un renderer propio,
+registrarlo antes de montar la tabla con `registerRenderer('badeg', () => miRenderer)`, o pasar la
+instancia directamente en `column.renderer`. Ver "Escribir un renderer propio" en el README.
+```
+
+Dos detalles del aviso, y los dos importan:
+
+- **Se emite una sola vez por nombre**, durante toda la vida de la aplicación. Resolver el renderer
+  de una columna ocurre una vez por columna visible y por frame: sin esa memoria, un único typo
+  emitiría cientos de mensajes por segundo y dejaría la consola de las devtools inutilizable.
+- **No viaja al bundle de producción.** La comprobación está detrás de `import.meta.env.DEV`, que el
+  empaquetado de la librería reemplaza por un literal; el mensaje, la función que lo emite y la
+  memoria de nombres ya avisados desaparecen del artefacto publicado. El consumidor no paga ni un
+  byte ni una comprobación por frame.
+
+Un nombre desconocido es SIEMPRE un error: no hay ninguna regla de reconciliación que preserve uno ni
+ninguna ventana de carga que lo produzca. Es la diferencia con las claves de columna ausentes en el
+estado guardado, que se descartan en silencio a propósito porque un layout de hace dos deploys
+mencionando una columna que ya no existe es un estado perfectamente legítimo. Ver
+[Reconciliación](#reconciliación--esta-conviene-leerla).
 
 ---
 
@@ -2562,7 +2598,7 @@ explicar qué se compró a cambio.
 | `useTablePersistence.test.ts` | Orden carga/guardado, debounce, volcado al desmontar, degradación en SSR y modo privado                                                                                                                                                                                                        |
 | `useCellEditor.test.ts`       | Veto de `beforeEdit`, coacción de tipos, y que `rows` nunca se muta                                                                                                                                                                                                                            |
 | `selection.test.ts`           | Teclado completo, auto-scroll en píxeles exactos, columnas ocultas, el anillo único —una sola celda marcada, y el anillo del viewport opcional y suprimido con celda activa— y la estructura accesible: roles, `aria-rowindex` del encabezado y `aria-colindex` alineado entre header y cuerpo |
-| `renderers.test.ts`           | Valores inesperados en cada renderer incluido                                                                                                                                                                                                                                                  |
+| `renderers.test.ts`           | Valores inesperados en cada renderer incluido, y el aviso por nombre desconocido: una vez por nombre, nunca para un nombre registrado                                                                                                                                                          |
 | `cell-layout.test.ts`         | Modo de maquetado: qué renderers lo declaran, que la clase se escriba solo al cambiar de renderer, que las tres alineaciones produzcan el mismo estado en los dos modos, y —leyendo el `.css`— que la celda de texto conserve su recorte con puntos suspensivos                                |
 | `grouping.test.ts`            | Aplanado, agregados anidados, expansión controlada, `formatAggregate`, `emptyGroupLabel`, y que `editCommit` reporta el índice ORIGINAL                                                                                                                                                        |
 | `slot-editor.test.ts`         | El slot `#editor`: dónde abre y dónde no, el veto, `commit()` y `cancel()` sobre la tubería de siempre, el índice ORIGINAL con un grupo plegado, el cierre por scroll y por puntero, el foco de ida y de vuelta, y que el presupuesto por frame no se mueve ni con el editor abierto           |
