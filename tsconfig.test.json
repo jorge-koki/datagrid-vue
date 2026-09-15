@@ -18,6 +18,13 @@
 
     // `vite/client` declara los módulos `.css` que importan los SFC del
     // componente, que los tests cargan al montar `DataTable.vue`.
+    //
+    // `node` NO está acá, y es deliberado: agregarlo redefine globales del DOM
+    // —`setTimeout` pasaría a devolver un `Timeout` en lugar de un número— y esa
+    // decisión ya está tomada y documentada en `useTablePersistence.ts`. Como los
+    // tests importan los módulos del componente, esos módulos se compilan también
+    // dentro de este proyecto y heredarían el cambio. El único test que necesita
+    // leer un archivo declara por su cuenta lo que usa: ver `node-fs.d.ts`.
     "types": ["vite/client"],
 
     "paths": {

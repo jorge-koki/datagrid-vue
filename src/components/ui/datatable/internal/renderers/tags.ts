@@ -1,5 +1,12 @@
 import type { CellRenderContext, CellRendererHandle } from '../../types'
-import { createElement, fallbackText, findOption, NEUTRAL_COLOR_TOKEN, writeHidden } from './shared'
+import {
+  BOX_CELL_LAYOUT,
+  createElement,
+  fallbackText,
+  findOption,
+  NEUTRAL_COLOR_TOKEN,
+  writeHidden,
+} from './shared'
 import type { AnyCellRenderer } from './shared'
 
 /**
@@ -63,6 +70,9 @@ function createPill(root: HTMLElement): TagPill {
 
 export const tagsRenderer: AnyCellRenderer = {
   type: 'tags',
+  // Es el renderer donde más se notaba el desfase: la lista heredaba la altura
+  // de línea de la fila y volvía a aplicar el mismo error sobre sus píldoras.
+  layout: BOX_CELL_LAYOUT,
 
   create(cell: HTMLElement): CellRendererHandle {
     const root = createElement('span', 'dt-tags')

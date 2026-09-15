@@ -26,6 +26,7 @@ export type {
   BuiltInAggregation,
   CellAlign,
   CellEditorType,
+  CellLayout,
   CellOption,
   CellPosition,
   CellRenderContext,

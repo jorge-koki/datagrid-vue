@@ -1,5 +1,6 @@
 import type { CellRenderContext, CellRendererHandle } from '../../types'
 import {
+  BOX_CELL_LAYOUT,
   createElement,
   fallbackText,
   findOption,
@@ -67,6 +68,9 @@ export function deleteBadgeState(handle: CellRendererHandle): void {
 
 export const badgeRenderer: AnyCellRenderer = {
   type: 'badge',
+  // La píldora es una caja, no texto suelto: la celda tiene que centrarla con
+  // flex y no con la altura de línea.
+  layout: BOX_CELL_LAYOUT,
 
   create(cell: HTMLElement): CellRendererHandle {
     const handle: CellRendererHandle = { root: cell }

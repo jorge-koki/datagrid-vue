@@ -292,10 +292,49 @@
    * no se aplica al texto anónimo dentro de un contenedor flex, y el recorte con
    * puntos suspensivos es justamente lo que se necesita en una celda de ancho
    * fijo.
+   *
+   * Esto es correcto PARA TEXTO y solo para texto. Una celda cuyo contenido es
+   * una caja —un badge, un avatar, un anillo— declara el modo `box` y se lleva
+   * el bloque de abajo. Ver `.dt-cell--box`.
    */
   line-height: var(--dt-row-height);
   white-space: nowrap;
   text-overflow: ellipsis;
+}
+
+/*
+ * Celda cuyo contenido es una caja estructurada y no texto suelto.
+ *
+ * ## Qué estaba mal
+ *
+ * El centrado por `line-height` de arriba centra el TEXTO. Una caja en línea no
+ * se ubica igual: `vertical-align: middle` no apunta al centro geométrico de la
+ * caja de línea sino a la línea base más media altura de x. Con la altura de
+ * línea puesta en la altura de fila y una tipografía de 14px esos dos puntos no
+ * coinciden —la diferencia son uno o dos píxeles, según la métrica de la fuente
+ * del anfitrión— y toda caja estructurada quedaba sistemáticamente más abajo de
+ * lo que debía, mientras el texto plano se veía perfecto.
+ *
+ * En `tags` el error se aplicaba DOS veces: la lista heredaba la altura de línea
+ * de la fila, así que el desfase entraba una vez al ubicar la lista dentro de la
+ * celda y otra al ubicar cada píldora dentro de la lista.
+ *
+ * ## Por qué acá sí se puede usar flex
+ *
+ * La objeción que impide usarlo en `.dt-cell` es el recorte con puntos
+ * suspensivos del texto anónimo, y en modo caja no hay texto anónimo: el
+ * renderer siempre construye un elemento, y ese elemento recorta por su cuenta.
+ * `align-items: center` centra contra el centro geométrico de la caja, que es lo
+ * que se quería desde el principio, y lo hace bien con cualquier altura de fila,
+ * `dense` incluido.
+ *
+ * `line-height: normal` deshace la altura de línea del tamaño de la fila para
+ * los descendientes: heredada, volvería a inflar cualquier caja interna.
+ */
+.dt-cell--box {
+  display: flex;
+  align-items: center;
+  line-height: normal;
 }
 
 .dt-cell--center {
@@ -304,6 +343,27 @@
 
 .dt-cell--right {
   text-align: right;
+}
+
+/*
+ * La misma alineación horizontal, traducida al modo caja.
+ *
+ * `text-align` no posiciona ítems flex, así que sin estas dos reglas una celda
+ * en modo caja quedaría siempre pegada a la izquierda. La traducción es literal:
+ * `left` (sin clase) es `flex-start`, que ya es el valor inicial de
+ * `justify-content` y por eso no necesita regla propia.
+ *
+ * Se reutilizan LAS MISMAS clases que el modo texto en lugar de escribir otras
+ * desde el pool. Es deliberado: con una sola fuente de verdad —el valor de
+ * `align`, escrito una vez por `setCellAlign`— los dos modos no pueden divergir,
+ * y la alineación tampoco cuesta una escritura más al cambiar de modo.
+ */
+.dt-cell--box.dt-cell--center {
+  justify-content: center;
+}
+
+.dt-cell--box.dt-cell--right {
+  justify-content: flex-end;
 }
 
 .dt-cell--editing {
@@ -561,10 +621,15 @@
 /* ------------------------------------------------- Renderers de celda */
 
 /*
- * Todos los renderers comparten la misma disciplina visual: la celda impone su
- * alto por `line-height`, y el contenido se alinea con `vertical-align: middle`
- * en lugar de flex, porque la celda necesita conservar `text-overflow: ellipsis`
- * y eso no funciona dentro de un contenedor flex.
+ * Todos los renderers comparten la misma disciplina visual: su celda declara el
+ * modo `box` y el centrado vertical lo resuelve el `align-items: center` de
+ * `.dt-cell--box`. Por eso ninguna de estas clases declara ya
+ * `vertical-align: middle`: esa propiedad era la compensación del centrado por
+ * altura de línea, y era justamente la que dejaba todo uno o dos píxeles abajo.
+ * Cada renderer solo se ocupa de su propia forma y de su alto.
+ *
+ * El alto sigue derivándose de `--dt-row-height` con `calc()`, así que `dense`
+ * —que solo cambia esa variable— se acompaña sin ninguna regla extra.
  */
 
 .dt-badge,
@@ -576,7 +641,6 @@
   /* Un poco menos que la altura de fila, para que la píldora respire. */
   height: calc(var(--dt-row-height) - 14px);
   line-height: calc(var(--dt-row-height) - 14px);
-  vertical-align: middle;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -590,11 +654,17 @@
   );
 }
 
+/*
+ * El chevron es geometría fija y no debe encogerse: como ítem flex de la celda
+ * lo haría, y en una columna angosta se vería aplastado. `flex: 0 0 auto` deja
+ * que sea la píldora la que ceda, que es la que sabe recortarse con puntos
+ * suspensivos.
+ */
 .dt-select-chevron {
+  flex: 0 0 auto;
   width: 0.875em;
   height: 0.875em;
   margin-left: 0.375rem;
-  vertical-align: middle;
   color: var(--dt-text-dimmed);
 }
 
@@ -604,17 +674,30 @@
 
 /* ------------------------------------------------------------- Progreso */
 
+/*
+ * La caja del progreso también es flex, y por el mismo motivo que la celda: sus
+ * dos hijos tienen alturas distintas —el anillo mide lo que mide y la etiqueta
+ * lo que mida su línea de texto— y alinearlos entre sí por línea base arrastraba
+ * el mismo desfase un nivel más abajo.
+ *
+ * Es además lo que vuelve innecesario el `line-height: 1` que esta regla tenía:
+ * existía para que la línea de la etiqueta no inflara la caja por encima del
+ * anillo. Con flex el alto de la caja es el del hijo más alto y la altura de
+ * línea deja de intervenir.
+ */
 .dt-progress {
-  display: inline-block;
-  vertical-align: middle;
-  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  /* Sigue haciendo falta: un `column.format` propio puede devolver un texto
+     largo, y sin esto la etiqueta partiría en dos renglones. */
   white-space: nowrap;
 }
 
 .dt-progress-ring {
+  /* Geometría fija, igual que el chevron: el que cede es el texto. */
+  flex: 0 0 auto;
   width: calc(var(--dt-row-height) - 18px);
   height: calc(var(--dt-row-height) - 18px);
-  vertical-align: middle;
   /*
    * El trazo arranca a las 3 en punto; girar -90 grados lo lleva a las 12, que
    * es de donde la gente espera que crezca un indicador de avance.
@@ -636,7 +719,6 @@
 
 .dt-progress-label {
   margin-left: 0.5rem;
-  vertical-align: middle;
   color: var(--dt-text-muted);
   font-variant-numeric: tabular-nums;
 }
@@ -646,10 +728,11 @@
 .dt-avatar {
   position: relative;
   display: inline-block;
+  /* Un círculo achatado se lee como un error de render: nunca se encoge. */
+  flex: 0 0 auto;
   width: calc(var(--dt-row-height) - 16px);
   height: calc(var(--dt-row-height) - 16px);
   border-radius: 999px;
-  vertical-align: middle;
   overflow: hidden;
   background: color-mix(
     in srgb,
@@ -681,8 +764,9 @@
 /* ------------------------------------------------------------ Casilla */
 
 .dt-checkbox {
+  /* El navegador le da su tamaño intrínseco; encogerlo lo volvería inusable. */
+  flex: 0 0 auto;
   margin: 0;
-  vertical-align: middle;
   accent-color: var(--dt-primary);
   cursor: pointer;
 }
@@ -694,12 +778,35 @@
 
 /* ------------------------------------------------------------ Etiquetas */
 
+/*
+ * La lista de etiquetas es flex por la misma razón que la celda, un nivel más
+ * abajo: las píldoras son cajas y no texto.
+ *
+ * Es donde el desfase se veía peor. La lista era un `inline-block` sin altura de
+ * línea propia, así que heredaba la de la fila —40px— y su caja crecía hasta
+ * ocupar la fila entera; después, las píldoras de adentro se alineaban por línea
+ * base contra esa misma altura. El error entraba dos veces y las píldoras
+ * quedaban tocando el borde inferior.
+ */
 .dt-tags {
-  display: inline-block;
+  display: flex;
+  align-items: center;
   max-width: 100%;
-  vertical-align: middle;
   overflow: hidden;
   white-space: nowrap;
+}
+
+/*
+ * Dentro de la lista, cada píldora conserva su ancho natural y el recorte lo
+ * hace el `overflow: hidden` de la lista, tal como antes de flex. Sin esto un
+ * ítem flex se encogería, y varias etiquetas cortas pasarían a verse todas
+ * recortadas en lugar de verse enteras hasta donde entran.
+ *
+ * `.dt-badge` no lleva esta regla a propósito: es hijo directo de la celda y ahí
+ * sí tiene que ceder, porque es él quien recorta con puntos suspensivos.
+ */
+.dt-tags .dt-tag {
+  flex: 0 0 auto;
 }
 
 .dt-tag + .dt-tag {

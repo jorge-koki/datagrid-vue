@@ -1,6 +1,6 @@
 import type { CellRenderContext, CellRendererHandle } from '../../types'
 import { createBadgeState, deleteBadgeState, getBadgeState, updateBadgeState } from './badge'
-import { createSvgElement } from './shared'
+import { BOX_CELL_LAYOUT, createSvgElement } from './shared'
 import type { AnyCellRenderer } from './shared'
 
 /**
@@ -40,6 +40,8 @@ function createChevron(): SVGSVGElement {
 
 export const selectRenderer: AnyCellRenderer = {
   type: 'select',
+  // Píldora y chevron son dos cajas que además hay que alinear entre sí.
+  layout: BOX_CELL_LAYOUT,
 
   create(cell: HTMLElement): CellRendererHandle {
     const handle: CellRendererHandle = { root: cell }

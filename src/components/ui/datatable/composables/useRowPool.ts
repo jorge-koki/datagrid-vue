@@ -25,6 +25,7 @@ import {
   setCellBox,
   setCellCustomClass,
   setCellEditing,
+  setCellLayout,
   setGroupCount,
   setGroupHeaderBox,
   setGroupLabel,
@@ -48,7 +49,7 @@ import {
   UNPAINTED_ROW_INDEX,
 } from '../internal/constants'
 import { formatCellValue, rawValuesEqual, readRawValue, toCellValue } from '../internal/values'
-import { resolveRenderer, revertCheckbox } from '../internal/renderers'
+import { resolveRenderer, revertCheckbox, TEXT_CELL_LAYOUT } from '../internal/renderers'
 import type { CellRenderer } from '../types'
 
 /**
@@ -839,6 +840,15 @@ export function useRowPool<TRow extends Record<string, unknown>>(
    * correcta y basta con `update`. Si difiere, se cierra el handle viejo con
    * `destroy`, se vacía el nodo y se vuelve a construir.
    *
+   * ## El modo de maquetado viaja acá y en ningún otro lado
+   *
+   * Que una celda se centre por altura de línea o por flex depende del RENDERER
+   * y de nada más, así que el único momento en que puede cambiar es este mismo.
+   * Aplicarlo desde adentro de esta función —y no en `paintCell`, que corre por
+   * celda visible y por frame— no es una comodidad: es lo que hace imposible
+   * escribir esa clase durante el scroll, porque no queda ningún otro camino que
+   * llegue a ella.
+   *
    * @returns `true` si el nodo se reconstruyó y hay que forzar `update`.
    */
   function ensureRenderer(cellNode: PooledCellElement, renderer: CellRenderer<TRow>): boolean {
@@ -852,6 +862,9 @@ export function useRowPool<TRow extends Record<string, unknown>>(
     cellNode.__dtHandle = renderer.create(cellNode)
     cellNode.__dtRenderer = renderer
     cellNode.__dtRendererType = renderer.type
+    // Un renderer que no declara `layout` —incluidos todos los propios escritos
+    // antes de que este eje existiera— se comporta como hasta ahora.
+    setCellLayout(cellNode, renderer.layout ?? TEXT_CELL_LAYOUT)
     return true
   }
 

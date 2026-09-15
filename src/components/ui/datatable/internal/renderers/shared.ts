@@ -1,4 +1,10 @@
-import type { CellOption, CellRenderContext, CellRendererHandle, CellAlign } from '../../types'
+import type {
+  CellAlign,
+  CellLayout,
+  CellOption,
+  CellRenderContext,
+  CellRendererHandle,
+} from '../../types'
 
 /**
  * Infraestructura común de los renderers de celda.
@@ -33,6 +39,17 @@ import type { CellOption, CellRenderContext, CellRendererHandle, CellAlign } fro
 export const TEXT_RENDERER_TYPE = 'text'
 
 /**
+ * Modo de maquetado por defecto: texto centrado por `line-height`.
+ *
+ * Es el valor que asume un renderer que no declara `layout`, incluidos los
+ * propios del consumidor escritos antes de que este eje existiera.
+ */
+export const TEXT_CELL_LAYOUT = 'text'
+
+/** Modo de maquetado de una celda cuyo contenido es una caja estructurada. */
+export const BOX_CELL_LAYOUT = 'box'
+
+/**
  * Un renderer que sirve para cualquier forma de fila.
  *
  * La diferencia con `CellRenderer` está en `update`, que aquí es un método
@@ -50,6 +67,8 @@ export interface AnyCellRenderer {
   readonly type: string
   /** Alineación que adopta la columna si no declara `align`. */
   readonly defaultAlign?: CellAlign
+  /** Modo de maquetado que la celda adopta para este renderer. Por defecto `'text'`. */
+  readonly layout?: CellLayout
   /** Construye la estructura interna de la celda una única vez. */
   create(cell: HTMLElement): CellRendererHandle
   /** Actualiza la celda con el valor actual. */

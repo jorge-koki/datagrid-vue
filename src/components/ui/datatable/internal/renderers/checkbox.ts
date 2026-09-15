@@ -1,5 +1,5 @@
 import type { CellRenderContext, CellRendererHandle } from '../../types'
-import { createElement } from './shared'
+import { BOX_CELL_LAYOUT, createElement } from './shared'
 import type { AnyCellRenderer } from './shared'
 
 /**
@@ -38,6 +38,9 @@ const states = new WeakMap<CellRendererHandle, CheckboxState>()
 export const checkboxRenderer: AnyCellRenderer = {
   type: 'checkbox',
   defaultAlign: 'center',
+  // Un control de formulario es una caja con alto propio, decidido por el
+  // navegador: la altura de línea de la celda no lo centra.
+  layout: BOX_CELL_LAYOUT,
 
   create(cell: HTMLElement): CellRendererHandle {
     const input = createElement('input', 'dt-checkbox')

@@ -1,5 +1,6 @@
 import type { CellRenderContext, CellRendererHandle } from '../../types'
 import {
+  BOX_CELL_LAYOUT,
   createElement,
   DEFAULT_COLOR_TOKENS,
   hashToIndex,
@@ -112,6 +113,8 @@ function toInitials(name: string): string {
 
 export const avatarRenderer: AnyCellRenderer = {
   type: 'avatar',
+  // El círculo tiene alto propio: centrarlo por línea base lo deja bajo.
+  layout: BOX_CELL_LAYOUT,
 
   create(cell: HTMLElement): CellRendererHandle {
     const root = createElement('span', 'dt-avatar')

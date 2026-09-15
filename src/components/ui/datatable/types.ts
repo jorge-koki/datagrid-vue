@@ -29,6 +29,25 @@ export type CellValue = string | number | boolean | null | undefined | Date
 export type CellAlign = 'left' | 'center' | 'right'
 
 /**
+ * Cómo se maqueta el contenido de una celda para centrarlo verticalmente.
+ *
+ * - `text`: el contenido es texto suelto. La celda lo centra con `line-height`
+ *   igual a la altura de fila, que es lo único que conserva el recorte con
+ *   puntos suspensivos: `text-overflow: ellipsis` no se aplica al texto anónimo
+ *   dentro de un contenedor flex.
+ * - `box`: el contenido es una caja estructurada —una píldora, un avatar, un
+ *   anillo de progreso, una casilla— y la celda lo centra con flex. Hace falta
+ *   porque `vertical-align: middle` no apunta al centro geométrico de la línea
+ *   sino a la línea base más media altura de x, y con una altura de línea del
+ *   tamaño de la fila esos dos puntos no coinciden.
+ *
+ * Es un eje INDEPENDIENTE de {@link CellAlign}: el modo decide el centrado
+ * vertical y la alineación decide el horizontal. Los tres valores de `align`
+ * significan exactamente lo mismo en los dos modos.
+ */
+export type CellLayout = 'text' | 'box'
+
+/**
  * Selección del esquema de color.
  *
  * - `light` / `dark` fuerzan la paleta sin importar el entorno anfitrión.
@@ -416,6 +435,18 @@ export interface CellRenderer<TRow> {
    * Un `column.align` explícito siempre gana.
    */
   readonly defaultAlign?: CellAlign
+  /**
+   * Modo de maquetado que la celda adopta para este renderer. Por defecto `'text'`.
+   *
+   * Declararlo `'box'` es lo que hace que un contenido que NO es texto —una
+   * píldora, un avatar, un anillo— quede centrado verticalmente de verdad. Ver
+   * {@link CellLayout} para el porqué.
+   *
+   * Es metadato del renderer, no estado de la celda: solo cambia cuando un nodo
+   * reciclado pasa a otro tipo de renderer, así que el pool lo aplica en el mismo
+   * punto donde reconstruye el nodo y no cuesta ni una escritura por frame.
+   */
+  readonly layout?: CellLayout
   /**
    * Construye la estructura interna de la celda una única vez.
    * Devuelve un handle opaco con las referencias a los nodos que `update` va a mutar.

@@ -23,7 +23,7 @@ import { tagsRenderer } from './tags'
  * sumar sus propios renderers sin bifurcar el componente.
  */
 
-export { TEXT_RENDERER_TYPE } from './shared'
+export { BOX_CELL_LAYOUT, TEXT_CELL_LAYOUT, TEXT_RENDERER_TYPE } from './shared'
 export type { AnyCellRenderer, CellRendererFactory, CellRendererLifecycle } from './shared'
 export { textRenderer } from './text'
 export { numberRenderer } from './number'

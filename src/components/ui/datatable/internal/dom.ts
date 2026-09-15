@@ -1,5 +1,11 @@
 import { ROW_KIND_DATA, UNPAINTED_GENERATION, UNPAINTED_ROW_INDEX } from './constants'
-import { createElement, createSvgElement, TEXT_RENDERER_TYPE } from './renderers/shared'
+import {
+  BOX_CELL_LAYOUT,
+  createElement,
+  createSvgElement,
+  TEXT_CELL_LAYOUT,
+  TEXT_RENDERER_TYPE,
+} from './renderers/shared'
 import type { CellRendererLifecycle } from './renderers/shared'
 import type { CellRendererHandle } from '../types'
 
@@ -169,6 +175,17 @@ export interface PooledCellElement extends HTMLDivElement {
    * reconstruirlo dejaría esa estructura vieja adentro.
    */
   __dtRendererType: string
+  /**
+   * Modo de maquetado con el que está montada la celda.
+   *
+   * Es metadato del renderer, así que se mueve EXACTAMENTE con
+   * `__dtRendererType`: dos columnas con el mismo tipo de renderer tienen
+   * siempre el mismo modo, y una celda que conserva su tipo durante el scroll no
+   * puede cambiar de modo. Se guarda aparte igual, porque el valor por defecto
+   * del campo tiene que coincidir con el del nodo recién creado para que la
+   * primera pasada de una celda de texto no escriba una clase que ya no está.
+   */
+  __dtLayout: string
   /** Renderer que construyó el nodo, para poder cerrarlo con `destroy`. */
   __dtRenderer: CellRendererLifecycle | null
   /** Handle devuelto por `create`, que se le pasa a `update` en cada frame. */
@@ -346,6 +363,10 @@ export function createCellElement(): PooledCellElement {
     // Arranca declarando el tipo por defecto pero SIN handle: la primera pasada
     // de pintado detecta el handle nulo y ejecuta `create`.
     __dtRendererType: TEXT_RENDERER_TYPE,
+    // Y arranca con el modo que le corresponde a ese tipo por defecto, que es
+    // además el de la clase con la que nace el nodo: sin clase de maquetado. Así
+    // una celda de texto atraviesa su primer pintado sin tocar `classList`.
+    __dtLayout: TEXT_CELL_LAYOUT,
     __dtRenderer: null as CellRendererLifecycle | null,
     __dtHandle: null as CellRendererHandle | null,
     __dtRowIndex: UNPAINTED_ROW_INDEX,
@@ -427,10 +448,38 @@ export function clearCellContent(node: PooledCellElement): void {
 }
 
 /**
+ * Aplica el modo de maquetado de la celda.
+ *
+ * ## Por qué esto NO se escribe por frame
+ *
+ * El modo es metadato del renderer, no del dato: todas las celdas de una columna
+ * de badges están en modo caja y ninguna deja de estarlo por scrollear. La única
+ * forma de que un nodo cambie de modo es que el slot pase a representar una
+ * columna con OTRO tipo de renderer, que es exactamente la condición que
+ * `ensureRenderer` ya detecta y donde esta función se invoca. Durante un scroll
+ * —vertical u horizontal entre columnas del mismo tipo— no se llama nunca, y si
+ * se llamara, la comparación de abajo cortaría igual antes de tocar el DOM.
+ *
+ * `text` es el caso por defecto y no lleva clase, así que una tabla de puras
+ * columnas de texto no escribe esta clase ni una sola vez en toda su vida.
+ */
+export function setCellLayout(node: PooledCellElement, layout: string): void {
+  if (node.__dtLayout === layout) return
+  node.__dtLayout = layout
+  node.classList.toggle('dt-cell--box', layout === BOX_CELL_LAYOUT)
+}
+
+/**
  * Aplica la alineación de la columna como clase.
  *
  * `left` es el caso por defecto y no lleva clase, de modo que la mayoría de las
  * celdas nunca tocan `classList`.
+ *
+ * Las mismas dos clases sirven a los DOS modos de maquetado: en modo texto la
+ * hoja de estilos las resuelve con `text-align` y en modo caja con
+ * `justify-content`, porque `text-align` no posiciona ítems flex. Que la fuente
+ * de verdad sea una sola —el valor de `align`, escrito acá— es lo que garantiza
+ * que los tres estados no puedan significar cosas distintas según el modo.
  */
 export function setCellAlign(node: PooledCellElement, align: string): void {
   if (node.__dtAlign === align) return
@@ -678,7 +727,14 @@ export function setAggregateBox(node: PooledAggregateElement, x: number, width: 
   }
 }
 
-/** Aplica la alineación de la columna a la celda de agregado. */
+/**
+ * Aplica la alineación de la columna a la celda de agregado.
+ *
+ * Reusa las clases de alineación de las celdas, pero nunca el modo caja: un
+ * agregado es siempre una cifra ya formateada, o sea texto, aunque la columna
+ * que resume se pinte con badges. Por eso se centra por altura de línea como
+ * cualquier celda de texto y queda alineado con la columna de la que habla.
+ */
 export function setAggregateAlign(node: PooledAggregateElement, align: string): void {
   if (node.__dtAggAlign === align) return
   node.__dtAggAlign = align

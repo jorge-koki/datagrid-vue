@@ -724,6 +724,32 @@ todas las celdas.
 
 Vienen ocho registrados. Se elige uno con `renderer: '<nombre>'`.
 
+### Dos modos de maquetado: texto y caja
+
+Un renderer declara con `layout` cómo quiere que su celda **centre verticalmente** el contenido. Es un
+eje independiente de `align`, que decide el centrado horizontal y significa exactamente lo mismo en
+los dos modos.
+
+| `layout`           | Quiénes                                                     | Cómo centra la celda                                                  |
+| ------------------ | ----------------------------------------------------------- | --------------------------------------------------------------------- |
+| `'text'` (default) | `text`, `number`                                            | `line-height` igual a la altura de fila                               |
+| `'box'`            | `badge`, `select`, `progress`, `avatar`, `checkbox`, `tags` | `display: flex` + `align-items: center`, con la clase `.dt-cell--box` |
+
+La razón de que haya dos y no uno: la celda de texto **necesita** el centrado por `line-height`,
+porque `text-overflow: ellipsis` no se aplica al texto anónimo dentro de un contenedor flex y el
+recorte con puntos suspensivos es justo lo que hace falta en una celda de ancho fijo. Pero ese
+centrado solo funciona para texto. Una caja en línea se ubica con `vertical-align: middle`, que no
+apunta al centro geométrico de la línea sino a la línea base más media altura de x: con la altura de
+línea puesta en la altura de fila, esos dos puntos no coinciden y toda caja quedaba uno o dos píxeles
+más abajo de lo que debía, mientras el texto plano se veía perfecto.
+
+El modo es metadato del renderer, no estado de la celda, así que **solo puede cambiar cuando un slot
+reciclado pasa a otro tipo de renderer**: es la misma condición que ya obliga a reconstruir el nodo, y
+por eso la clase no cuesta ni una escritura por frame de scroll.
+
+Un renderer que no declara `layout` se comporta como `'text'`, igual que antes de que este eje
+existiera.
+
 ### `text` — el que viene por defecto
 
 Escribe el valor como texto plano. Usa `column.format` cuando existe y, si no, la representación
@@ -822,6 +848,11 @@ reflow síncrono en mitad del pintado; escribir de más invalida estilos para na
 El estado por celda conviene guardarlo en un `WeakMap` indexado por el handle, y cachear el último
 valor escrito para que una escritura redundante sea de verdad un no-op.
 
+Si el renderer construye una **caja** —cualquier cosa que no sea texto suelto: una píldora, un
+círculo, una barra, un control— conviene declararle `layout: 'box'`. Sin eso la celda lo centra por
+altura de línea y queda un par de píxeles bajo. Ver
+[Dos modos de maquetado](#dos-modos-de-maquetado-texto-y-caja).
+
 **Por columna (lo más simple: `TRow` es concreto):**
 
 ```ts
@@ -833,6 +864,8 @@ const barStates = new WeakMap<CellRendererHandle, BarState>()
 const barRenderer: CellRenderer<Invoice> = {
   type: 'bar',
   defaultAlign: 'right',
+  // La barra es una caja, no texto: la celda la centra con flex.
+  layout: 'box',
 
   create(cell: HTMLElement): CellRendererHandle {
     const bar = document.createElement('span')
@@ -870,6 +903,7 @@ import type { CellRenderContext, CellRendererHandle } from 'datagrid-vue'
 registerRenderer('bar', () => ({
   type: 'bar',
   defaultAlign: 'right',
+  layout: 'box',
   create(cell: HTMLElement): CellRendererHandle {
     /* igual que arriba */
   },
@@ -1502,6 +1536,12 @@ tiene que ser global.** Las filas y las celdas del cuerpo las crea el pool con
 que se apoya `<style scoped>`: una regla con alcance que las apunte simplemente no se aplica nunca.
 Lo mismo vale para las cabeceras de grupo y sus agregados.
 
+Un detalle que conviene tener presente al escribir esas reglas: una celda cuyo renderer declara
+`layout: 'box'` lleva además la clase `.dt-cell--box` y **es un contenedor flex**. Ahí `text-align` no
+posiciona nada —lo hace `justify-content`, que la hoja ya deriva de la alineación de la columna— y lo
+que se agregue adentro se comporta como un ítem flex. Las celdas de texto siguen siendo bloques
+normales. Ver [Dos modos de maquetado](#dos-modos-de-maquetado-texto-y-caja).
+
 ---
 
 ## Visibilidad, orden y persistencia de columnas
@@ -1750,6 +1790,7 @@ fija estos invariantes:
 | `Intl.NumberFormat` se construye **una sola vez**                               | Un formateador por celda y por frame domina el presupuesto de pintado           |
 | `avatar` y `tags` mutan sin asignar dentro de `update`                          | La basura del camino caliente la cobra el recolector con un frame perdido       |
 | Cambiar el tipo de renderer en un slot reciclado **reconstruye** la estructura  | Un slot puede pasar de `badge` a `progress` durante el scroll horizontal        |
+| La clase de maquetado se escribe **solo** al cambiar el tipo de renderer        | Centrar bien un badge no puede costar una escritura por frame                   |
 | Los índices ARIA se escriben **por fila**, no por celda                         | Misma información para el lector de pantalla, quince veces menos escrituras     |
 | La estructura accesible del header cuesta **cero** escrituras por frame         | Los roles son estáticos; asociar por `columnheader` evita un atributo por celda |
 | Un slot que pasa de fila de datos a cabecera de grupo **recicla** su nodo       | Plegar un grupo mueve de tipo a varios slots a la vez, en mitad del scroll      |
@@ -1779,6 +1820,7 @@ explicar qué se compró a cambio.
 | `useCellEditor.test.ts`       | Veto de `beforeEdit`, coacción de tipos, y que `rows` nunca se muta                                                                                                                                                                                                                            |
 | `selection.test.ts`           | Teclado completo, auto-scroll en píxeles exactos, columnas ocultas, el anillo único —una sola celda marcada, y el anillo del viewport opcional y suprimido con celda activa— y la estructura accesible: roles, `aria-rowindex` del encabezado y `aria-colindex` alineado entre header y cuerpo |
 | `renderers.test.ts`           | Valores inesperados en cada renderer incluido                                                                                                                                                                                                                                                  |
+| `cell-layout.test.ts`         | Modo de maquetado: qué renderers lo declaran, que la clase se escriba solo al cambiar de renderer, que las tres alineaciones produzcan el mismo estado en los dos modos, y —leyendo el `.css`— que la celda de texto conserve su recorte con puntos suspensivos                                |
 | `grouping.test.ts`            | Aplanado, agregados anidados, expansión controlada, `formatAggregate`, `emptyGroupLabel`, y que `editCommit` reporta el índice ORIGINAL                                                                                                                                                        |
 
 ---
@@ -1848,15 +1890,15 @@ Publicar a npm no necesita ningún paso extra: `npm publish` corre `prepare`, qu
 
 ## Referencia: qué exporta el paquete
 
-| Export                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Tipo                                                             |
-| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| `DataTable` (también el export por defecto), `DataTableColumnToggle`                                                                                                                                                                                                                                                                                                                                                                                                                                                  | Componentes                                                      |
-| `COLOR_TOKENS`, `ColorTokenName`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | Mapa de la paleta de estados y el tipo de su clave               |
-| `registerRenderer`, `resolveRenderer`, `createTextRenderer`, `TEXT_RENDERER_TYPE`                                                                                                                                                                                                                                                                                                                                                                                                                                     | Registro de renderers                                            |
-| `textRenderer`, `numberRenderer`, `badgeRenderer`, `selectRenderer`, `progressRenderer`, `avatarRenderer`, `checkboxRenderer`, `tagsRenderer`                                                                                                                                                                                                                                                                                                                                                                         | Instancias de los renderers incluidos, para componer sobre ellas |
-| `createLocalStorageAdapter`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | El adapter de almacenamiento por defecto                         |
-| `DataTableProps`, `DataTableColumn`, `DataTableInstance`, `DataTableTheme`, `CellValue`, `CellAlign`, `CellOption`, `CellEditorType`, `CellPosition`, `CellRenderer`, `CellRenderContext`, `CellRendererHandle`, `AnyCellRenderer`, `CellRendererFactory`, `SelectionMode`, `CellSelectEvent`, `BeforeEditEvent`, `AfterEditEvent`, `EditCommitEvent`, `ColumnResizeEvent`, `ColumnVisibilityState`, `ColumnWidthState`, `DataTablePersistOptions`, `DataTableStorageAdapter`, `PersistedTableState`, `VirtualWindow` | Tipos                                                            |
-| `GroupByState`, `GroupRow`, `DataRow`, `FlatRow`, `GroupToggleEvent`, `BuiltInAggregation`, `AggregationFn`, `ColumnAggregation`                                                                                                                                                                                                                                                                                                                                                                                      | Tipos de la agrupación                                           |
+| Export                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | Tipo                                                             |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| `DataTable` (también el export por defecto), `DataTableColumnToggle`                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Componentes                                                      |
+| `COLOR_TOKENS`, `ColorTokenName`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | Mapa de la paleta de estados y el tipo de su clave               |
+| `registerRenderer`, `resolveRenderer`, `createTextRenderer`, `TEXT_RENDERER_TYPE`                                                                                                                                                                                                                                                                                                                                                                                                                                                   | Registro de renderers                                            |
+| `textRenderer`, `numberRenderer`, `badgeRenderer`, `selectRenderer`, `progressRenderer`, `avatarRenderer`, `checkboxRenderer`, `tagsRenderer`                                                                                                                                                                                                                                                                                                                                                                                       | Instancias de los renderers incluidos, para componer sobre ellas |
+| `createLocalStorageAdapter`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | El adapter de almacenamiento por defecto                         |
+| `DataTableProps`, `DataTableColumn`, `DataTableInstance`, `DataTableTheme`, `CellValue`, `CellAlign`, `CellLayout`, `CellOption`, `CellEditorType`, `CellPosition`, `CellRenderer`, `CellRenderContext`, `CellRendererHandle`, `AnyCellRenderer`, `CellRendererFactory`, `SelectionMode`, `CellSelectEvent`, `BeforeEditEvent`, `AfterEditEvent`, `EditCommitEvent`, `ColumnResizeEvent`, `ColumnVisibilityState`, `ColumnWidthState`, `DataTablePersistOptions`, `DataTableStorageAdapter`, `PersistedTableState`, `VirtualWindow` | Tipos                                                            |
+| `GroupByState`, `GroupRow`, `DataRow`, `FlatRow`, `GroupToggleEvent`, `BuiltInAggregation`, `AggregationFn`, `ColumnAggregation`                                                                                                                                                                                                                                                                                                                                                                                                    | Tipos de la agrupación                                           |
 
 Los composables y el pool de nodos **no** se exportan. Son detalles de implementación, y exportarlos
 los convertiría en API que después habría que sostener para siempre.

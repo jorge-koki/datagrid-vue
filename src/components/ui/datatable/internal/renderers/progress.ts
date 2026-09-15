@@ -1,5 +1,11 @@
 import type { CellRenderContext, CellRendererHandle } from '../../types'
-import { createElement, createSvgElement, writeCustomProperty, writeText } from './shared'
+import {
+  BOX_CELL_LAYOUT,
+  createElement,
+  createSvgElement,
+  writeCustomProperty,
+  writeText,
+} from './shared'
 import type { AnyCellRenderer } from './shared'
 
 /**
@@ -75,6 +81,9 @@ function createCircle(className: string): SVGCircleElement {
 
 export const progressRenderer: AnyCellRenderer = {
   type: 'progress',
+  // El anillo es geometría fija: si la celda lo alinea por línea base, queda
+  // descentrado respecto de la fila.
+  layout: BOX_CELL_LAYOUT,
 
   create(cell: HTMLElement): CellRendererHandle {
     const root = createElement('span', 'dt-progress')
