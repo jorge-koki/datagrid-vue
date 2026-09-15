@@ -23,7 +23,12 @@ import { shallowRef } from 'vue'
 import type { ShallowRef } from 'vue'
 import { useRowGrouping } from '../composables/useRowGrouping'
 import type { UseRowGroupingReturn } from '../composables/useRowGrouping'
-import { groupIdColumnPath, groupSegment, reconcileGroupBy } from '../internal/aggregations'
+import {
+  groupId,
+  groupIdColumnPath,
+  groupSegment,
+  reconcileGroupBy,
+} from '../internal/aggregations'
 import { reconcileCollapsedGroups, reconcilePersistedState } from '../internal/reconcile'
 import { createPoolFixture, mountTable, resolveColumns } from './harness'
 import type { GridRow, TableHarness, TableProps } from './harness'
@@ -34,6 +39,7 @@ import type {
   DataTableColumn,
   DataTableStorageAdapter,
   FlatRow,
+  GroupIdSegment,
   PersistedTableState,
 } from '../types'
 
@@ -1826,6 +1832,215 @@ describe('emptyGroupLabel — the empty bucket carries a configurable label', ()
       (node) => node.querySelector('.dt-group-label')?.textContent,
     )
     expect(labels).toEqual(['Sin asignar', 'open'])
+    harness.unmount()
+  })
+})
+
+/* ------------------------------------------------- El constructor de ids */
+
+/**
+ * Fila con un valor de cada tipo que `CellValue` admite.
+ *
+ * Cada columna agrupa por una forma distinta —texto, número, booleano, ausente,
+ * fecha— para que un árbol real emita las cinco marcas de tipo del formato de id
+ * en una sola pasada. `text` incluye la cadena vacía y `when` una fecha
+ * inválida, que son los dos bordes donde la etiqueta visible y el id se separan.
+ */
+type Mixed = {
+  id: number
+  text: string | null | undefined
+  num: number
+  flag: boolean
+  when: Date
+}
+
+const MIXED: readonly Mixed[] = [
+  { id: 0, text: 'alpha', num: 1, flag: true, when: new Date('2024-01-01T00:00:00.000Z') },
+  { id: 1, text: 'alpha', num: 2, flag: false, when: new Date('2024-02-01T00:00:00.000Z') },
+  { id: 2, text: null, num: 1, flag: false, when: new Date('2024-01-01T00:00:00.000Z') },
+  { id: 3, text: undefined, num: 2, flag: true, when: new Date('2024-02-01T00:00:00.000Z') },
+  { id: 4, text: '', num: -0.5, flag: true, when: new Date('no es una fecha') },
+]
+
+const MIXED_COLUMNS: readonly DataTableColumn<Mixed>[] = [
+  { key: 'id' },
+  { key: 'text' },
+  { key: 'num' },
+  { key: 'flag' },
+  { key: 'when' },
+]
+
+/** Secuencia aplanada del dataset mixto, con todo expandido. */
+function mixedFlat(groupBy: readonly string[]): readonly FlatRow<Mixed>[] | null {
+  return useRowGrouping<Mixed>({
+    rows: MIXED,
+    columns: MIXED_COLUMNS,
+    groupBy,
+    expandedGroups: undefined,
+    defaultExpanded: true,
+  }).flatRows.value
+}
+
+/**
+ * Recorre un árbol real y, para cada cabecera, rearma su id con {@link groupId}.
+ *
+ * Devuelve las dos listas en paralelo en lugar de comparar adentro para que un
+ * fallo muestre el diff completo y no solo la primera diferencia.
+ *
+ * El camino se lleva en un array indexado por profundidad: la secuencia aplanada
+ * es un recorrido en profundidad, así que cuando aparece una cabecera de nivel
+ * `d` sus ancestros ya ocupan las posiciones `0..d-1`. Truncar a `d` es lo que
+ * descarta la rama anterior al pasar a un hermano.
+ */
+function idsFromTreeAndHelper(flat: readonly FlatRow<Mixed>[] | null): {
+  fromTree: string[]
+  fromHelper: string[]
+} {
+  const path: GroupIdSegment[] = []
+  const fromTree: string[] = []
+  const fromHelper: string[] = []
+
+  for (const entry of flat ?? []) {
+    if (entry.kind !== 'group') continue
+    path.length = entry.depth
+    path.push([entry.columnKey, entry.value])
+
+    const [first, ...rest] = path
+    if (first === undefined) throw new Error('[test] una cabecera de grupo sin ningún nivel')
+
+    fromTree.push(entry.groupId)
+    fromHelper.push(groupId(first, ...rest))
+  }
+
+  return { fromTree, fromHelper }
+}
+
+describe('groupId — the public builder and the tree build share one implementation', () => {
+  it('reproduces the ids of a REAL tree for every value type CellValue covers', () => {
+    // Este es el test que importa. No compara contra strings escritos a mano:
+    // compara contra los ids que el árbol acaba de emitir, así que solo puede
+    // pasar mientras las dos rutas produzcan exactamente el mismo formato.
+    for (const columnKey of ['text', 'num', 'flag', 'when']) {
+      const { fromTree, fromHelper } = idsFromTreeAndHelper(mixedFlat([columnKey]))
+      expect(fromHelper).toEqual(fromTree)
+      expect(fromTree.length).toBeGreaterThan(1)
+    }
+  })
+
+  it('the tree really emits the five type tags, so the comparison is not vacuous', () => {
+    // Sin esta aserción, el test de arriba pasaría igual si el árbol nunca
+    // hubiera producido un número, un booleano, un ausente o una fecha.
+    expect(idsFromTreeAndHelper(mixedFlat(['text'])).fromTree).toEqual([
+      'text:alpha',
+      'text:~null',
+      'text:~undefined',
+      'text:',
+    ])
+    expect(idsFromTreeAndHelper(mixedFlat(['num'])).fromTree).toEqual([
+      'num:#1',
+      'num:#2',
+      'num:#-0.5',
+    ])
+    expect(idsFromTreeAndHelper(mixedFlat(['flag'])).fromTree).toEqual([
+      'flag:?true',
+      'flag:?false',
+    ])
+    expect(idsFromTreeAndHelper(mixedFlat(['when'])).fromTree).toEqual([
+      'when:@2024-01-01T00:00:00.000Z',
+      'when:@2024-02-01T00:00:00.000Z',
+      'when:@invalid',
+    ])
+  })
+
+  it('matches the tree at every depth of a multi-level grouping', () => {
+    const flat = mixedFlat(['flag', 'num', 'text'])
+    const { fromTree, fromHelper } = idsFromTreeAndHelper(flat)
+
+    expect(fromHelper).toEqual(fromTree)
+    // Los tres niveles existen de verdad: sin esto, el test pasaría con un árbol
+    // de un solo nivel y no probaría nada sobre el camino.
+    const depths = new Set<number>()
+    for (const entry of flat ?? []) {
+      if (entry.kind === 'group') depths.add(entry.depth)
+    }
+    expect(depths).toEqual(new Set([0, 1, 2]))
+    expect(fromTree).toContain('flag:?true/num:#1/text:alpha')
+  })
+
+  it('a single segment builds a top-level id and the rest nests it', () => {
+    expect(groupId(['region', 'LATAM'])).toBe('region:LATAM')
+    expect(groupId(['region', 'LATAM'], ['status', 'active'])).toBe('region:LATAM/status:active')
+    // Un nivel más, para fijar también el separador ENTRE niveles y no solo el
+    // que va entre la columna y el valor.
+    expect(groupId(['a', 1], ['b', true], ['c', null])).toBe('a:#1/b:?true/c:~null')
+  })
+
+  it('an id built by groupId actually opens that group on a mounted table', async () => {
+    const nested = groupId(['status', 'open'], ['amount', 10])
+
+    const harness = await mountGrouped({
+      groupBy: ['status', 'amount'],
+      expandedGroups: [groupId(['status', 'open']), nested],
+    })
+
+    // El grupo anidado quedó abierto y su fila se pintó: es la prueba de punta a
+    // punta de que el id construido es el mismo que el árbol le puso al grupo.
+    const header = harness.canvas.querySelector(`[data-row-key="${nested}"]`)
+    expect(header?.getAttribute('aria-expanded')).toBe('true')
+    expect(harness.cell(0, 'amount')?.textContent).toBe('10')
+
+    // Y solo ese: el hermano que no está en la lista sigue plegado.
+    const sibling = harness.canvas.querySelector(
+      `[data-row-key="${groupId(['status', 'open'], ['amount', 20])}"]`,
+    )
+    expect(sibling?.getAttribute('aria-expanded')).toBe('false')
+    expect(harness.cell(1, 'amount')).toBeNull()
+    harness.unmount()
+  })
+
+  it('a hand-written id that drops the type tag opens nothing, and stays silent', async () => {
+    // La falla que este helper existe para eliminar, fijada como test: el `10`
+    // numérico se codifica `#10`, y sin la marca el id no nombra a ningún grupo.
+    // La tabla no rompe, no avisa, y el grupo simplemente no abre.
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    const harness = await mountGrouped({
+      groupBy: ['status', 'amount'],
+      expandedGroups: ['status:open', 'status:open/amount:10'],
+    })
+
+    expect(harness.canvas.querySelector('[data-row-key="status:open/amount:#10"]')).not.toBeNull()
+    expect(harness.cell(0, 'amount')).toBeNull()
+
+    // DECISIÓN: no se avisa. Un id que hoy no nombra a ningún grupo es un estado
+    // LEGÍTIMO y ya documentado —`reconcileCollapsedGroups` conserva a propósito
+    // los ids cuyo valor ya no está en los datos, y `rows` puede llegar vacío
+    // mientras carga—, así que un aviso no podría distinguir el error del uso
+    // correcto. El chequeo se mueve al momento de CONSTRUIR el id, que es el
+    // único punto donde hay información suficiente para hacerlo.
+    expect(warn).not.toHaveBeenCalled()
+    harness.unmount()
+  })
+
+  it('stays silent while rows have not arrived yet, which is the same state', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    const harness = await mountGrouped({
+      rows: [],
+      expandedGroups: [groupId(['status', 'open'])],
+    })
+
+    expect(groupNodes(harness.canvas)).toHaveLength(0)
+    expect(warn).not.toHaveBeenCalled()
+
+    // Y cuando los datos llegan, el id que ya estaba en la lista abre su grupo
+    // sin que el consumidor tenga que volver a escribirlo.
+    await harness.wrapper.setProps({ rows: gridRows() })
+    await harness.flush()
+
+    const header = harness.canvas.querySelector('[data-row-key="status:open"]')
+    expect(header?.getAttribute('aria-expanded')).toBe('true')
+    expect(warn).not.toHaveBeenCalled()
     harness.unmount()
   })
 })

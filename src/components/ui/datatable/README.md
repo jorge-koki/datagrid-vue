@@ -218,7 +218,7 @@ el plegado bajo control del padre y el layout persistido entre sesiones.
 ```vue
 <script setup lang="ts">
 import { shallowRef } from 'vue'
-import { COLOR_TOKENS, DataTable } from 'datagrid-vue'
+import { COLOR_TOKENS, DataTable, groupId } from 'datagrid-vue'
 import type { DataTableColumn, EditCommitEvent, GroupToggleEvent } from 'datagrid-vue'
 import 'datagrid-vue/style.css'
 
@@ -291,12 +291,16 @@ const groupBy = shallowRef<readonly string[]>(['region', 'status'])
 /**
  * Qué grupos están abiertos, por `groupId`.
  *
- * El `groupId` es un camino de `columna:valor` unido con `/`, y por eso es estable
- * entre sesiones. Controlado, esta lista es la verdad LITERAL: un id que no está
- * acá está colapsado y `groupsDefaultExpanded` deja de intervenir, así que los
- * grupos de segundo nivel arrancan cerrados hasta que alguien los abra.
+ * Los ids se construyen con el helper `groupId(...)` y no a mano: el formato es
+ * interno y un id mal escrito no produce ningún error, solo un grupo que no abre.
+ * Controlado, esta lista es la verdad LITERAL: un id que no está acá está
+ * colapsado y `groupsDefaultExpanded` deja de intervenir, así que los grupos de
+ * segundo nivel arrancan cerrados hasta que alguien los abra.
  */
-const expandedGroups = shallowRef<readonly string[]>(['region:LATAM', 'region:EMEA'])
+const expandedGroups = shallowRef<readonly string[]>([
+  groupId(['region', 'LATAM']),
+  groupId(['region', 'EMEA']),
+])
 
 /** Un cambio puntual. Expandir o colapsar todo NO emite uno por grupo. */
 function onGroupToggle(event: GroupToggleEvent): void {
@@ -791,7 +795,7 @@ const table = useTemplateRef<DataTableInstance>('table')
 | `refresh()`            | Invalida todos los valores de celda cacheados, rehace el árbol de grupos **y agenda un repintado en el próximo frame**.               |
 | `resetLayout()`        | Descarta el layout guardado y vuelve visibilidad, orden, anchos y agrupación a sus valores por defecto. Es el "restablecer columnas". |
 | `flushPersistence()`   | Escribe de inmediato el layout pendiente por el debounce. El desmontaje ya vuelca lo pendiente por su cuenta.                         |
-| `toggleGroup(groupId)` | Invierte el estado de un grupo por su `groupId`. Ver [Agrupación](#agrupación).                                                       |
+| `toggleGroup(groupId)` | Invierte el estado de un grupo por su `groupId`, que se construye con [`groupId(...)`](#groupid-cómo-se-escribe-un-id).               |
 | `expandAllGroups()`    | Expande todos los grupos del árbol actual.                                                                                            |
 | `collapseAllGroups()`  | Colapsa todos los grupos del árbol actual.                                                                                            |
 
@@ -1654,7 +1658,7 @@ function onGroupToggle(event: GroupToggleEvent): void {
 | Prop                    | Tipo                | Por defecto     | Qué hace                                                                                                                                                             |
 | ----------------------- | ------------------- | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `groupBy`               | `readonly string[]` | lista vacía     | `v-model:group-by`. Claves de columna en orden de anidamiento. `['status', 'priority']` produce un primer nivel por estado y, dentro de cada uno, uno por prioridad. |
-| `expandedGroups`        | `readonly string[]` | _no controlado_ | `v-model:expanded-groups`. `groupId` de los grupos expandidos.                                                                                                       |
+| `expandedGroups`        | `readonly string[]` | _no controlado_ | `v-model:expanded-groups`. `groupId` de los grupos expandidos. Los ids se construyen con [`groupId(...)`](#groupid-cómo-se-escribe-un-id), no a mano.                |
 | `groupsDefaultExpanded` | `boolean`           | `true`          | Estado inicial de un grupo del que todavía no se sabe nada.                                                                                                          |
 | `showGroupCount`        | `boolean`           | `true`          | Si la cabecera muestra la insignia con la cantidad de filas descendientes.                                                                                           |
 | `emptyGroupLabel`       | `string`            | `'(empty)'`     | Etiqueta del grupo que junta los valores ausentes, tanto `null` como `undefined`.                                                                                    |
@@ -1714,6 +1718,78 @@ haya persistido.
 La etiqueta de la cabecera se resuelve primero contra `column.options`, así una columna de estados
 agrupa bajo `Open` y no bajo `open`. La lista de opciones ya es la fuente de verdad de cómo se llama
 cada valor de cara al usuario.
+
+### `groupId(...)`: cómo se escribe un id
+
+Todo lo que recibe un id —`expandedGroups`, `toggleGroup()`, un conjunto colapsado que se restaura a
+mano— lo recibe como string. Escribir ese string a mano tiene un modo de falla desagradable: **un id
+equivocado no produce ningún error ni ningún aviso**. El grupo se queda cerrado, la tabla sigue
+funcionando y no hay nada que mirar. Por eso el paquete exporta el constructor:
+
+```ts
+import { groupId } from 'datagrid-vue'
+
+groupId(['region', 'LATAM']) // 'region:LATAM'
+groupId(['region', 'LATAM'], ['status', 'active']) // 'region:LATAM/status:active'
+
+// Las marcas de tipo las pone el helper. Escribir `'amount:10'` sería un id que
+// no nombra a ningún grupo; el correcto es `'amount:#10'`.
+groupId(['amount', 10]) // 'amount:#10'
+groupId(['done', true]) // 'done:?true'
+groupId(['assignee', null]) // 'assignee:~null'
+groupId(['due', new Date('2024-01-01T00:00:00.000Z')]) // 'due:@2024-01-01T00:00:00.000Z'
+```
+
+Cada argumento es un nivel, en orden de anidamiento, y cada nivel es la tupla `[columnKey, value]`.
+El `value` acepta cualquier `CellValue` —string, número, booleano, `null`, `undefined` o `Date`— y es
+el mismo valor que está en los datos, no su etiqueta: se agrupa por `'open'` aunque la cabecera diga
+`Open`.
+
+| Firma                                | Qué construye                                                         |
+| ------------------------------------ | --------------------------------------------------------------------- |
+| `groupId(segmento)`                  | El id de un grupo de primer nivel.                                    |
+| `groupId(segmento, ...másSegmentos)` | El camino completo de un grupo anidado, un nivel por tupla.           |
+| `GroupIdSegment<TKey = string>`      | El tipo de una tupla: `readonly [columnKey: TKey, value: CellValue]`. |
+
+El primer nivel es obligatorio en la firma a propósito: `groupId()` sin argumentos devolvería la
+cadena vacía, que no nombra a ningún grupo y se comportaría exactamente igual que un id mal escrito.
+Exigirlo convierte ese caso en un error de compilación.
+
+El parámetro de tipo es el otro filo, para quien tenga la unión literal de sus claves de columna. La
+librería no la conoce —`DataTableColumn.key` es un `string`—, pero si se la pasa, una clave mal
+escrita deja de ser un grupo que no abre y pasa a ser un error del compilador:
+
+```ts
+type InvoiceKey = 'customer' | 'region' | 'status' | 'total'
+
+groupId<InvoiceKey>(['regio', 'LATAM'])
+// TS2820: Type '"regio"' is not assignable to type 'InvoiceKey'.
+//         Did you mean '"region"'?
+```
+
+Es opcional: sin el parámetro explícito, `TKey` se infiere del argumento y no verifica nada, que es
+el comportamiento correcto cuando el consumidor no tiene una unión que ofrecer.
+
+**Es la misma función que construye los ids del árbol.** No es una reimplementación del formato para
+el consumidor: `groupId` y la construcción de la vista aplanada pasan por las mismas dos primitivas
+internas, así que un id construido acá es el string que la tabla le puso a ese grupo por definición y
+no por coincidencia. Dos implementaciones del mismo formato terminan desincronizándose, y el síntoma
+de esa desincronización sería otra vez un grupo que no abre y no avisa.
+
+> **Escribir el id a mano funciona, pero no está garantizado.** El formato está documentado más
+> arriba porque aparece en el almacenamiento y en los tests, y hoy nada impide construir el string
+> por cuenta propia. Lo que no hay es una promesa: los separadores y las marcas de tipo son detalle
+> interno y pueden cambiar sin que eso sea un cambio incompatible de la API. Lo que se sostiene es
+> `groupId(...)`. Un id escrito a mano que deje de coincidir no rompe la tabla ni lanza nada: el
+> grupo queda cerrado, en silencio.
+
+**Un id que hoy no nombra a ningún grupo NO produce un aviso**, y es deliberado. Es un estado
+legítimo con demasiada frecuencia como para poder distinguirlo de un error: mientras `rows` todavía
+está cargando no existe ningún grupo, un conjunto colapsado restaurado del almacenamiento se
+[conserva a propósito](#persistencia) aunque su valor ya no esté en los datos, y un consumidor
+puede guardar el estado de expansión de una agrupación que en este momento no está activa. Un aviso
+dispararía en los tres casos. La verificación se corre entonces al momento de CONSTRUIR el id, que es
+el único punto donde hay información suficiente para hacerla.
 
 ### Agregados por columna
 
@@ -1819,9 +1895,10 @@ padre lo agregue a la lista.
 ```vue
 <script setup lang="ts">
 import { shallowRef } from 'vue'
+import { groupId } from 'datagrid-vue'
 
 // Controlado: la tabla no cambia esto sola, solo emite lo que el padre debería adoptar.
-const expandedGroups = shallowRef<readonly string[]>(['region:LATAM'])
+const expandedGroups = shallowRef<readonly string[]>([groupId(['region', 'LATAM'])])
 </script>
 
 <template>
@@ -2558,15 +2635,16 @@ Publicar a npm no necesita ningún paso extra: `npm publish` corre `prepare`, qu
 
 ## Referencia: qué exporta el paquete
 
-| Export                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | Tipo                                                             |
-| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| `DataTable` (también el export por defecto), `DataTableColumnToggle`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | Componentes                                                      |
-| `COLOR_TOKENS`, `ColorTokenName`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | Mapa de la paleta de estados y el tipo de su clave               |
-| `registerRenderer`, `resolveRenderer`, `createTextRenderer`, `TEXT_RENDERER_TYPE`                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | Registro de renderers                                            |
-| `textRenderer`, `numberRenderer`, `badgeRenderer`, `selectRenderer`, `progressRenderer`, `avatarRenderer`, `checkboxRenderer`, `tagsRenderer`                                                                                                                                                                                                                                                                                                                                                                                                              | Instancias de los renderers incluidos, para componer sobre ellas |
-| `createLocalStorageAdapter`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | El adapter de almacenamiento por defecto                         |
-| `DataTableProps`, `DataTableColumn`, `DataTableInstance`, `DataTableTheme`, `CellValue`, `CellAlign`, `CellLayout`, `CellOption`, `CellEditorType`, `CellEditorSlotProps`, `CellPosition`, `CellRenderer`, `CellRenderContext`, `CellRendererHandle`, `AnyCellRenderer`, `CellRendererFactory`, `SelectionMode`, `CellSelectEvent`, `BeforeEditEvent`, `AfterEditEvent`, `EditCommitEvent`, `ColumnResizeEvent`, `ColumnVisibilityState`, `ColumnWidthState`, `DataTablePersistOptions`, `DataTableStorageAdapter`, `PersistedTableState`, `VirtualWindow` | Tipos                                                            |
-| `GroupByState`, `GroupRow`, `DataRow`, `FlatRow`, `GroupToggleEvent`, `BuiltInAggregation`, `AggregationFn`, `ColumnAggregation`                                                                                                                                                                                                                                                                                                                                                                                                                           | Tipos de la agrupación                                           |
+| Export                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | Tipo                                                                    |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `DataTable` (también el export por defecto), `DataTableColumnToggle`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | Componentes                                                             |
+| `COLOR_TOKENS`, `ColorTokenName`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | Mapa de la paleta de estados y el tipo de su clave                      |
+| `registerRenderer`, `resolveRenderer`, `createTextRenderer`, `TEXT_RENDERER_TYPE`                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | Registro de renderers                                                   |
+| `textRenderer`, `numberRenderer`, `badgeRenderer`, `selectRenderer`, `progressRenderer`, `avatarRenderer`, `checkboxRenderer`, `tagsRenderer`                                                                                                                                                                                                                                                                                                                                                                                                              | Instancias de los renderers incluidos, para componer sobre ellas        |
+| `createLocalStorageAdapter`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | El adapter de almacenamiento por defecto                                |
+| `groupId`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | Constructor del id de un grupo, para `expandedGroups` y `toggleGroup()` |
+| `DataTableProps`, `DataTableColumn`, `DataTableInstance`, `DataTableTheme`, `CellValue`, `CellAlign`, `CellLayout`, `CellOption`, `CellEditorType`, `CellEditorSlotProps`, `CellPosition`, `CellRenderer`, `CellRenderContext`, `CellRendererHandle`, `AnyCellRenderer`, `CellRendererFactory`, `SelectionMode`, `CellSelectEvent`, `BeforeEditEvent`, `AfterEditEvent`, `EditCommitEvent`, `ColumnResizeEvent`, `ColumnVisibilityState`, `ColumnWidthState`, `DataTablePersistOptions`, `DataTableStorageAdapter`, `PersistedTableState`, `VirtualWindow` | Tipos                                                                   |
+| `GroupByState`, `GroupRow`, `GroupIdSegment`, `DataRow`, `FlatRow`, `GroupToggleEvent`, `BuiltInAggregation`, `AggregationFn`, `ColumnAggregation`                                                                                                                                                                                                                                                                                                                                                                                                         | Tipos de la agrupación                                                  |
 
 Los composables y el pool de nodos **no** se exportan. Son detalles de implementación, y exportarlos
 los convertiría en API que después habría que sostener para siempre.

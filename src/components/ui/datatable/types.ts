@@ -249,6 +249,27 @@ export interface CellOption {
 export type GroupByState = readonly string[]
 
 /**
+ * Un nivel de un {@link GroupRow.groupId}: la columna por la que se agrupa y el
+ * valor que define al grupo dentro de ese nivel.
+ *
+ * Es una tupla con los elementos NOMBRADOS y no un objeto porque el nombre viaja
+ * igual —el editor muestra `[columnKey: string, value: CellValue]` mientras se
+ * escribe la llamada— y la forma corta es la que deja una lista de niveles
+ * legible en una sola línea. Con un objeto por nivel, un id de dos niveles
+ * ocuparía cuatro.
+ *
+ * @typeParam TKey - Claves de columna admitidas. Por defecto `string`, porque la
+ * librería no conoce las claves del consumidor: `DataTableColumn.key` es un
+ * `string` y un array de columnas no las conserva como literales. Quien SÍ tenga
+ * la unión de sus claves puede pasarla explícitamente, y entonces una clave mal
+ * escrita pasa a ser un error de compilación en lugar de un grupo que no abre.
+ */
+export type GroupIdSegment<TKey extends string = string> = readonly [
+  columnKey: TKey,
+  value: CellValue,
+]
+
+/**
  * Agregación incluida, por nombre.
  *
  * - `count`: cantidad de filas descendientes cuyo valor en la columna no es

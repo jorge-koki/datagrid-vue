@@ -4,6 +4,7 @@ import type {
   CellValue,
   DataTableColumn,
   GroupByState,
+  GroupIdSegment,
 } from '../types'
 import { formatCellValue, readCellValue } from './values'
 import { findOption } from './renderers/shared'
@@ -84,6 +85,59 @@ export function groupSegment(columnKey: string, value: CellValue): string {
 }
 
 /**
+ * Cuelga el segmento de un nivel del id de su padre.
+ *
+ * `parentId` vacío significa "primer nivel", y ahí el id ES el segmento: sin esta
+ * rama el id de un grupo raíz arrancaría con un `/` de más y no coincidiría con
+ * ningún id persistido.
+ *
+ * Existe como función y no como una interpolación suelta porque hay DOS caminos
+ * que arman ids —la construcción del árbol y {@link groupId}— y una segunda
+ * escritura del mismo formato es exactamente lo que después se desincroniza. El
+ * síntoma de esa desincronización sería el mismo que el de un id mal escrito a
+ * mano: un grupo que no abre, sin error y sin aviso.
+ */
+export function joinGroupId(parentId: string, segment: string): string {
+  return parentId === '' ? segment : `${parentId}${GROUP_ID_SEPARATOR}${segment}`
+}
+
+/**
+ * Construye el {@link GroupRow.groupId} de un grupo a partir de sus niveles.
+ *
+ * Es la ÚNICA forma soportada de escribir un id para `expandedGroups`, para
+ * `toggleGroup()` o para un conjunto colapsado persistido. El formato —los
+ * separadores, las marcas de tipo de los valores no string— es interno y puede
+ * cambiar; esta función es el contrato que se mantiene.
+ *
+ * ```ts
+ * groupId(['region', 'LATAM'])                      // 'region:LATAM'
+ * groupId(['region', 'LATAM'], ['status', 'active']) // 'region:LATAM/status:active'
+ * ```
+ *
+ * El primer nivel es un parámetro propio y no el primer elemento de un rest: un
+ * `groupId()` sin argumentos devolvería la cadena vacía, que no identifica a
+ * ningún grupo y se comportaría igual que un id mal escrito. Exigirlo en la firma
+ * convierte ese caso en un error de compilación.
+ *
+ * Comparte implementación con la construcción del árbol: los dos caminos pasan
+ * por {@link groupSegment} y {@link joinGroupId}, así que un id construido acá es
+ * el mismo string que produce `useRowGrouping` para ese grupo, por definición y
+ * no por coincidencia.
+ *
+ * @typeParam TKey - Ver {@link GroupIdSegment}.
+ * @param first - Nivel más externo. Con un solo nivel, el id completo.
+ * @param rest - Niveles siguientes, en orden de anidamiento.
+ */
+export function groupId<TKey extends string = string>(
+  first: GroupIdSegment<TKey>,
+  ...rest: readonly GroupIdSegment<TKey>[]
+): string {
+  let id = joinGroupId('', groupSegment(first[0], first[1]))
+  for (const [columnKey, value] of rest) id = joinGroupId(id, groupSegment(columnKey, value))
+  return id
+}
+
+/**
  * Claves de columna que atraviesa un id de grupo, de la raíz hacia abajo.
  *
  * Se usa para reconciliar un conjunto colapsado guardado contra la agrupación
@@ -91,9 +145,9 @@ export function groupSegment(columnKey: string, value: CellValue): string {
  * contuvieran, el camino se leería mal y el id se descartaría, que es la falla
  * segura: el grupo simplemente vuelve a aparecer expandido.
  */
-export function groupIdColumnPath(groupId: string): string[] {
+export function groupIdColumnPath(id: string): string[] {
   const path: string[] = []
-  for (const segment of groupId.split(GROUP_ID_SEPARATOR)) {
+  for (const segment of id.split(GROUP_ID_SEPARATOR)) {
     const cut = segment.indexOf(GROUP_SEGMENT_SEPARATOR)
     if (cut <= 0) return []
     path.push(segment.slice(0, cut))

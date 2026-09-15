@@ -8,6 +8,7 @@ import {
   finishAggregate,
   groupSegment,
   groupValueLabel,
+  joinGroupId,
   needsRowCollection,
   reconcileGroupBy,
   resolveAggregateColumns,
@@ -292,7 +293,10 @@ export function useRowGrouping<TRow extends Record<string, unknown>>(
         // clave es el respaldo que exige el tipo, no un caso esperado.
         const value = column ? readCellValue(column, row) : null
         const segment = groupSegment(columnKey, value)
-        const id = parentId === '' ? segment : `${parentId}/${segment}`
+        // El id sale de las MISMAS dos funciones que usa el helper público
+        // `groupId`. Repetir la interpolación acá sería una segunda escritura del
+        // formato, y una segunda escritura se desincroniza.
+        const id = joinGroupId(parentId, segment)
 
         let node = index.get(segment)
         if (node === undefined) {

@@ -49,6 +49,7 @@ export type {
   EditCommitEvent,
   FlatRow,
   GroupByState,
+  GroupIdSegment,
   GroupRow,
   GroupToggleEvent,
   PersistedTableState,
@@ -100,5 +101,16 @@ export const COLOR_TOKENS = {
 
 /** Nombre de un color de la paleta de estados incluida. */
 export type ColorTokenName = keyof typeof COLOR_TOKENS
+
+/**
+ * Constructor del {@link GroupRow.groupId} de un grupo.
+ *
+ * Sale de `internal/` y no de `types.ts` por la misma razón que el registro de
+ * renderers: es la implementación REAL, la que usa la construcción del árbol, y
+ * no una copia hecha para el consumidor. Una segunda implementación del formato
+ * se desincronizaría de la primera, y el síntoma —un grupo que no abre— es
+ * exactamente la falla silenciosa que este export existe para eliminar.
+ */
+export { groupId } from './internal/aggregations'
 
 export { createLocalStorageAdapter } from './composables/useTablePersistence'
