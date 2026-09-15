@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import { fileURLToPath, URL } from 'node:url'
 
 import { defineConfig } from 'vite'
@@ -25,14 +26,19 @@ const LIB_ENTRY = fileURLToPath(new URL('./src/components/ui/datatable/index.ts'
 
 export default defineConfig(({ mode }) => {
   const isLib = mode === 'lib'
+  // Vitest resuelve este mismo archivo con `mode === 'test'`. La suite solo
+  // necesita compilar SFCs: las devtools levantan un cliente de desarrollo que
+  // en un entorno sin navegador es puro costo de arranque.
+  const isTest = mode === 'test'
 
   return {
-    plugins: isLib
-      ? // El build de librería solo necesita compilar SFCs. Las devtools inyectan
-        // un cliente de desarrollo y JSX no lo usa ningún archivo del componente:
-        // ambos plugins serían peso muerto dentro del paquete publicado.
-        [vue()]
-      : [vue(), vueJsx(), vueDevTools()],
+    plugins:
+      isLib || isTest
+        ? // El build de librería solo necesita compilar SFCs. Las devtools inyectan
+          // un cliente de desarrollo y JSX no lo usa ningún archivo del componente:
+          // ambos plugins serían peso muerto dentro del paquete publicado.
+          [vue()]
+        : [vue(), vueJsx(), vueDevTools()],
 
     resolve: {
       alias: {
@@ -82,5 +88,27 @@ export default defineConfig(({ mode }) => {
           outDir: 'dist-demo',
           emptyOutDir: true,
         },
+
+    // La configuración de Vitest vive acá y no en un `vitest.config.ts` aparte
+    // para que la suite resuelva exactamente el mismo alias `@` y la misma
+    // cadena de plugins que compilan la aplicación. Vite ignora esta clave en
+    // `build`, así que ni `vite build` ni `vite build --mode lib` la ven.
+    test: {
+      // `happy-dom` en lugar de `jsdom`: arranca en una fracción del tiempo y
+      // esta suite no necesita nada de lo que jsdom implementa de más
+      // (navegación, layout, red). Lo que falta —`ResizeObserver` y un
+      // `requestAnimationFrame` gobernable— lo provee `__tests__/setup.ts`.
+      environment: 'happy-dom',
+      include: ['src/**/__tests__/**/*.test.ts'],
+      setupFiles: ['./src/components/ui/datatable/__tests__/setup.ts'],
+      // Los tests de rendimiento parchean prototipos del DOM. Restaurar espías
+      // y mocks entre tests evita que una suite contamine a la siguiente.
+      restoreMocks: true,
+      coverage: {
+        provider: 'v8',
+        include: ['src/components/ui/datatable/**/*.ts', 'src/components/ui/datatable/**/*.vue'],
+        exclude: ['src/components/ui/datatable/__tests__/**'],
+      },
+    },
   }
 })

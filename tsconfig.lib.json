@@ -9,6 +9,12 @@
 {
   "extends": "@vue/tsconfig/tsconfig.dom.json",
   "include": ["src/components/ui/datatable/**/*.ts", "src/components/ui/datatable/**/*.vue"],
+
+  // Los tests viven dentro del directorio del componente para estar al lado de
+  // lo que verifican, pero no forman parte de lo que se publica: sin esta
+  // exclusión, `build:lib-types` emitiría declaraciones de la suite dentro de
+  // `dist/types`.
+  "exclude": ["src/components/ui/datatable/__tests__/**"],
   "compilerOptions": {
     // Mismo nivel de rigor que la aplicación: los tipos emitidos tienen que
     // describir el código tal como fue verificado.

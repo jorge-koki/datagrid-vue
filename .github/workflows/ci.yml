@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Una ejecución por rama: un push nuevo cancela la anterior en lugar de
+# encolarla. Revisar el resultado de un commit que ya quedó atrás no aporta.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      # `npm ci` dispara el script `prepare`, que compila la librería. No se
+      # omite a propósito: es exactamente lo que ejecuta quien instala el paquete
+      # desde GitHub, así que este paso también verifica esa ruta de instalación.
+      - name: Install
+        run: npm ci
+
+      - name: Type check
+        run: npm run type-check
+
+      - name: Tests
+        run: npm test
+
+      - name: Build demo
+        run: npm run build
+
+      - name: Build library
+        run: npm run build:lib
+
+      # El formateo se verifica al final porque un fallo acá no invalida nada de
+      # lo anterior: informa una diferencia de estilo, no un error de código.
+      - name: Format check
+        run: npx oxfmt --check src/

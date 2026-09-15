@@ -1,0 +1,703 @@
+/**
+ * Selección y navegación con teclado, sobre el componente montado.
+ *
+ * Es el único bloque de la suite que necesita la tabla entera: la navegación
+ * vive en el viewport, opera sobre la celda activa —que es estado del
+ * componente, no el nodo con foco— y coordina scroll, edición y emisión de
+ * eventos. Los nodos del pool se reciclan y el foco del DOM no sobrevive a un
+ * scroll: ese es exactamente el motivo por el que el teclado no se maneja en el
+ * pool.
+ *
+ * Las aserciones de auto-scroll son en píxeles exactos a propósito. "Se ve la
+ * celda" es una afirmación que cualquier implementación cumple saltando al
+ * medio de la tabla; lo que hay que proteger es que el desplazamiento sea el
+ * MÍNIMO necesario, porque un salto de más pierde el contexto visual del
+ * usuario.
+ */
+
+import { describe, expect, it } from 'vitest'
+import type { VueWrapper } from '@vue/test-utils'
+import { mountTable } from './harness'
+import type { GridRow, TableHarness, TableProps } from './harness'
+import type { BeforeEditEvent, CellPosition } from '../types'
+
+type Row = { id: number; name: string; amount: number; city: string; done: boolean }
+
+/** Altura de fila y de viewport usadas en todo el archivo. */
+const ROW_HEIGHT = 40
+const VIEWPORT = { width: 600, height: 400 }
+/** 400 / 40 = 10 filas completas visibles. */
+const VISIBLE_ROWS = 10
+const COLUMN_WIDTH = 120
+
+function makeRows(count: number): Row[] {
+  const rows: Row[] = []
+  for (let index = 0; index < count; index += 1) {
+    rows.push({
+      id: index,
+      name: `Name ${index}`,
+      amount: index * 10,
+      city: `City ${index}`,
+      done: index % 2 === 0,
+    })
+  }
+  return rows
+}
+
+/** Seis columnas de 120px: cinco entran en el viewport de 600px. */
+const COLUMNS = [
+  { key: 'id', width: COLUMN_WIDTH, editable: true },
+  { key: 'name', width: COLUMN_WIDTH, editable: true },
+  { key: 'amount', width: COLUMN_WIDTH, editable: true },
+  { key: 'city', width: COLUMN_WIDTH, editable: true },
+  { key: 'done', width: COLUMN_WIDTH },
+  { key: 'extra', width: COLUMN_WIDTH },
+] as const
+
+const COLUMN_KEYS = COLUMNS.map((column) => column.key)
+
+async function mountGrid(
+  overrides: Partial<TableProps> = {},
+  rowCount = 100,
+): Promise<TableHarness> {
+  return mountTable({
+    viewport: VIEWPORT,
+    props: {
+      rows: makeRows(rowCount),
+      columns: COLUMNS,
+      rowKey: 'id',
+      rowHeight: ROW_HEIGHT,
+      ...overrides,
+    },
+  })
+}
+
+/** Última celda activa anunciada por `update:activeCell`. */
+function lastActiveCell(wrapper: VueWrapper): CellPosition | null {
+  const events = wrapper.emitted('update:activeCell')
+  if (!events || events.length === 0) return null
+  const payload: unknown = events[events.length - 1]?.[0]
+  if (payload === null || payload === undefined) return null
+  if (typeof payload !== 'object' || !('rowIndex' in payload) || !('columnKey' in payload)) {
+    throw new Error('[test] update:activeCell emitió una forma inesperada')
+  }
+  const { rowIndex, columnKey } = payload
+  if (typeof rowIndex !== 'number' || typeof columnKey !== 'string') {
+    throw new Error('[test] update:activeCell emitió una forma inesperada')
+  }
+  return { rowIndex, columnKey }
+}
+
+/** Cantidad de veces que se anunció un cambio de celda activa. */
+function activeCellEmissions(wrapper: VueWrapper): number {
+  return wrapper.emitted('update:activeCell')?.length ?? 0
+}
+
+/**
+ * Selecciona una celda que todavía no está pintada.
+ *
+ * Solo hay nodos para la ventana visible: para hacer clic en la fila 50 primero
+ * hay que llevarla a pantalla, igual que haría un usuario.
+ */
+async function selectFarCell(
+  harness: TableHarness,
+  rowIndex: number,
+  columnKey: string,
+): Promise<void> {
+  await harness.scrollTo({ top: rowIndex * ROW_HEIGHT })
+  await harness.clickCell(rowIndex, columnKey)
+}
+
+describe('selection — a single click selects, it does not edit', () => {
+  it('selects the clicked cell', async () => {
+    const harness = await mountGrid()
+
+    await harness.clickCell(2, 'name')
+
+    expect(lastActiveCell(harness.wrapper)).toEqual({ rowIndex: 2, columnKey: 'name' })
+    harness.unmount()
+  })
+
+  it('does not open the editor on a single click', async () => {
+    const harness = await mountGrid()
+
+    await harness.clickCell(2, 'name')
+
+    // Seleccionar para mirar o para navegar con el teclado es mucho más
+    // frecuente que editar: exigir doble clic para lo primero agregaría un gesto
+    // al caso común.
+    expect(harness.editor()).toBeNull()
+    harness.unmount()
+  })
+
+  it('opens the editor on a double click', async () => {
+    const harness = await mountGrid()
+
+    await harness.doubleClickCell(2, 'name')
+
+    expect(harness.editor()).not.toBeNull()
+    harness.unmount()
+  })
+
+  it('emits cellSelect with the row, the column and the value', async () => {
+    const harness = await mountGrid()
+
+    await harness.clickCell(3, 'amount')
+
+    const emitted = harness.wrapper.emitted('cellSelect')
+    expect(emitted).toHaveLength(1)
+    expect(emitted?.[0]?.[0]).toMatchObject({ rowIndex: 3, columnKey: 'amount', value: 30 })
+    harness.unmount()
+  })
+
+  it('does not re-announce a click on the already active cell', async () => {
+    const harness = await mountGrid()
+    await harness.clickCell(2, 'name')
+    const before = activeCellEmissions(harness.wrapper)
+
+    await harness.clickCell(2, 'name')
+
+    expect(activeCellEmissions(harness.wrapper)).toBe(before)
+    harness.unmount()
+  })
+
+  it('marks the active cell in the DOM', async () => {
+    const harness = await mountGrid()
+
+    await harness.clickCell(2, 'name')
+
+    expect(harness.cell(2, 'name')?.classList.contains('dt-cell--active')).toBe(true)
+    expect(harness.cell(2, 'name')?.getAttribute('aria-selected')).toBe('true')
+    harness.unmount()
+  })
+})
+
+describe('keyboard — arrows clamp at the edges instead of wrapping', () => {
+  it('ArrowDown moves one row down', async () => {
+    const harness = await mountGrid()
+    await harness.clickCell(0, 'name')
+
+    await harness.press('ArrowDown')
+
+    expect(lastActiveCell(harness.wrapper)).toEqual({ rowIndex: 1, columnKey: 'name' })
+    harness.unmount()
+  })
+
+  it('ArrowUp stops at the first row and does not wrap to the last', async () => {
+    const harness = await mountGrid()
+    await harness.clickCell(0, 'name')
+    const before = activeCellEmissions(harness.wrapper)
+
+    await harness.press('ArrowUp')
+
+    // Envolver al final de una tabla de 100.000 filas dejaría al usuario
+    // perdido sin ninguna señal de lo que pasó.
+    expect(lastActiveCell(harness.wrapper)).toEqual({ rowIndex: 0, columnKey: 'name' })
+    expect(activeCellEmissions(harness.wrapper)).toBe(before)
+    harness.unmount()
+  })
+
+  it('ArrowDown stops at the last row', async () => {
+    const harness = await mountGrid({}, 12)
+    await harness.clickCell(11, 'name')
+
+    await harness.press('ArrowDown')
+
+    expect(lastActiveCell(harness.wrapper)).toEqual({ rowIndex: 11, columnKey: 'name' })
+    harness.unmount()
+  })
+
+  it('ArrowLeft stops at the first column', async () => {
+    const harness = await mountGrid()
+    await harness.clickCell(2, 'id')
+
+    await harness.press('ArrowLeft')
+
+    expect(lastActiveCell(harness.wrapper)).toEqual({ rowIndex: 2, columnKey: 'id' })
+    harness.unmount()
+  })
+
+  it('ArrowRight stops at the last column', async () => {
+    const harness = await mountGrid()
+    await harness.clickCell(2, 'id')
+    for (let step = 0; step < 10; step += 1) await harness.press('ArrowRight')
+
+    expect(lastActiveCell(harness.wrapper)).toEqual({ rowIndex: 2, columnKey: 'extra' })
+    harness.unmount()
+  })
+
+  it('starts from the first cell and applies the delta when nothing is selected', async () => {
+    const harness = await mountGrid()
+
+    await harness.press('ArrowDown')
+
+    // Sin celda activa el origen es (0, primera columna) y la tecla se aplica
+    // sobre ese origen, así que la primera flecha hacia abajo aterriza en la
+    // fila 1. Es el comportamiento vigente; cambiarlo a "la primera flecha
+    // selecciona la celda 0" sería una decisión de producto, no un arreglo.
+    expect(lastActiveCell(harness.wrapper)).toEqual({ rowIndex: 1, columnKey: 'id' })
+    harness.unmount()
+  })
+
+  it('clamps to the first cell when the first key press moves backwards', async () => {
+    const harness = await mountGrid()
+
+    await harness.press('ArrowUp')
+
+    expect(lastActiveCell(harness.wrapper)).toEqual({ rowIndex: 0, columnKey: 'id' })
+    harness.unmount()
+  })
+})
+
+describe('keyboard — Tab wraps across rows, arrows do not', () => {
+  it('Tab past the last column moves to the first column of the next row', async () => {
+    const harness = await mountGrid()
+    await harness.clickCell(2, 'extra')
+
+    await harness.press('Tab')
+
+    expect(lastActiveCell(harness.wrapper)).toEqual({ rowIndex: 3, columnKey: 'id' })
+    harness.unmount()
+  })
+
+  it('Shift+Tab before the first column moves to the last column of the previous row', async () => {
+    const harness = await mountGrid()
+    await harness.clickCell(3, 'id')
+
+    await harness.press('Tab', { shiftKey: true })
+
+    expect(lastActiveCell(harness.wrapper)).toEqual({ rowIndex: 2, columnKey: 'extra' })
+    harness.unmount()
+  })
+
+  it('Tab stops at the very last cell of the table', async () => {
+    const harness = await mountGrid({}, 4)
+    await harness.clickCell(3, 'extra')
+    const before = activeCellEmissions(harness.wrapper)
+
+    await harness.press('Tab')
+
+    expect(activeCellEmissions(harness.wrapper)).toBe(before)
+    harness.unmount()
+  })
+
+  it('Shift+Tab stops at the very first cell of the table', async () => {
+    const harness = await mountGrid()
+    await harness.clickCell(0, 'id')
+    const before = activeCellEmissions(harness.wrapper)
+
+    await harness.press('Tab', { shiftKey: true })
+
+    expect(activeCellEmissions(harness.wrapper)).toBe(before)
+    harness.unmount()
+  })
+})
+
+describe('keyboard — Home, End and paging', () => {
+  it('Home moves to the first column of the current row', async () => {
+    const harness = await mountGrid()
+    await harness.clickCell(5, 'city')
+
+    await harness.press('Home')
+
+    expect(lastActiveCell(harness.wrapper)).toEqual({ rowIndex: 5, columnKey: 'id' })
+    harness.unmount()
+  })
+
+  it('End moves to the last column of the current row', async () => {
+    const harness = await mountGrid()
+    await harness.clickCell(5, 'id')
+
+    await harness.press('End')
+
+    expect(lastActiveCell(harness.wrapper)).toEqual({ rowIndex: 5, columnKey: 'extra' })
+    harness.unmount()
+  })
+
+  it('Ctrl+Home jumps to the very first cell', async () => {
+    const harness = await mountGrid()
+    await selectFarCell(harness, 50, 'city')
+
+    await harness.press('Home', { ctrlKey: true })
+
+    expect(lastActiveCell(harness.wrapper)).toEqual({ rowIndex: 0, columnKey: 'id' })
+    harness.unmount()
+  })
+
+  it('Ctrl+End jumps to the very last cell', async () => {
+    const harness = await mountGrid({}, 30)
+    await harness.clickCell(0, 'id')
+
+    await harness.press('End', { ctrlKey: true })
+
+    expect(lastActiveCell(harness.wrapper)).toEqual({ rowIndex: 29, columnKey: 'extra' })
+    harness.unmount()
+  })
+
+  it('Cmd+Home behaves like Ctrl+Home, for macOS', async () => {
+    const harness = await mountGrid()
+    await selectFarCell(harness, 50, 'city')
+
+    await harness.press('Home', { metaKey: true })
+
+    expect(lastActiveCell(harness.wrapper)).toEqual({ rowIndex: 0, columnKey: 'id' })
+    harness.unmount()
+  })
+
+  it('PageDown moves down exactly one screenful of rows', async () => {
+    const harness = await mountGrid()
+    await harness.clickCell(0, 'name')
+
+    await harness.press('PageDown')
+
+    // El viewport mide 400px y la fila 40px: una página son 10 filas.
+    expect(lastActiveCell(harness.wrapper)).toEqual({
+      rowIndex: VISIBLE_ROWS,
+      columnKey: 'name',
+    })
+    harness.unmount()
+  })
+
+  it('PageUp moves up exactly one screenful of rows', async () => {
+    const harness = await mountGrid()
+    await selectFarCell(harness, 25, 'name')
+
+    await harness.press('PageUp')
+
+    expect(lastActiveCell(harness.wrapper)).toEqual({
+      rowIndex: 25 - VISIBLE_ROWS,
+      columnKey: 'name',
+    })
+    harness.unmount()
+  })
+
+  it('PageUp clamps at the top instead of going negative', async () => {
+    const harness = await mountGrid()
+    await harness.clickCell(3, 'name')
+
+    await harness.press('PageUp')
+
+    expect(lastActiveCell(harness.wrapper)).toEqual({ rowIndex: 0, columnKey: 'name' })
+    harness.unmount()
+  })
+})
+
+describe('keyboard — auto-scroll moves the minimum necessary', () => {
+  it('does not scroll while the target row is already visible', async () => {
+    const harness = await mountGrid()
+    await harness.clickCell(0, 'name')
+
+    for (let step = 0; step < VISIBLE_ROWS - 1; step += 1) await harness.press('ArrowDown')
+
+    expect(harness.scrollPosition().top).toBe(0)
+    harness.unmount()
+  })
+
+  it('scrolls by exactly one row when stepping past the bottom edge', async () => {
+    const harness = await mountGrid()
+    await harness.clickCell(0, 'name')
+
+    for (let step = 0; step < VISIBLE_ROWS; step += 1) await harness.press('ArrowDown')
+
+    // Fila 10: su borde inferior está en 11 * 40 = 440, el viewport mide 400,
+    // así que el desplazamiento mínimo es 40. Un salto mayor perdería el
+    // contexto visual del usuario.
+    expect(harness.scrollPosition().top).toBe(ROW_HEIGHT)
+    harness.unmount()
+  })
+
+  it('keeps scrolling one row at a time, never jumping ahead', async () => {
+    const harness = await mountGrid()
+    await harness.clickCell(0, 'name')
+
+    for (let step = 0; step < VISIBLE_ROWS + 3; step += 1) await harness.press('ArrowDown')
+
+    expect(harness.scrollPosition().top).toBe(4 * ROW_HEIGHT)
+    harness.unmount()
+  })
+
+  it('scrolls horizontally by exactly the width of the column that went off-screen', async () => {
+    const harness = await mountGrid()
+    await harness.clickCell(0, 'id')
+
+    // Cinco columnas de 120px entran en 600px. La sexta (`extra`) termina en
+    // 720, así que hay que correr 120.
+    for (let step = 0; step < 5; step += 1) await harness.press('ArrowRight')
+
+    expect(harness.scrollPosition().left).toBe(COLUMN_WIDTH)
+    harness.unmount()
+  })
+
+  it('scrolls back up when moving above the visible window', async () => {
+    const harness = await mountGrid()
+    await harness.clickCell(0, 'name')
+    for (let step = 0; step < VISIBLE_ROWS + 3; step += 1) await harness.press('ArrowDown')
+    expect(harness.scrollPosition().top).toBe(4 * ROW_HEIGHT)
+
+    await harness.press('Home', { ctrlKey: true })
+
+    expect(harness.scrollPosition().top).toBe(0)
+    expect(harness.scrollPosition().left).toBe(0)
+    harness.unmount()
+  })
+})
+
+describe('keyboard — editing', () => {
+  it('Enter opens the editor on the active cell', async () => {
+    const harness = await mountGrid()
+    await harness.clickCell(2, 'name')
+
+    await harness.press('Enter')
+
+    expect(harness.editor()).not.toBeNull()
+    harness.unmount()
+  })
+
+  it('F2 opens the editor too', async () => {
+    const harness = await mountGrid()
+    await harness.clickCell(2, 'name')
+
+    await harness.press('F2')
+
+    expect(harness.editor()).not.toBeNull()
+    harness.unmount()
+  })
+
+  it('Enter inside the editor commits and moves the selection down', async () => {
+    const harness = await mountGrid()
+    await harness.clickCell(2, 'name')
+    await harness.press('Enter')
+
+    const control = harness.editor()
+    if (!control) throw new Error('[test] no se abrió el editor')
+    control.value = 'Edited'
+    control.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    await harness.flush()
+
+    const committed = harness.wrapper.emitted('editCommit')
+    expect(committed).toHaveLength(1)
+    expect(committed?.[0]?.[0]).toMatchObject({
+      rowIndex: 2,
+      columnKey: 'name',
+      newValue: 'Edited',
+    })
+    // Como en una planilla de cálculo: confirmar baja una fila.
+    expect(lastActiveCell(harness.wrapper)).toEqual({ rowIndex: 3, columnKey: 'name' })
+    harness.unmount()
+  })
+
+  it('typing a printable character opens the editor seeded with it', async () => {
+    const harness = await mountGrid()
+    await harness.clickCell(2, 'name')
+
+    await harness.press('x')
+
+    // La tecla que abrió la edición tiene que ser el primer carácter del valor
+    // nuevo, no perderse.
+    expect(harness.editor()?.value).toBe('x')
+    harness.unmount()
+  })
+
+  it('type-to-edit respects the beforeEdit veto', async () => {
+    const harness = await mountGrid({
+      onBeforeEdit: (event: BeforeEditEvent<GridRow>) => event.cancel(),
+    })
+    await harness.clickCell(2, 'name')
+
+    await harness.press('x')
+
+    expect(harness.editor()).toBeNull()
+    harness.unmount()
+  })
+
+  it('does not hijack a Ctrl-modified key', async () => {
+    const harness = await mountGrid()
+    await harness.clickCell(2, 'name')
+
+    await harness.press('a', { ctrlKey: true })
+
+    // Ctrl+A es "seleccionar todo" del navegador; capturarlo para empezar a
+    // editar sería secuestrar un atajo del sistema.
+    expect(harness.editor()).toBeNull()
+    harness.unmount()
+  })
+
+  it('does not hijack an Alt-modified key', async () => {
+    const harness = await mountGrid()
+    await harness.clickCell(2, 'name')
+
+    await harness.press('a', { altKey: true })
+
+    expect(harness.editor()).toBeNull()
+    harness.unmount()
+  })
+
+  it('does let Shift through, because Shift is how capitals are typed', async () => {
+    const harness = await mountGrid()
+    await harness.clickCell(2, 'name')
+
+    await harness.press('A', { shiftKey: true })
+
+    expect(harness.editor()?.value).toBe('A')
+    harness.unmount()
+  })
+
+  it('ignores a named key that is not a navigation key', async () => {
+    const harness = await mountGrid()
+    await harness.clickCell(2, 'name')
+
+    await harness.press('ContextMenu')
+
+    expect(harness.editor()).toBeNull()
+    harness.unmount()
+  })
+
+  it('does nothing on type-to-edit when there is no active cell', async () => {
+    const harness = await mountGrid()
+
+    await harness.press('x')
+
+    expect(harness.editor()).toBeNull()
+    expect(activeCellEmissions(harness.wrapper)).toBe(0)
+    harness.unmount()
+  })
+
+  it('Escape keeps the selection instead of clearing it', async () => {
+    const harness = await mountGrid()
+    await harness.clickCell(2, 'name')
+    const before = activeCellEmissions(harness.wrapper)
+
+    await harness.press('Escape')
+
+    // Escape cancela una edición; sin edición abierta no tiene por qué
+    // deseleccionar, que sería perder el lugar en la tabla.
+    expect(lastActiveCell(harness.wrapper)).toEqual({ rowIndex: 2, columnKey: 'name' })
+    expect(activeCellEmissions(harness.wrapper)).toBe(before)
+    harness.unmount()
+  })
+
+  it('ignores navigation keys while the editor is open', async () => {
+    const harness = await mountGrid()
+    await harness.clickCell(2, 'name')
+    await harness.press('Enter')
+    const before = activeCellEmissions(harness.wrapper)
+
+    await harness.press('ArrowDown')
+
+    // El manejador del viewport se aparta mientras hay un editor: las flechas
+    // pertenecen al control de edición.
+    expect(activeCellEmissions(harness.wrapper)).toBe(before)
+    harness.unmount()
+  })
+})
+
+describe('keyboard — hidden columns are skipped', () => {
+  it('ArrowRight jumps over a hidden column', async () => {
+    const harness = await mountGrid({ columnVisibility: { name: false } })
+    await harness.clickCell(2, 'id')
+
+    await harness.press('ArrowRight')
+
+    // `name` está oculta: no ocupa un lugar en la navegación, igual que no
+    // ocupa un slot del pool.
+    expect(lastActiveCell(harness.wrapper)).toEqual({ rowIndex: 2, columnKey: 'amount' })
+    harness.unmount()
+  })
+
+  it('End lands on the last VISIBLE column', async () => {
+    const harness = await mountGrid({ columnVisibility: { extra: false } })
+    await harness.clickCell(2, 'id')
+
+    await harness.press('End')
+
+    expect(lastActiveCell(harness.wrapper)).toEqual({ rowIndex: 2, columnKey: 'done' })
+    harness.unmount()
+  })
+
+  it('Tab wraps using the visible columns only', async () => {
+    const harness = await mountGrid({ columnVisibility: { extra: false } })
+    await harness.clickCell(2, 'done')
+
+    await harness.press('Tab')
+
+    expect(lastActiveCell(harness.wrapper)).toEqual({ rowIndex: 3, columnKey: 'id' })
+    harness.unmount()
+  })
+})
+
+describe('selectionMode', () => {
+  it('attaches no keyboard handler when selection is off', async () => {
+    const harness = await mountGrid({ selectionMode: 'none' })
+
+    await harness.press('ArrowDown')
+
+    // No es que el manejador ignore la tecla: Vue directamente no registra el
+    // listener, así que la tabla no interfiere con el scroll nativo.
+    expect(activeCellEmissions(harness.wrapper)).toBe(0)
+    harness.unmount()
+  })
+
+  it('does not select on click when selection is off', async () => {
+    const harness = await mountGrid({ selectionMode: 'none' })
+
+    await harness.clickCell(2, 'name')
+
+    expect(activeCellEmissions(harness.wrapper)).toBe(0)
+    harness.unmount()
+  })
+
+  it('keeps the viewport out of the tab order when selection is off', async () => {
+    const harness = await mountGrid({ selectionMode: 'none' })
+
+    expect(harness.viewport.getAttribute('tabindex')).toBe('-1')
+    harness.unmount()
+  })
+
+  it('makes the viewport focusable when selection is on', async () => {
+    const harness = await mountGrid()
+
+    expect(harness.viewport.getAttribute('tabindex')).toBe('0')
+    harness.unmount()
+  })
+
+  it('marks the row instead of the cell in row mode', async () => {
+    const harness = await mountGrid({ selectionMode: 'row' })
+
+    await harness.clickCell(2, 'name')
+
+    const cell = harness.cell(2, 'name')
+    const row = cell?.closest('.dt-row')
+    expect(row?.classList.contains('dt-row--active')).toBe(true)
+    // En modo `row` la unidad seleccionada es la fila y lo anuncia ella: marcar
+    // además la celda duplicaría el anuncio del lector de pantalla.
+    expect(row?.getAttribute('aria-selected')).toBe('true')
+    expect(cell?.classList.contains('dt-cell--active')).toBe(false)
+    harness.unmount()
+  })
+
+  it('still tracks the active column in row mode, so the keyboard knows where it is', async () => {
+    const harness = await mountGrid({ selectionMode: 'row' })
+    await harness.clickCell(2, 'amount')
+
+    await harness.press('ArrowDown')
+
+    expect(lastActiveCell(harness.wrapper)).toEqual({ rowIndex: 3, columnKey: 'amount' })
+    harness.unmount()
+  })
+})
+
+describe('grid accessibility wiring', () => {
+  it('announces the row count including the header row', async () => {
+    const harness = await mountGrid({}, 25)
+
+    expect(harness.viewport.getAttribute('aria-rowcount')).toBe('26')
+    harness.unmount()
+  })
+
+  it('announces the visible column count', async () => {
+    const harness = await mountGrid({ columnVisibility: { extra: false } })
+
+    expect(harness.viewport.getAttribute('aria-colcount')).toBe(String(COLUMN_KEYS.length - 1))
+    harness.unmount()
+  })
+})

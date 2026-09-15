@@ -1071,6 +1071,76 @@ These are the realistic ways to give the performance back, in rough order of how
 
 ---
 
+## Testing
+
+La suite vive en `src/components/ui/datatable/__tests__/` y corre con
+[Vitest](https://vitest.dev) sobre `happy-dom`.
+
+```bash
+npm test           # una corrida
+npm run test:watch # modo watch
+npm run test:coverage
+```
+
+La configuración está en el bloque `test` de `vite.config.ts`, para que los tests resuelvan el mismo
+alias `@` y la misma cadena de plugins que la aplicación. Los archivos de test quedan fuera de
+`tsconfig.app.json` y de la emisión de tipos de la librería, pero **sí se verifican**:
+`tsconfig.test.json` los incluye y está referenciado desde `tsconfig.json`, así que
+`npm run type-check` compila la suite con el mismo rigor que el componente,
+`noUncheckedIndexedAccess` incluido.
+
+`happy-dom` no provee un `ResizeObserver` que emita ni un `requestAnimationFrame` gobernable.
+`__tests__/setup.ts` instala dobles de ambos: los frames se ejecutan a mano con `flushFrames()` y el
+tamaño del viewport se anuncia con `FakeResizeObserver.emit()`. Ningún test espera a un timer real,
+porque un test de rendimiento intermitente termina borrado por quien lo cruza la próxima vez.
+
+### Qué garantizan los tests de rendimiento
+
+`__tests__/pool.perf.test.ts` es el centro de la suite. Se apoya en `__tests__/dom-recorder.ts`, que
+parchea `textContent`, `style`, `setAttribute`, `classList`, `hidden`, `checked`, `src` y la
+creación, inserción y eliminación de nodos, y cuenta cada escritura dentro de un subárbol. Con eso
+fija estos invariantes:
+
+| Invariante                                                                      | Por qué importa                                                             |
+| ------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| Repintar con entradas idénticas produce **cero** escrituras, en los 8 renderers | Es la afirmación central de la librería                                     |
+| Los nodos de fila y de celda sobreviven al scroll como los **mismos objetos**   | Reciclar, no recrear                                                        |
+| El costo por frame depende de la ventana, **no** del dataset ni de la distancia | 100.000 filas cuestan lo mismo que 200; saltar 150 filas, lo mismo que 1    |
+| Mover la celda activa en horizontal alterna **exactamente 2** clases            | La selección no repinta la ventana                                          |
+| Los nodos sobrantes se **ocultan**, nunca se eliminan                           | `hidden` conserva la capa de composición; `removeChild` la descarta         |
+| `Intl.NumberFormat` se construye **una sola vez**                               | Un formateador por celda y por frame domina el presupuesto de pintado       |
+| `avatar` y `tags` mutan sin asignar dentro de `update`                          | La basura del camino caliente la cobra el recolector con un frame perdido   |
+| Cambiar el tipo de renderer en un slot reciclado **reconstruye** la estructura  | Un slot puede pasar de `badge` a `progress` durante el scroll horizontal    |
+| Los índices ARIA se escriben **por fila**, no por celda                         | Misma información para el lector de pantalla, quince veces menos escrituras |
+
+### Estas aserciones son estructurales
+
+Los números de `pool.perf.test.ts` no son observaciones: cada uno está derivado del contrato de
+`internal/dom.ts` y explicado en el comentario que lo acompaña.
+
+**Si una de esas aserciones falla, lo más probable es que el problema esté en el código y no en el
+número.** El modo de falla que protegen no lanza ninguna excepción: romper el caché de pintado deja
+la tabla renderizando, con el mismo aspecto, y solo scrollea peor. Ningún otro test lo nota. Subir la
+constante hasta que vuelva el verde apaga exactamente la alarma que hay que escuchar.
+
+Si el cambio es una mejora real —menos escrituras que antes— bajá la constante y actualizá el
+comentario con el razonamiento nuevo. Si es un aumento, el comentario tiene que explicar qué se
+compró a cambio.
+
+### El resto de la suite
+
+| Archivo                       | Qué cubre                                                                               |
+| ----------------------------- | --------------------------------------------------------------------------------------- |
+| `useVirtualWindow.test.ts`    | Matemática de la ventana: 100k filas, scroll negativo, overscroll, overscan             |
+| `useColumnLayout.test.ts`     | Offsets acumulados, acotado de anchos, orden, y la búsqueda binaria por fuerza bruta    |
+| `reconcile.test.ts`           | Estado guardado contra columnas que cambiaron; payloads corruptos                       |
+| `useTablePersistence.test.ts` | Orden carga/guardado, debounce, volcado al desmontar, degradación en SSR y modo privado |
+| `useCellEditor.test.ts`       | Veto de `beforeEdit`, coacción de tipos, y que `rows` nunca se muta                     |
+| `selection.test.ts`           | Teclado completo, auto-scroll en píxeles exactos, columnas ocultas                      |
+| `renderers.test.ts`           | Valores inesperados en cada renderer incluido                                           |
+
+---
+
 ## Limitations
 
 Stated plainly. None of these are implemented:
