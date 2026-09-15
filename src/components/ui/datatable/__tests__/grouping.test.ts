@@ -1188,6 +1188,27 @@ describe('component — grouping plugged into everything that already existed', 
     harness.unmount()
   })
 
+  it('clicking a group header leaves no selection ring and no focused cell', async () => {
+    const harness = await mountGrouped()
+
+    // Se manda `pointerdown` además del `click`, que es lo que hace un puntero
+    // real: `pointerdown` es el camino por el que se selecciona y por el que la
+    // tabla pide el foco, así que es el único que podría dejar una marca.
+    const header = harness.canvas.querySelector('.dt-group-row')
+    header?.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }))
+    header?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    await harness.flush()
+
+    expect(harness.wrapper.emitted('groupToggle')).toHaveLength(1)
+    // Una cabecera se pliega, no se selecciona: sus celdas están escondidas y no
+    // representan ninguna columna. No emite selección, no deja ninguna celda
+    // marcada y no se queda con el foco del DOM.
+    expect(harness.wrapper.emitted('update:activeCell')).toBeUndefined()
+    expect(harness.grid.querySelectorAll('.dt-cell--active')).toHaveLength(0)
+    expect(document.activeElement?.classList.contains('dt-cell')).not.toBe(true)
+    harness.unmount()
+  })
+
   it('does not emit cellSelect when the active row is a group header', async () => {
     const harness = await mountGrouped()
 

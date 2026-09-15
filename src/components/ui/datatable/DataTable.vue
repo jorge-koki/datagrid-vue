@@ -357,6 +357,9 @@ const pool = useRowPool<TRow>({
     // Un clic simple SELECCIONA. No abre el editor: eso lo hacen el doble clic,
     // Enter y F2.
     if (props.selectionMode === 'none') return
+    // El foco va PRIMERO: si había un editor abierto sobre otra celda, moverlo
+    // dispara su `blur` y lo confirma antes de que la selección se mueva.
+    focusViewport(position)
     selectCell(position)
   },
   onCellToggle: (position, nextValue) => {
@@ -415,6 +418,47 @@ const activeColumnIndex = computed(() => {
   if (!current) return -1
   return resolvedColumns.value.findIndex((column) => column.key === current.columnKey)
 })
+
+/**
+ * Lleva el foco al viewport cuando el puntero apunta una celda.
+ *
+ * Es necesario porque las celdas NO son enfocables: el manejador de teclado vive
+ * en `.dt-viewport` y solo ve las teclas mientras el foco esté ahí adentro.
+ * Antes esto pasaba de rebote —cada celda llevaba `tabindex="-1"`, el clic la
+ * enfocaba a ella y desde ahí las teclas burbujeaban hasta el viewport—, pero
+ * ese mismo `tabindex` era el que hacía que el navegador le pintara un anillo de
+ * `:focus-visible` a una celda distinta de la activa, y se veían DOS celdas
+ * seleccionadas. Quitado el `tabindex`, el foco deja de ser un efecto colateral
+ * y se pide explícitamente, en un único lugar.
+ *
+ * Dos guardas:
+ *
+ * 1. Si el viewport ya tiene el foco no se hace nada. Es el caso de venir
+ *    navegando con el teclado, y reenfocar sería trabajo sin cambio.
+ * 2. Si hay un editor abierto sobre ESTA misma celda, el foco le pertenece al
+ *    control y quitárselo lo cerraría por `blur`. Un clic sobre OTRA celda sí
+ *    mueve el foco: esa edición se confirma igual —es la misma semántica de
+ *    planilla que ya aplica `beginEdit`— y el teclado tiene que quedar
+ *    apuntando al viewport.
+ *
+ * En modo `none` no se llega hasta acá: el llamador corta antes, así que una
+ * tabla sin selección nunca le roba el foco a nada de la página.
+ */
+function focusViewport(position: CellPosition): void {
+  const viewport = viewportEl.value
+  if (!viewport || viewport.ownerDocument.activeElement === viewport) return
+
+  const editing = editor.editing.value
+  if (
+    editing !== null &&
+    editing.rowIndex === position.rowIndex &&
+    editing.columnKey === position.columnKey
+  ) {
+    return
+  }
+
+  viewport.focus()
+}
 
 /**
  * Fija la celda activa y avisa.
@@ -806,6 +850,13 @@ const editor = useCellEditor<TRow>({
     // Enter confirma y baja una fila, como en una planilla. La selección se
     // mueve aunque el padre no persista el valor: es navegación, no edición.
     moveActiveBy(1, 0)
+  },
+  onReleaseFocus: () => {
+    // El editor soltó el foco al cerrarse y sin esto quedaría en el `body`, o
+    // sea fuera de la tabla: el manejador de teclado escucha en el viewport, así
+    // que la flecha siguiente a un Escape no llegaría a ningún lado. Se lo
+    // devuelve al único elemento enfocable de la tabla, que es de donde salió.
+    viewportEl.value?.focus()
   },
 })
 

@@ -312,10 +312,22 @@ export function createAggregateElement(row: PooledRowElement): PooledAggregateEl
 /**
  * Crea un nodo de celda vacío.
  *
- * `tabindex="-1"` la vuelve enfocable por programa y por click sin meterla en el
- * orden de tabulación: con 450 celdas visibles, participar del tab order haría
- * imposible atravesar la tabla con el teclado. Es lo que permite que "Enter
- * sobre la celda enfocada" abra el editor.
+ * ## La celda NO lleva `tabindex`, y es una consecuencia del reciclado
+ *
+ * Dónde está parado el usuario es estado del componente —la posición
+ * `activeCell`— y no el foco del DOM. La razón es justamente que estos nodos se
+ * reciclan: el nodo que muestra la fila 12 puede quedar reasignado a la fila 42
+ * en mitad de un scroll, sin moverse ni un píxel. Si el foco fuera el registro
+ * de la posición activa, esa reasignación lo dejaría señalando una celda que el
+ * usuario nunca eligió, y el nodo seguiría recibiendo sus teclas mientras
+ * muestra datos distintos. Un dato que sobrevive al repintado no puede vivir en
+ * un nodo que se recicla.
+ *
+ * De ahí se sigue el resto del diseño: la marca visual es la clase
+ * `dt-cell--active`, que se pinta a partir de esa posición, y el único elemento
+ * enfocable de la tabla es `.dt-viewport`, que es también el que lleva el
+ * manejador de teclado. Con las celdas fuera del foco hay un solo anillo
+ * posible y un solo lugar donde se escriben las teclas.
  *
  * Los `as` sobre los literales `null` y `undefined` son ensanchamientos al tipo
  * declarado del campo, igual que el `[]` de {@link createRowElement}: sin ellos
@@ -326,7 +338,6 @@ export function createAggregateElement(row: PooledRowElement): PooledAggregateEl
 export function createCellElement(): PooledCellElement {
   const element = document.createElement('div')
   element.className = 'dt-cell'
-  element.tabIndex = -1
   // Igual que el rol de la fila: estructural, se escribe una sola vez.
   element.setAttribute('role', 'gridcell')
   return Object.assign(element, {

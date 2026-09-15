@@ -337,11 +337,18 @@
   box-shadow: none;
 }
 
-.dt-cell:focus-visible {
-  outline: 2px solid var(--dt-primary);
-  outline-offset: -2px;
-}
-
+/*
+ * El anillo de foco lo lleva el VIEWPORT, y es el único que existe.
+ *
+ * Las celdas no son enfocables —no llevan `tabindex`, ver `createCellElement`—
+ * porque la posición activa es estado del componente y no el foco del DOM. Hubo
+ * además una regla `.dt-cell:focus-visible` con este mismo color, y era un
+ * segundo sistema dibujando lo mismo: al hacer clic en una celda esa celda
+ * tomaba el foco, y la primera flecha hacía que el navegador la considerara
+ * enfocada por teclado y le pintara el anillo, mientras `dt-cell--active` ya
+ * había pasado a la celda siguiente. Se veían dos celdas seleccionadas a la vez.
+ * La marca de selección es `dt-cell--active` y nada más.
+ */
 .dt-viewport:focus-visible {
   outline: 2px solid var(--dt-primary);
   outline-offset: -2px;

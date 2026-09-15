@@ -61,6 +61,17 @@ export interface UseCellEditorOptions<TRow> {
    * encadenar las dos acciones.
    */
   onEnterCommit?: () => void
+  /**
+   * Se invoca al cerrar el editor, solo si el control TENÍA el foco del DOM.
+   *
+   * `close()` suelta el foco a propósito —ver su documentación— y soltarlo lo
+   * manda al `body`. Desde ahí el manejador de teclado de la tabla, que escucha
+   * en el viewport, deja de recibir las teclas: después de un Escape o de un
+   * cierre por scroll, la flecha siguiente no haría absolutamente nada. Este
+   * callback existe para que el componente recupere el foco sin que este módulo
+   * tenga que conocer el viewport ni ningún otro nodo ajeno a su control.
+   */
+  onReleaseFocus?: () => void
 }
 
 /** Resultado de {@link useCellEditor}. */
@@ -530,12 +541,28 @@ export function useCellEditor<TRow extends Record<string, unknown>>(
    * Se consulta `document.activeElement` antes de llamar a `blur()` para no
    * emitir un evento sobre un control que no tenía el foco: es el caso de una
    * confirmación por scroll, donde el usuario nunca llegó a tipear.
+   *
+   * ## Y el foco se DEVUELVE, no se abandona
+   *
+   * `blur()` manda el foco al `body`, que está fuera de la tabla. El manejador
+   * de teclado escucha en el viewport, así que un foco en el `body` deja la
+   * grilla muda: después de un Escape, la flecha siguiente no llegaba a ningún
+   * lado. Por eso la misma lectura que decide si hay que soltar el foco decide
+   * si hay que pedir que lo recuperen, con {@link UseCellEditorOptions.onReleaseFocus}
+   * y recién al final, con `closing` ya bajado y el estado limpio.
    */
   function close(): void {
     closing = true
     const control = activeControl
+    // Se recuerda si el control tenía el foco para poder devolverlo al final,
+    // con el cierre ya terminado y la guarda de reentrada abajo. Devolverlo
+    // antes reentraría en este mismo camino con el estado a medio limpiar.
+    let hadFocus = false
     if (control) {
-      if (control.ownerDocument.activeElement === control) control.blur()
+      if (control.ownerDocument.activeElement === control) {
+        hadFocus = true
+        control.blur()
+      }
       control.hidden = true
       control.value = ''
     }
@@ -545,6 +572,7 @@ export function useCellEditor<TRow extends Record<string, unknown>>(
     originalValue = undefined
     appliedGeometry = null
     closing = false
+    if (hadFocus) options.onReleaseFocus?.()
   }
 
   function applyGeometry(position: CellPosition): void {

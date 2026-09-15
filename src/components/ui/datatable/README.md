@@ -484,7 +484,7 @@ La estructura completa, de afuera hacia adentro:
 | `.dt-canvas`           | `role="rowgroup"`                                                                                                                                                                |
 | `.dt-row`              | `role="row"`, `aria-rowindex` (base 1, corrido por la fila de encabezado: la fila de datos `0` reporta `2`), `aria-selected` en modo `'row'`, `aria-level` con agrupación activa |
 | `.dt-row.dt-group-row` | Además: `aria-expanded`, `aria-level` (base 1, igual a `depth + 1`), `aria-posinset` y `aria-setsize` entre sus hermanos de nivel                                                |
-| `.dt-cell`             | `role="gridcell"`, `aria-colindex` (base 1 sobre las columnas **visibles**, así que una columna oculta no ocupa slot), `aria-selected` en modo `'cell'`, `tabindex="-1"`         |
+| `.dt-cell`             | `role="gridcell"`, `aria-colindex` (base 1 sobre las columnas **visibles**, así que una columna oculta no ocupa slot), `aria-selected` en modo `'cell'`                          |
 
 `aria-sort` **no** aparece, y no es un olvido: no hay ordenamiento (ver [Limitaciones](#limitaciones)).
 Anunciar una columna como ordenable donde no se puede ordenar sería peor que no anunciar nada.
@@ -504,14 +504,21 @@ es un atributo estático que Vue escribe al montar.
 El índice es 1..N sobre las columnas **visibles**, así que ocultar o reordenar columnas mueve los dos
 lados juntos y una columna oculta no deja un hueco en la numeración.
 
-Las celdas llevan `tabindex="-1"` para poder recibir el foco por código y por clic sin entrar en el
-orden de tabulación: con unas 450 celdas visibles, entrar en ese orden haría imposible tabular más
-allá de la tabla.
+**Las celdas no son enfocables y no llevan `tabindex`.** La posición activa es estado del componente,
+no el foco del DOM, y eso es consecuencia directa del reciclado de nodos: el nodo que muestra una fila
+puede quedar reasignado a otra en mitad de un scroll, así que el foco dejaría de señalar la celda que
+el usuario eligió. Hubo un `tabindex="-1"` por celda y trajo un problema visible: la celda tomaba foco
+real al hacer clic y el navegador le pintaba su propio anillo de `:focus-visible` —del mismo color que
+`.dt-cell--active`— en cuanto el usuario tocaba una flecha, con lo que se veían **dos** celdas
+seleccionadas a la vez. La marca de selección es `dt-cell--active`, y es la única.
 
 **El foco y el teclado no se movieron con el rol.** Siguen en `.dt-viewport`, que es la caja que
-scrollea: es donde tiene sentido que aparezca el anillo de foco, y es el elemento al que el usuario le
-está mandando las teclas de desplazamiento. El manejador escucha ahí y la posición activa sigue siendo
-estado del componente, no el nodo enfocado.
+scrollea: es donde tiene sentido que aparezca el anillo de foco, es el **único** elemento enfocable de
+la tabla y es el elemento al que el usuario le está mandando las teclas de desplazamiento. El
+manejador escucha ahí y la posición activa sigue siendo estado del componente, no el nodo enfocado.
+Un clic sobre una celda lleva el foco al viewport de forma explícita —salvo con `selectionMode` en
+`'none'`, donde la tabla no le quita el foco a nadie—, y cerrar el editor se lo devuelve, para que la
+tecla siguiente a un Escape siga llegando.
 
 > **Lo único que queda afuera del contrato.** El mensaje de `emptyText` se renderiza como un `div`
 > dentro de `.dt-root`, o sea dentro de la grilla, y no es una fila. Solo aparece con `rows` vacío,

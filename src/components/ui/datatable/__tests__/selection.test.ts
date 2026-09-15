@@ -172,6 +172,176 @@ describe('selection — a single click selects, it does not edit', () => {
   })
 })
 
+/**
+ * Un solo anillo: la marca de selección y el foco del DOM no compiten.
+ *
+ * ## Qué se rompió y qué protege este bloque
+ *
+ * Había DOS sistemas independientes dibujando el mismo anillo verde. Las celdas
+ * del pool llevaban `tabindex="-1"`, así que un clic le daba foco REAL del DOM a
+ * la celda apuntada; la hoja de estilos tenía además una regla
+ * `.dt-cell:focus-visible` con el mismo color que `.dt-cell--active`. Al hacer
+ * clic en una celda y mover después la selección con una flecha, el navegador
+ * pasaba a considerar la interacción como de teclado y le pintaba el anillo de
+ * foco a la celda VIEJA, que seguía enfocada, mientras `dt-cell--active` ya
+ * estaba en la nueva. El usuario veía dos celdas seleccionadas a la vez.
+ *
+ * Ese `tabindex` era además código muerto: nadie enfocaba una celda por
+ * programa, y el manejador de teclado se había mudado al viewport cuando se
+ * implementó la selección. Lo único que seguía haciendo era que las teclas
+ * funcionaran de rebote después de un clic —la celda enfocada las dejaba
+ * burbujear hasta el viewport—, y eso ahora se pide explícitamente.
+ *
+ * ## Por qué estos tests CUENTAN en lugar de preguntar
+ *
+ * Preguntarle a la celda nueva si tiene la marca es exactamente lo que ya hacen
+ * los tests de más arriba, y seguía siendo cierto con el bug: la celda nueva
+ * tenía su clase, y la vieja tenía además el anillo del navegador. La única
+ * aserción que puede fallar ante este bug es cuántos anillos hay en TODA la
+ * grilla.
+ */
+describe('selection ring — exactly one cell is ever painted', () => {
+  /** Celdas con la marca de activa en toda la grilla. */
+  function activeCells(harness: TableHarness): HTMLElement[] {
+    return [...harness.grid.querySelectorAll('.dt-cell--active')].filter(
+      (node): node is HTMLElement => node instanceof HTMLElement,
+    )
+  }
+
+  /** Celda del pool que tenga el foco del DOM, o `null`. */
+  function focusedCell(): Element | null {
+    const focused = document.activeElement
+    if (focused === null) return null
+    return focused.classList.contains('dt-cell') ? focused : null
+  }
+
+  it('mouse then keyboard leaves exactly one painted cell', async () => {
+    const harness = await mountGrid()
+    await harness.clickCell(2, 'name')
+    expect(activeCells(harness)).toHaveLength(1)
+
+    await harness.press('ArrowDown')
+
+    const painted = activeCells(harness)
+    expect(painted).toHaveLength(1)
+    expect(painted[0]).toBe(harness.cell(3, 'name'))
+    harness.unmount()
+  })
+
+  it('keyboard then mouse also leaves exactly one', async () => {
+    const harness = await mountGrid()
+    await harness.press('ArrowDown')
+    await harness.press('ArrowDown')
+    expect(activeCells(harness)).toHaveLength(1)
+
+    // La transición inversa importa tanto como la otra: el bug era simétrico,
+    // porque el foco se quedaba donde lo hubiera dejado el último clic.
+    await harness.clickCell(5, 'city')
+
+    const painted = activeCells(harness)
+    expect(painted).toHaveLength(1)
+    expect(painted[0]).toBe(harness.cell(5, 'city'))
+    harness.unmount()
+  })
+
+  it('no pooled cell carries a tabindex attribute', async () => {
+    const harness = await mountGrid()
+    await harness.clickCell(2, 'name')
+    await harness.press('ArrowDown')
+
+    const cells = [...harness.canvas.querySelectorAll('.dt-cell')]
+    expect(cells.length).toBeGreaterThan(0)
+    // Es la causa raíz, y por eso se verifica el mecanismo y no solo el
+    // síntoma: con `tabindex` la celda vuelve a ser enfocable y el navegador
+    // vuelve a tener dónde dibujar un segundo anillo. Una celda es un
+    // `gridcell` y nada más.
+    for (const cell of cells) {
+      expect(cell.hasAttribute('tabindex')).toBe(false)
+    }
+    harness.unmount()
+  })
+
+  it('never leaves a pooled cell as the focused element', async () => {
+    const harness = await mountGrid()
+
+    await harness.clickCell(2, 'name')
+    expect(focusedCell()).toBeNull()
+
+    await harness.press('ArrowDown')
+    expect(focusedCell()).toBeNull()
+
+    await harness.press('ArrowRight')
+    expect(focusedCell()).toBeNull()
+
+    // Y tampoco después de scrollear, que es cuando un nodo enfocado pasaría a
+    // representar otra fila sin que el usuario moviera nada.
+    await harness.scrollTo({ top: 20 * ROW_HEIGHT })
+    expect(focusedCell()).toBeNull()
+    harness.unmount()
+  })
+
+  it('clicking a cell moves the focus to the viewport, so the next arrow key lands', async () => {
+    const harness = await mountGrid()
+
+    await harness.clickCell(2, 'name')
+
+    // El manejador de teclado vive en el viewport y solo ve las teclas si el
+    // foco está ahí adentro. Antes esto pasaba de rebote por el `tabindex` de
+    // la celda; sin él, hay que pedirlo.
+    expect(document.activeElement).toBe(harness.viewport)
+
+    await harness.press('ArrowDown')
+
+    expect(lastActiveCell(harness.wrapper)).toEqual({ rowIndex: 3, columnKey: 'name' })
+    harness.unmount()
+  })
+
+  it('does not steal the focus on click when selection is off', async () => {
+    const harness = await mountGrid({ selectionMode: 'none' })
+    const outside = document.createElement('button')
+    document.body.appendChild(outside)
+    outside.focus()
+
+    await harness.clickCell(2, 'name')
+
+    // Sin selección la tabla no participa del teclado: quitarle el foco a lo
+    // que el usuario estuviera usando sería peor que no hacer nada.
+    expect(document.activeElement).toBe(outside)
+    outside.remove()
+    harness.unmount()
+  })
+
+  it('the editor takes the focus, and gives it back to the viewport on Escape', async () => {
+    const harness = await mountGrid()
+    await harness.clickCell(2, 'name')
+
+    await harness.doubleClickCell(2, 'name')
+
+    const control = harness.editor()
+    if (!control) throw new Error('[test] no se abrió el editor')
+    expect(document.activeElement).toBe(control)
+
+    // Escape se manda al control y no al viewport: mientras hay una edición
+    // abierta el manejador del viewport se aparta, así que la tecla es del
+    // editor.
+    control.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+    )
+    await harness.flush()
+
+    expect(harness.editor()).toBeNull()
+    // Cerrar suelta el foco a propósito, y soltarlo lo manda al `body`: desde
+    // ahí el manejador del viewport no vería ni una tecla más y la flecha
+    // siguiente a un Escape no haría nada.
+    expect(document.activeElement).toBe(harness.viewport)
+
+    await harness.press('ArrowDown')
+
+    expect(lastActiveCell(harness.wrapper)).toEqual({ rowIndex: 3, columnKey: 'name' })
+    harness.unmount()
+  })
+})
+
 describe('keyboard — arrows clamp at the edges instead of wrapping', () => {
   it('ArrowDown moves one row down', async () => {
     const harness = await mountGrid()

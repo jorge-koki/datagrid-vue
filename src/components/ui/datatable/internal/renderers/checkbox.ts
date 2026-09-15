@@ -42,8 +42,11 @@ export const checkboxRenderer: AnyCellRenderer = {
   create(cell: HTMLElement): CellRendererHandle {
     const input = createElement('input', 'dt-checkbox')
     input.type = 'checkbox'
-    // La celda ya es enfocable y maneja el teclado; el input no debe sumar una
-    // segunda parada de tabulación por cada celda visible.
+    // Fuera del orden de tabulación: con ~450 celdas visibles, una parada por
+    // casilla haría imposible atravesar la tabla con Tab. La celda no es
+    // enfocable y el teclado lo maneja el viewport, así que la casilla no tiene
+    // que ofrecer una parada propia. Sigue siendo enfocable por clic, que es lo
+    // que necesita para comportarse como un control nativo.
     input.tabIndex = -1
     cell.appendChild(input)
 
