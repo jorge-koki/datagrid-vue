@@ -419,12 +419,50 @@ function moveActiveTo(rowIndex: number, columnIndex: number): void {
   scrollToCell(position)
 }
 
-/** Mueve la selección relativa a donde está. Se acota en los bordes, no da la vuelta. */
+/**
+ * Índice con el que entra un eje cuando todavía no hay nada seleccionado.
+ *
+ * La selección entra a la grilla por el borde OPUESTO al sentido del
+ * movimiento, que es de donde viene: bajando se entra por arriba, subiendo se
+ * entra por abajo. Un delta nulo no expresa intención sobre ese eje y arranca
+ * por el principio.
+ */
+function seedIndexFor(delta: number, count: number): number {
+  return delta < 0 ? count - 1 : 0
+}
+
+/**
+ * Mueve la selección relativa a donde está. Se acota en los bordes, no da la
+ * vuelta.
+ *
+ * ## Sin celda activa la tecla SIEMBRA, no mueve
+ *
+ * Esta función tomaba el origen (0, primera columna) cuando no había selección y
+ * después le aplicaba el delta, con lo cual la primera flecha hacia abajo
+ * aterrizaba en la fila 1 y se salteaba la 0. El error no está en el acotado
+ * sino en el orden: sin celda activa no existe un "donde está" al que aplicarle
+ * un desplazamiento, así que la primera tecla tiene que FIJAR la posición y no
+ * moverse desde una inventada.
+ *
+ * Con la posición sembrada, la primera flecha hacia abajo o hacia la derecha
+ * selecciona la primera fila o la primera columna visible, y la primera flecha
+ * hacia arriba o hacia la izquierda selecciona la última. La misma regla vale
+ * para PageUp y PageDown, que también son movimientos con sentido.
+ *
+ * `Home` y `End` no pasan por acá justamente porque no son movimientos con
+ * sentido sino saltos absolutos: ver el manejador de teclado.
+ */
 function moveActiveBy(rowDelta: number, columnDelta: number): void {
   const current = activeCell.value
-  const rowIndex = current ? current.rowIndex : 0
-  const columnIndex = current ? Math.max(activeColumnIndex.value, 0) : 0
-  moveActiveTo(rowIndex + rowDelta, columnIndex + columnDelta)
+  if (!current) {
+    moveActiveTo(
+      seedIndexFor(rowDelta, props.rows.length),
+      seedIndexFor(columnDelta, resolvedColumns.value.length),
+    )
+    return
+  }
+
+  moveActiveTo(current.rowIndex + rowDelta, Math.max(activeColumnIndex.value, 0) + columnDelta)
 }
 
 /**
@@ -513,7 +551,11 @@ function onViewportKeyDown(event: KeyboardEvent): void {
     case 'Home':
       event.preventDefault()
       if (ctrl) moveActiveTo(0, 0)
-      else moveActiveBy(0, -Number.MAX_SAFE_INTEGER)
+      // Absoluto, igual que `End` acá abajo, y no un delta negativo enorme que
+      // `moveActiveTo` termine acotando. Expresado como delta, `Home` sería un
+      // movimiento "hacia la izquierda" y sin celda activa entraría por el borde
+      // derecho, que es exactamente lo contrario de lo que significa `Home`.
+      else moveActiveTo(activeCell.value?.rowIndex ?? 0, 0)
       return
     case 'End':
       event.preventDefault()

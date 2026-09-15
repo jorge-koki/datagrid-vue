@@ -487,21 +487,27 @@ describe('useCellEditor — how an edit session ends', () => {
     harness.unmount()
   })
 
-  it('opening another cell commits the previous one', () => {
+  it('opening another cell commits the previous one and LEAVES THE NEW ONE OPEN', () => {
     const harness = mountEditor()
     harness.editor.beginEdit(NAME_CELL)
     const control = harness.control()
     if (!control) throw new Error('[test] no hay editor abierto')
+    control.focus()
     control.value = 'Grace'
 
     harness.editor.beginEdit(AMOUNT_CELL)
 
     expect(harness.committed).toHaveLength(1)
     expect(harness.committed[0]?.columnKey).toBe('name')
-    // Deliberadamente no se afirma nada sobre el editor NUEVO en este camino.
-    // Cambiar de celda sin que el control anterior haya perdido el foco deja el
-    // `blur` del control viejo pendiente, y cuándo se dispara depende del
-    // entorno. Ver el test siguiente, que cubre la secuencia real del navegador.
+    // El editor nuevo tiene que quedar ABIERTO. Antes, el control anterior
+    // conservaba el foco del DOM al cerrarse, y enfocar el control nuevo le
+    // disparaba un `blur` que confirmaba de nuevo: cerraba la edición recién
+    // abierta y emitía un `afterEdit` fantasma. `close()` ahora suelta el foco
+    // dentro de la región guardada, así que esa secuencia ya no existe.
+    expect(harness.editor.editing.value).toEqual(AMOUNT_CELL)
+    // Exactamente un `afterEdit`, el de la celda que se cerró de verdad.
+    expect(harness.after).toHaveLength(1)
+    expect(harness.after[0]?.columnKey).toBe('name')
     harness.unmount()
   })
 
@@ -512,15 +518,78 @@ describe('useCellEditor — how an edit session ends', () => {
     if (!control) throw new Error('[test] no hay editor abierto')
     control.value = 'Grace'
 
-    // Es la secuencia real: apuntar a otra celda mueve el foco primero, y el
-    // `blur` del control anterior confirma la edición antes de que el manejador
-    // de la tabla llegue a pedir la apertura del editor nuevo.
+    // La otra secuencia posible: apuntar a otra celda mueve el foco primero, y
+    // el `blur` del control anterior confirma la edición antes de que el
+    // manejador de la tabla llegue a pedir la apertura del editor nuevo.
     control.blur()
     harness.editor.beginEdit(AMOUNT_CELL)
 
     expect(harness.committed).toHaveLength(1)
     expect(harness.committed[0]?.columnKey).toBe('name')
     expect(harness.editor.editing.value).toEqual(AMOUNT_CELL)
+    harness.unmount()
+  })
+
+  it('switches between two cells that SHARE a control without closing the new one', () => {
+    const harness = mountEditor()
+    harness.editor.beginEdit(NAME_CELL)
+    const first = harness.control()
+    if (!first) throw new Error('[test] no hay editor abierto')
+    first.focus()
+    first.value = 'Grace'
+
+    // Dos celdas de texto reusan el MISMO `<input>`: es el caso que la simple
+    // comparación de identidad en `handleBlur` no puede distinguir, y el que
+    // obliga a soltar el foco explícitamente al cerrar.
+    harness.editor.beginEdit({ rowIndex: 1, columnKey: 'name' })
+
+    expect(harness.control()).toBe(first)
+    expect(harness.editor.editing.value).toEqual({ rowIndex: 1, columnKey: 'name' })
+    expect(harness.after).toHaveLength(1)
+    expect(harness.committed).toHaveLength(1)
+    expect(harness.committed[0]?.rowIndex).toBe(0)
+    harness.unmount()
+  })
+
+  it('releases DOM focus when it closes, so the browser cannot queue a stray blur', () => {
+    const harness = mountEditor()
+    harness.editor.beginEdit(NAME_CELL)
+    const control = harness.control()
+    if (!control) throw new Error('[test] no hay editor abierto')
+    control.focus()
+    expect(document.activeElement).toBe(control)
+
+    harness.editor.commit()
+
+    // Es la mitad del arreglo que `happy-dom` no puede observar de otra forma.
+    // En un navegador real, ocultar un elemento enfocado dispara la regla de
+    // corrección de foco y con ella un `blur` que el motor emite por su cuenta;
+    // si ese `blur` llegara con el editor siguiente ya abierto sobre el MISMO
+    // control —dos celdas de texto reusan el mismo `<input>`— ninguna
+    // comparación de identidad podría distinguirlo de un blur legítimo. La
+    // defensa no es filtrar ese evento: es que no llegue a existir, soltando el
+    // foco nosotros mientras la guarda de reentrada está levantada.
+    expect(document.activeElement).not.toBe(control)
+    harness.unmount()
+  })
+
+  it('ignores a blur that the previous control delivers late', () => {
+    const harness = mountEditor()
+    harness.editor.beginEdit(AMOUNT_CELL)
+    const numberControl = harness.control()
+    if (!numberControl) throw new Error('[test] no hay editor abierto')
+
+    harness.editor.beginEdit(NAME_CELL)
+    const textControl = harness.control()
+    expect(textControl).not.toBe(numberControl)
+
+    // Un entorno puede diferir la entrega del `blur` del control anterior. Si
+    // llega tarde, sigue sin decir nada sobre la edición en curso: el control que
+    // lo emite ya no es el activo.
+    numberControl.dispatchEvent(new Event('blur'))
+
+    expect(harness.editor.editing.value).toEqual(NAME_CELL)
+    expect(harness.after).toHaveLength(1)
     harness.unmount()
   })
 

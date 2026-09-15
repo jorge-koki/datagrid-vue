@@ -275,8 +275,8 @@ describe('useTablePersistence — debounce', () => {
   })
 })
 
-describe('useTablePersistence — a failing adapter does not disable saving forever', () => {
-  it('keeps attempting to save after the adapter throws once', async () => {
+describe('useTablePersistence — a failing adapter does not take the grid down', () => {
+  it('absorbs a synchronous throw from inside the debounce timer', async () => {
     let calls = 0
     const save = vi.fn(() => {
       calls += 1
@@ -287,15 +287,105 @@ describe('useTablePersistence — a failing adapter does not disable saving fore
 
     harness.state.value = { ...emptyState(), columnWidths: { a: 200 } }
     await nextTick()
-    // El contrato del adaptador es absorber sus fallas; uno que las propaga hace
-    // que el error salga por el timer. Lo que importa es lo que pasa después.
-    expect(() => vi.advanceTimersByTime(300)).toThrow('quota exceeded')
+
+    // El contrato del adaptador es absorber sus propias fallas, así que uno que
+    // las propaga es una violación del lado del consumidor. Aun así no puede
+    // escapar: `writeNow` corre dentro del callback del timer del debounce, y una
+    // excepción ahí no tiene a nadie arriba que la atrape. No sube por la pila de
+    // quien redimensionó la columna ni la ve un error boundary: termina como un
+    // error global. Perder una preferencia de layout es una molestia; tumbar la
+    // aplicación por eso es un bug nuestro.
+    expect(() => vi.advanceTimersByTime(300)).not.toThrow()
+    expect(save).toHaveBeenCalledTimes(1)
 
     harness.state.value = { ...emptyState(), columnWidths: { a: 300 } }
     await nextTick()
     vi.advanceTimersByTime(300)
 
+    // Y una falla no deja la tabla sin poder volver a intentar.
     expect(save).toHaveBeenCalledTimes(2)
+    harness.unmount()
+  })
+
+  it('attaches a rejection handler to an async adapter, instead of dropping the promise', async () => {
+    /**
+     * Promesa que cuenta cuántos manejadores de rechazo se le adjuntaron.
+     *
+     * Es la única forma de observar el segundo modo de falla desde el runner. Un
+     * rechazo sin manejar no hace fallar un test: se reporta como un aviso global
+     * del proceso, en otro momento y sin atribución al test que lo causó, que es
+     * exactamente lo que lo vuelve difícil de diagnosticar en producción. Contar
+     * el `catch` verifica directamente que la promesa NO se descartó, que es el
+     * contrato real.
+     *
+     * Hereda de `Promise` y no es un thenable suelto a propósito: el composable
+     * decide con `instanceof Promise`, y un objeto con `then` no pasaría esa
+     * comprobación, con lo cual el test mediría otra cosa.
+     */
+    class CountingPromise<T> extends Promise<T> {
+      static handlers = 0
+
+      override catch<R = never>(
+        onRejected?: ((reason: unknown) => R | PromiseLike<R>) | null,
+      ): Promise<T | R> {
+        CountingPromise.handlers += 1
+        return super.catch(onRejected)
+      }
+    }
+    CountingPromise.handlers = 0
+
+    const save = vi.fn(() => CountingPromise.reject(new Error('backend down')))
+    const adapter: DataTableStorageAdapter = { load: () => null, save, remove: vi.fn() }
+    const harness = mountPersistence({ tableId: 't', persist: { adapter, debounce: 0 } })
+
+    harness.state.value = { ...emptyState(), columnWidths: { a: 200 } }
+    await nextTick()
+    await vi.advanceTimersByTimeAsync(0)
+
+    // Descartar la promesa con `void` dejaba el rechazo sin manejar, que es la
+    // misma clase de error global que el throw sincrónico, por otro camino. Hay
+    // que cubrir los dos modos de falla, igual que hace la carga.
+    expect(save).toHaveBeenCalledTimes(1)
+    expect(CountingPromise.handlers).toBe(1)
+
+    harness.state.value = { ...emptyState(), columnWidths: { a: 300 } }
+    await nextTick()
+    await vi.advanceTimersByTimeAsync(0)
+
+    // Y un rechazo no deja la tabla sin poder volver a intentar.
+    expect(save).toHaveBeenCalledTimes(2)
+    expect(CountingPromise.handlers).toBe(2)
+    harness.unmount()
+  })
+
+  it('absorbs a throw from flush() on unmount, the last chance to write', async () => {
+    const save = vi.fn(() => {
+      throw new Error('quota exceeded')
+    })
+    const adapter: DataTableStorageAdapter = { load: () => null, save, remove: vi.fn() }
+    const harness = mountPersistence({ tableId: 't', persist: { adapter, debounce: 300 } })
+
+    harness.state.value = { ...emptyState(), columnWidths: { a: 200 } }
+    await nextTick()
+
+    // Desmontar vuelca lo pendiente. Si eso lanzara, el error saldría desde
+    // `onBeforeUnmount` y se llevaría puesto el desmontaje del componente.
+    expect(() => harness.unmount()).not.toThrow()
+    expect(save).toHaveBeenCalledTimes(1)
+  })
+
+  it('absorbs a throw from remove(), the other adapter write', () => {
+    const remove = vi.fn(() => {
+      throw new Error('read only storage')
+    })
+    const adapter: DataTableStorageAdapter = { load: () => null, save: vi.fn(), remove }
+    const harness = mountPersistence({ tableId: 't', persist: { adapter, debounce: 300 } })
+
+    // `clear()` es lo que hace `resetLayout()` desde la API pública: el error sí
+    // subiría por la pila de quien lo llamó, pero no poder borrar una preferencia
+    // tampoco justifica una excepción.
+    expect(() => harness.persistence.clear()).not.toThrow()
+    expect(remove).toHaveBeenCalledTimes(1)
     harness.unmount()
   })
 })

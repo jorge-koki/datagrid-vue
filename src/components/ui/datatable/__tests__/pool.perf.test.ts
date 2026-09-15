@@ -133,58 +133,96 @@ describe('node recycling — scrolling reuses nodes instead of replacing them', 
 /**
  * Presupuesto exacto de un frame de scroll vertical.
  *
- * Con una ventana de 10 filas x 3 columnas de texto, un paso de scroll escribe:
+ * ## El invariante que protege este bloque
  *
- * - 10 `style.transform`: cada fila visible pasa a representar otra fila del
- *   dataset y se reposiciona dentro del canvas. Es inevitable: las filas están
- *   posicionadas en coordenadas absolutas del contenido.
- * - 10 `data-row-key` + 10 `aria-rowindex` = 20 atributos: identidad de fila,
- *   una escritura por fila y no por celda (ver el bloque de ARIA más abajo).
- * - 30 `textContent`: una por celda visible, porque las tres columnas tienen
- *   valores distintos en cada fila.
+ * El pool ROTA: la fila `i` se pinta en el slot `i % poolSize`, así que una fila
+ * que sigue visible después de un scroll conserva su nodo Y su índice, y el
+ * caché de `internal/dom.ts` la deja pasar sin escribir nada. En consecuencia:
  *
- * Total: 60. Lo que este número protege NO es su magnitud sino su
- * INDEPENDENCIA: es idéntico si se scrollea una fila o ciento cincuenta, y es
- * idéntico con 200 filas que con 100.000. El costo por frame depende del
- * tamaño de la ventana, nunca del tamaño del dataset ni de la distancia
- * recorrida. Esa es toda la tesis de la virtualización, expresada como un
- * número.
+ * **el costo de un frame es proporcional a la cantidad de filas que ENTRARON a
+ * la ventana, no al tamaño de la ventana.**
  *
- * Si este test falla hacia arriba, alguien agregó una escritura por celda al
- * camino caliente. Si falla hacia abajo, puede ser una mejora real: verificá que
- * el contenido siga siendo correcto antes de bajar la constante.
+ * El tamaño de la ventana sigue existiendo como COTA SUPERIOR: un salto largo no
+ * puede costar más que repintarla entera, porque no hay más nodos que repintar.
+ * Esa cota es lo que mantiene acotado el peor caso; lo que cambió es que el caso
+ * COMÚN —el scroll de una rueda, una tecla de flecha, un arrastre— ya no lo paga.
+ *
+ * Una fila que entra cuesta, con tres columnas de texto:
+ *
+ * - 1 `style.transform`: se reposiciona dentro del canvas. Es inevitable, las
+ *   filas están en coordenadas absolutas del contenido.
+ * - 2 atributos: `data-row-key` y `aria-rowindex`, la identidad de la fila. Van
+ *   en la FILA y no en cada celda (ver el bloque de ARIA más abajo).
+ * - 3 `textContent`: una por celda, porque las tres columnas tienen valores
+ *   distintos en cada fila.
+ *
+ * Total: 6 por fila entrante. Las otras nueve filas de la ventana atraviesan el
+ * pintado sin tocar el DOM ni una vez.
+ *
+ * Si estos números fallan hacia arriba, lo más probable es que alguien haya roto
+ * la rotación —volviendo al mapeo `rowRange.start + slot`— y el costo haya vuelto
+ * a ser proporcional a la ventana. Si fallan hacia abajo puede ser una mejora
+ * real: verificá que el contenido siga siendo correcto antes de bajar la
+ * constante.
  */
-const SCROLL_FRAME_WRITES = 60
+const ENTERING_ROW_WRITES = 6
 
-describe('scroll cost — writes per frame are bounded by the window, not the dataset', () => {
+/** Cota superior de un frame: repintar las diez filas de la ventana. */
+const FULL_WINDOW_WRITES = ENTERING_ROW_WRITES * 10
+
+describe('scroll cost — writes per frame track the rows that entered, not the window', () => {
   const columns: readonly DataTableColumn<DemoRow>[] = [
     { key: 'name' },
     { key: 'id' },
     { key: 'amount' },
   ]
 
-  it('one scroll step over a 10x3 window writes exactly 60 times', () => {
+  it('one scroll step over a 10x3 window writes only the entering row: exactly 6', () => {
     const fixture = createPoolFixture({ rows: makeRows(200), columns, visibleRows: 10 })
     fixture.paint()
     fixture.paint()
 
     const measured = measureDomWrites(fixture.container, () => fixture.paint({ start: 1 }))
 
-    expect(measured.counts.total, measured.report).toBe(SCROLL_FRAME_WRITES)
-    expect(measured.counts.textContent, measured.report).toBe(30)
-    expect(measured.counts.style, measured.report).toBe(10)
-    expect(measured.counts.attribute, measured.report).toBe(20)
+    expect(measured.counts.total, measured.report).toBe(ENTERING_ROW_WRITES)
+    // Tres textos: los de la única fila que entró. Las nueve filas que siguen
+    // en pantalla conservan su nodo y su índice, así que no escriben nada.
+    expect(measured.counts.textContent, measured.report).toBe(3)
+    expect(measured.counts.style, measured.report).toBe(1)
+    expect(measured.counts.attribute, measured.report).toBe(2)
+    // Rotar no oculta ni muestra nada mientras el pool y la ventana miden igual:
+    // el slot que libera la fila que sale lo ocupa la fila que entra.
+    expect(measured.counts.hidden, measured.report).toBe(0)
     fixture.destroy()
   })
 
-  it('jumping 150 rows costs the same as scrolling one', () => {
+  it('scrolling half a window repaints exactly that half', () => {
     const fixture = createPoolFixture({ rows: makeRows(200), columns, visibleRows: 10 })
     fixture.paint()
     fixture.paint()
 
-    const measured = measureDomWrites(fixture.container, () => fixture.paint({ start: 150 }))
+    const measured = measureDomWrites(fixture.container, () => fixture.paint({ start: 5 }))
 
-    expect(measured.counts.total, measured.report).toBe(SCROLL_FRAME_WRITES)
+    // Entran cinco filas (10..14) y se quedan cinco (5..9). El costo es
+    // exactamente la mitad de repintar la ventana, no la ventana entera.
+    expect(measured.counts.total, measured.report).toBe(ENTERING_ROW_WRITES * 5)
+    expect(measured.counts.textContent, measured.report).toBe(15)
+    fixture.destroy()
+  })
+
+  it('a jump larger than the window is bounded by the window, never more', () => {
+    const fixture = createPoolFixture({ rows: makeRows(200), columns, visibleRows: 10 })
+    fixture.paint()
+    fixture.paint()
+
+    // Saltar 25 filas no deja ninguna fila en común, así que entran las diez.
+    const near = measureDomWrites(fixture.container, () => fixture.paint({ start: 25 }))
+    expect(near.counts.total, near.report).toBe(FULL_WINDOW_WRITES)
+
+    // Y saltar 150 más tampoco puede costar más: no hay más nodos que repintar.
+    // Esta es la cota que la virtualización garantiza y que la rotación conserva.
+    const far = measureDomWrites(fixture.container, () => fixture.paint({ start: 175 }))
+    expect(far.counts.total, far.report).toBe(FULL_WINDOW_WRITES)
     fixture.destroy()
   })
 
@@ -195,20 +233,204 @@ describe('scroll cost — writes per frame are bounded by the window, not the da
 
     const measured = measureDomWrites(fixture.container, () => fixture.paint({ start: 90_001 }))
 
-    expect(measured.counts.total, measured.report).toBe(SCROLL_FRAME_WRITES)
+    expect(measured.counts.total, measured.report).toBe(ENTERING_ROW_WRITES)
     fixture.destroy()
   })
 
-  it('a wider window costs proportionally more, confirming the window is the only factor', () => {
+  it('a wider window costs the SAME per step, because only the entering row writes', () => {
     const fixture = createPoolFixture({ rows: makeRows(200), columns, visibleRows: 20 })
     fixture.paint()
     fixture.paint()
 
     const measured = measureDomWrites(fixture.container, () => fixture.paint({ start: 1 }))
 
-    // El doble de filas visibles con las mismas tres columnas: 20 transforms,
-    // 40 atributos de identidad y 60 textos.
-    expect(measured.counts.total, measured.report).toBe(120)
+    // El doble de filas visibles y el mismo costo. Antes de rotar, este número
+    // era 120: el doble de la ventana de diez. Ahora la ventana ya no aparece en
+    // el costo de un paso, solo en la cota de un salto.
+    expect(measured.counts.total, measured.report).toBe(ENTERING_ROW_WRITES)
+    fixture.destroy()
+  })
+
+  it('a wider window raises only the JUMP bound, proportionally', () => {
+    const fixture = createPoolFixture({ rows: makeRows(200), columns, visibleRows: 20 })
+    fixture.paint()
+    fixture.paint()
+
+    const measured = measureDomWrites(fixture.container, () => fixture.paint({ start: 50 }))
+
+    // Veinte filas entrantes por 6 escrituras cada una. La cota sigue siendo
+    // proporcional a la ventana, que es lo que la mantiene acotada.
+    expect(measured.counts.total, measured.report).toBe(ENTERING_ROW_WRITES * 20)
+    fixture.destroy()
+  })
+
+  it('a row that stayed visible keeps the very same DOM node', () => {
+    const fixture = createPoolFixture({ rows: makeRows(200), columns, visibleRows: 10 })
+    fixture.paint()
+
+    // Identidad, no igualdad: es la referencia al nodo lo que tiene que
+    // sobrevivir. Si cambiara, el caché de pintado viajaría con el nodo viejo y
+    // la fila se repintaría entera aunque muestre lo mismo.
+    const before = fixture.pool.getCellElement(5, 'name')
+    expect(before).not.toBeNull()
+
+    fixture.paint({ start: 1 })
+
+    expect(fixture.pool.getCellElement(5, 'name')).toBe(before)
+    // Y el nodo sigue diciendo lo que decía: rotar no mueve el contenido de una
+    // fila a otra.
+    expect(before?.textContent).toBe('Row 5')
+    // La fila que salió de la ventana ya no se resuelve, aunque su nodo siga en
+    // el pool reciclado para otra fila.
+    expect(fixture.pool.getCellElement(0, 'name')).toBeNull()
+    fixture.destroy()
+  })
+
+  it('rotation survives a pool that grows: no stale rows, no duplicates', () => {
+    const fixture = createPoolFixture({ rows: makeRows(200), columns, visibleRows: 5 })
+    // Se arranca lejos del origen para que la base del módulo importe: con
+    // start 0 los primeros slots coinciden con cualquier base y el rehash no se
+    // vería.
+    fixture.paint({ start: 10 })
+    fixture.paint({ start: 10 })
+
+    // La ventana se ensancha de 5 a 8: el pool crece y, con él, la base del
+    // módulo. TODOS los slots cambian de fila a la vez. Es el caso que rompería
+    // una implementación que solo repintara "lo que entró" sin revisitar los
+    // slots que ya estaban.
+    const measured = measureDomWrites(fixture.container, () =>
+      fixture.paint({ start: 10, end: 18 }),
+    )
+
+    // Los tres nodos nuevos se crean; ninguno se elimina.
+    expect(measured.counts.removeNode, measured.report).toBe(0)
+
+    const painted = fixture
+      .rowNodes()
+      .filter((node) => !node.hidden)
+      .map((node) => node.dataset.rowKey)
+
+    // Ocho filas pintadas, las ocho de la ventana, sin repetidos y sin ninguna
+    // sobreviviente de la ventana anterior.
+    expect(painted).toHaveLength(8)
+    expect([...painted].sort()).toEqual(['10', '11', '12', '13', '14', '15', '16', '17'].sort())
+    expect(new Set(painted).size).toBe(8)
+
+    // Y la resolución por índice sigue encontrando cada fila en su slot nuevo.
+    for (let rowIndex = 10; rowIndex < 18; rowIndex += 1) {
+      expect(fixture.pool.getCellElement(rowIndex, 'name')?.textContent).toBe(`Row ${rowIndex}`)
+    }
+    fixture.destroy()
+  })
+
+  it('rotation survives a pool that shrinks through trim()', () => {
+    const fixture = createPoolFixture({ rows: makeRows(200), columns, visibleRows: 20 })
+    fixture.paint({ start: 30 })
+
+    // `trim` es el único camino por el que el pool se achica, y achicarlo mueve
+    // la base del módulo igual que agrandarlo.
+    fixture.pool.trim(6)
+    fixture.paint({ start: 30, end: 36 })
+
+    const painted = fixture
+      .rowNodes()
+      .filter((node) => !node.hidden)
+      .map((node) => node.dataset.rowKey)
+
+    expect(painted).toHaveLength(6)
+    expect([...painted].sort()).toEqual(['30', '31', '32', '33', '34', '35'].sort())
+    for (let rowIndex = 30; rowIndex < 36; rowIndex += 1) {
+      expect(fixture.pool.getCellElement(rowIndex, 'name')?.textContent).toBe(`Row ${rowIndex}`)
+    }
+    fixture.destroy()
+  })
+})
+
+/**
+ * El eje horizontal rota con el mismo módulo, y la decisión se tomó midiendo.
+ *
+ * La duda era legítima: las columnas tienen ancho VARIABLE, así que cuántas
+ * entran en el viewport depende de dónde se esté parado, y la base del módulo se
+ * mueve mientras se scrollea. Cada vez que crece hay que rehashear las celdas de
+ * todas las filas visibles, que es mucho más caro que rehashear filas.
+ *
+ * La medición dice que igual conviene por un margen grande: ver la tabla
+ * completa en la cabecera de `useRowPool.ts`. El rehash es un evento acotado
+ * porque `growCells` solo crece, así que la base se estabiliza en la cantidad
+ * máxima de columnas que llegaron a entrar y deja de moverse.
+ *
+ * Estos tests recortan un tramo de un array de columnas ya resuelto UNA vez, que
+ * es lo que hace el componente con `resolvedColumns.slice(...)`. Importa: el
+ * módulo se aplica sobre `ResolvedColumn.index`, la posición absoluta entre las
+ * columnas visibles, y no sobre la posición dentro del tramo recortado. Resolver
+ * el tramo de cero en cada frame daría índices que arrancan en 0 siempre y la
+ * rotación no tendría contra qué rotar.
+ */
+describe('horizontal rotation — a column step writes only the entering column', () => {
+  // Anchos deliberadamente distintos: son los que vuelven interesante el eje
+  // horizontal. Con todas las columnas del mismo ancho, `setCellBox` solo
+  // reescribiría el `transform` y el test mediría la mitad del trabajo real.
+  const WIDE_COLUMNS = resolveColumns([
+    { key: 'name', width: 80 },
+    { key: 'id', width: 200 },
+    { key: 'amount', width: 120 },
+    { key: 'status', width: 60 },
+    { key: 'progress', width: 240 },
+    { key: 'choice', width: 90 },
+    { key: 'done', width: 150 },
+    { key: 'name', label: 'name again', width: 110 },
+  ])
+
+  it('scrolling one column over a 10x5 window writes only that column', () => {
+    const fixture = createPoolFixture({ rows: makeRows(200), visibleRows: 10 })
+    fixture.paint({ columns: WIDE_COLUMNS.slice(0, 5) })
+    fixture.paint({ columns: WIDE_COLUMNS.slice(0, 5) })
+
+    const measured = measureDomWrites(fixture.container, () =>
+      fixture.paint({ columns: WIDE_COLUMNS.slice(1, 6) }),
+    )
+
+    // Una columna entrante por diez filas visibles: diez celdas. Cada una
+    // escribe su texto, su caja (`transform` y `width`, porque la columna nueva
+    // está en otro offset y puede tener otro ancho) y su `aria-colindex`.
+    expect(measured.counts.textContent, measured.report).toBe(10)
+    expect(measured.counts.style, measured.report).toBe(20)
+    expect(measured.counts.attribute, measured.report).toBe(10)
+    // Las otras cuarenta celdas conservan su slot y no escriben nada. Sin rotar,
+    // este mismo paso costaba 199 escrituras.
+    expect(measured.counts.total, measured.report).toBe(40)
+    fixture.destroy()
+  })
+
+  it('a column that stayed visible keeps its DOM node and its content', () => {
+    const fixture = createPoolFixture({ rows: makeRows(200), visibleRows: 4 })
+    fixture.paint({ columns: WIDE_COLUMNS.slice(0, 5) })
+
+    const before = fixture.pool.getCellElement(2, 'status')
+    expect(before?.textContent).toBe(String(makeRows(3)[2]?.status))
+
+    fixture.paint({ columns: WIDE_COLUMNS.slice(1, 6) })
+
+    expect(fixture.pool.getCellElement(2, 'status')).toBe(before)
+    // La columna que salió del tramo ya no se resuelve.
+    expect(fixture.pool.getCellElement(2, 'name')).toBeNull()
+    fixture.destroy()
+  })
+
+  it('both axes rotate at once without interfering', () => {
+    const fixture = createPoolFixture({ rows: makeRows(200), visibleRows: 10 })
+    fixture.paint({ columns: WIDE_COLUMNS.slice(0, 5) })
+    fixture.paint({ columns: WIDE_COLUMNS.slice(0, 5) })
+
+    fixture.paint({ columns: WIDE_COLUMNS.slice(1, 6), start: 1 })
+
+    // Una celda cualquiera del cruce: la fila y la columna se resolvieron cada
+    // una por su módulo, sobre bases distintas, y el contenido es el correcto.
+    expect(fixture.pool.getCellElement(10, 'id')?.textContent).toBe('10')
+    expect(fixture.pool.getCellElement(5, 'amount')?.textContent).toBe('500')
+    // La fila y la columna que salieron ya no se resuelven.
+    expect(fixture.pool.getCellElement(0, 'id')).toBeNull()
+    expect(fixture.pool.getCellElement(5, 'name')).toBeNull()
     fixture.destroy()
   })
 })
@@ -556,8 +778,11 @@ describe('ARIA — index writes stay per row during vertical scroll', () => {
     fixture.destroy()
   })
 
-  it('writes aria-rowindex once per visible row', () => {
-    expect(countMatching(scrollWrites.entries, 'aria-rowindex'), scrollWrites.report).toBe(10)
+  it('writes aria-rowindex once per ENTERING row', () => {
+    // Antes de que el pool rotara eran diez: una por fila visible, porque las
+    // diez cambiaban de índice en cada paso. Ahora solo cambia de índice la fila
+    // que entró, y `aria-rowindex` acompaña a ese cambio y a ningún otro.
+    expect(countMatching(scrollWrites.entries, 'aria-rowindex'), scrollWrites.report).toBe(1)
   })
 
   it('writes aria-colindex zero times, because columns did not move', () => {

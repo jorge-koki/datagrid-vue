@@ -214,10 +214,42 @@ export function useTablePersistence<TRow>(
     timer = 0
   }
 
+  /**
+   * Ejecuta una escritura del adaptador sin dejar que una falla suya escape.
+   *
+   * El contrato de {@link DataTableStorageAdapter} dice que un adaptador absorbe
+   * sus propias fallas, así que uno que las propaga está violando su lado del
+   * trato. Igual se defiende, por dónde caería el error: `writeNow` corre dentro
+   * del callback del timer del debounce, y una excepción ahí no tiene a nadie
+   * arriba que la pueda atrapar. No sube por la pila de quien redimensionó la
+   * columna, no la ve un `try` del consumidor y no la ve un error boundary:
+   * termina como un error global. Que no se pueda guardar una preferencia de
+   * layout es una molestia; que se lleve puesta la aplicación es un bug nuestro,
+   * no del adaptador.
+   *
+   * Se cubren los dos modos de falla, igual que en la carga: el `try` para el
+   * adaptador que lanza de forma sincrónica y el `catch` de la promesa para el
+   * que rechaza. Descartar la promesa con `void` dejaba el rechazo sin manejar,
+   * que es la misma clase de error global por otro camino.
+   *
+   * Se falla en silencio, como en `load` y como en el adaptador de
+   * `localStorage`: no hay nada que hacer ni nada que romper, y el lugar para
+   * reportar el problema es el adaptador, que es quien sabe por qué falló.
+   */
+  function runAdapterWrite(write: () => void | Promise<void>): void {
+    let result: void | Promise<void>
+    try {
+      result = write()
+    } catch {
+      return
+    }
+    if (result instanceof Promise) result.catch(() => {})
+  }
+
   function writeNow(): void {
     const config = resolved.value
     if (!config) return
-    void config.adapter.save(config.storageKey, buildPayload(config))
+    runAdapterWrite(() => config.adapter.save(config.storageKey, buildPayload(config)))
   }
 
   function schedule(): void {
@@ -247,7 +279,12 @@ export function useTablePersistence<TRow>(
     const config = resolved.value
     if (!config) return
     cancelPending()
-    void config.adapter.remove(config.storageKey)
+    // Misma defensa que en `writeNow`: `remove` es la otra escritura del
+    // adaptador y tenía el mismo `void` que descartaba un rechazo sin manejar.
+    // Acá el error sí subiría por la pila de quien llamó a `resetLayout()`, que
+    // es menos grave que salir por un timer, pero tumbar la aplicación por no
+    // poder borrar una preferencia sigue siendo desproporcionado.
+    runAdapterWrite(() => config.adapter.remove(config.storageKey))
   }
 
   /** Aplica lo cargado si sigue siendo pertinente, y habilita el guardado. */

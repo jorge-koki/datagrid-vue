@@ -42,7 +42,7 @@ import type { CellRenderer } from '../types'
  * conserva el camino caliente, donde la reactividad no aporta nada porque ya
  * sabemos exactamente qué cambió.
  *
- * ## Las tres reglas del pool
+ * ## Las cuatro reglas del pool
  *
  * 1. **Los nodos se reciclan, no se crean.** El pool crece cuando crece la
  *    cantidad visible y nunca se achica durante el scroll. Crear y destruir
@@ -57,6 +57,69 @@ import type { CellRenderer } from '../types'
  *    nodos se reciclan por slot horizontal, un mismo nodo puede pasar de una
  *    columna a otra con renderer distinto, y ahí hay que reconstruirlo. Ver
  *    `ensureRenderer`, que es el punto más sutil de este archivo.
+ *
+ * ## El pool ROTA: por qué un paso de scroll no repinta la ventana
+ *
+ * El mapeo fila -> slot es `rowIndex % poolSize`, no `rowIndex - rowRange.start`.
+ * La diferencia es toda la tesis de este archivo.
+ *
+ * Con el mapeo por resta, el slot 0 es siempre la fila superior visible: al
+ * scrollear una sola fila, las N filas visibles cambian de índice y las N
+ * repintan, aunque N-1 de ellas sigan en pantalla mostrando exactamente el mismo
+ * dato. Con el mapeo por módulo, una fila que sigue visible conserva su slot, y
+ * conservar el slot significa conservar el mismo nodo del DOM con el mismo
+ * `__dtRowIndex`: el caché de `internal/dom.ts` corta antes de tocar el DOM y esa
+ * fila no escribe absolutamente nada. Solo repintan las filas que ENTRARON.
+ *
+ * Esto es posible porque las filas se posicionan con `translate3d`, así que el
+ * orden del DOM ya es irrelevante para el orden visual. Rotar reordena qué nodo
+ * muestra qué fila, nunca dónde se ve cada fila: la rotación es invisible.
+ *
+ * El costo por frame pasa de ser proporcional al TAMAÑO DE LA VENTANA a ser
+ * proporcional a la CANTIDAD DE FILAS QUE ENTRARON, con el tamaño de la ventana
+ * como cota superior para un salto largo. Un paso de scroll sobre una ventana de
+ * 10x3 pasa de 60 escrituras a 6.
+ *
+ * ### Los dos ejes rotan, y el horizontal se decidió midiendo
+ *
+ * La duda razonable era el eje horizontal. A diferencia de las filas, las
+ * columnas tienen ancho VARIABLE, así que cuántas entran en el viewport depende
+ * de dónde se esté parado: la base del módulo —la cantidad de celdas del pool de
+ * una fila— se mueve mientras se scrollea, y cada vez que crece hay que rehashear
+ * todas las celdas de todas las filas visibles. Además, con la base por encima de
+ * la cantidad de columnas visibles quedan celdas sobrantes que se ocultan y se
+ * muestran al rotar, y eso cuesta escrituras de `hidden` por FILA, no por frame.
+ * Con las columnas siendo un orden de magnitud menos que las filas, era
+ * perfectamente plausible que la rotación horizontal no se pagara sola.
+ *
+ * Se midió en lugar de suponer, sobre una ventana de 10 filas x 5 columnas de
+ * ancho variable, contando escrituras reales al DOM con la grabadora de la suite:
+ *
+ * | Escenario                              | Sin rotar | Rotando | Factor |
+ * | -------------------------------------- | --------- | ------- | ------ |
+ * | Un paso horizontal, 5 columnas fijas   |       199 |      40 |  5,0x  |
+ * | Paso que ensancha la ventana (5 -> 6)  |       289 |     130 |  2,2x  |
+ * | Paso que angosta la ventana (6 -> 5)   |       209 |      10 | 20,9x  |
+ * | 12 pasos con la ventana oscilando 5<->6|      1598 |     390 |  4,1x  |
+ * | 12 pasos con la ventana estable        |      2293 |     420 |  5,5x  |
+ *
+ * El costo del rehash es real y se ve en la fila del ensanchamiento, que es la de
+ * peor factor; lo que la hipótesis subestimaba es que ese rehash es un evento
+ * ACOTADO. `growCells` solo crece, así que la base se estabiliza en la cantidad
+ * máxima de columnas que llegaron a entrar, exactamente igual que el pool de
+ * filas. La oscilación posterior de la ventana ya no mueve la base: angostar sale
+ * casi gratis porque las columnas que se quedan conservan su slot. Incluso en el
+ * barrido con la ventana oscilando en cada paso —el caso construido para que la
+ * rotación se vea lo peor posible— rotar cuesta cuatro veces menos.
+ *
+ * Con anchos de columna uniformes el escenario "ventana estable" es el único que
+ * ocurre, y ahí el factor es 5,5x.
+ *
+ * Los dos ejes son seguros de rotar por el mismo motivo: `.dt-row` y `.dt-cell`
+ * son `position: absolute` y se posicionan con `transform`, así que el orden del
+ * DOM no interviene en el orden visual de ninguno de los dos. Y la posición que
+ * anuncia un lector de pantalla viaja por `aria-rowindex` y `aria-colindex`, que
+ * es justamente para lo que estaban desde el principio.
  *
  * ## Por qué es TypeScript plano
  *
@@ -153,6 +216,12 @@ export interface RowPool<TRow> {
    * Solo debe llamarse ante un cambio de tamaño del viewport, jamás durante el
    * scroll: achicar el pool mientras se scrollea destruiría los mismos nodos que
    * el próximo frame va a necesitar.
+   *
+   * Achicar el pool mueve la base de la rotación, así que invalida el mapeo
+   * fila -> slot de todos los nodos que sobreviven. Hasta el próximo `paint`,
+   * `getCellElement` devuelve `null` para cualquier fila: es la respuesta
+   * correcta, porque en ese intervalo ningún nodo representa con certeza a la
+   * fila que dice representar.
    */
   trim(visibleRowCount: number): void
   /**
@@ -188,10 +257,13 @@ export function useRowPool<TRow extends Record<string, unknown>>(
   let container: HTMLElement | null = null
 
   /**
-   * Nodos de fila indexados por slot de viewport, no por índice de fila.
+   * Nodos de fila indexados por slot del pool.
    *
-   * El slot 0 es siempre la fila superior visible. Al scrollear, el slot 0 pasa
-   * a representar otra fila del dataset: esa indirección es todo el reciclado.
+   * El slot de una fila es `rowIndex % rows.length`, así que el orden de este
+   * array NO coincide con el orden visual: el slot 0 puede estar mostrando la
+   * última fila de la ventana. Lo que importa es que una fila que sigue visible
+   * después de un scroll conserva su slot, y por lo tanto su nodo. Ver el bloque
+   * "El pool ROTA" en la cabecera del archivo.
    */
   const rows: PooledRowElement[] = []
 
@@ -279,10 +351,61 @@ export function useRowPool<TRow extends Record<string, unknown>>(
 
   function trim(visibleRowCount: number): void {
     const keep = Math.max(0, Math.floor(visibleRowCount)) + ROW_POOL_SLACK
+    if (rows.length <= keep) return
+
     while (rows.length > keep) {
       const node = rows.pop()
       if (node) releaseRow(node)
     }
+
+    // El tamaño del pool es la base del módulo, así que achicarlo corre el slot
+    // de TODAS las filas que sobreviven. Se marcan como no pintadas para que
+    // `getCellElement` no devuelva un nodo que ya no representa lo que dice
+    // representar durante la ventana que va desde acá hasta el próximo pintado.
+    // El pintado siguiente recalcula el slot de cada fila y repinta lo que
+    // efectivamente cambió; `setRowKey` y `setRowAriaIndex` tienen su propio
+    // caché, así que una fila que conserva su índice no vuelve a escribir.
+    for (const node of rows) node.__dtRowIndex = UNPAINTED_ROW_INDEX
+  }
+
+  /**
+   * Slot que le corresponde a un índice dentro de un pool de `poolSize` nodos.
+   *
+   * Sirve para los dos ejes: un índice de fila contra el pool de filas, o un
+   * índice de columna contra el pool de celdas de una fila.
+   *
+   * El doble módulo cubre el argumento negativo, que aparece al despejar el
+   * índice a partir de un slot: `-1 % 10` es `-1` en JavaScript, y un índice
+   * negativo saldría del array.
+   */
+  function slotFor(index: number, poolSize: number): number {
+    return ((index % poolSize) + poolSize) % poolSize
+  }
+
+  /**
+   * Índice que le toca pintar a un slot, o `-1` si al slot no le toca ninguno.
+   *
+   * Es la inversa de {@link slotFor} acotada a la ventana: el slot
+   * `(start + k) % poolSize` corresponde al índice `start + k`, y solo hay índice
+   * si ese `k` cae dentro de los `count` elementos visibles. Como `count` nunca
+   * supera `poolSize` —`growRows` y `growCells` lo garantizan— el mapeo es
+   * inyectivo y ningún slot puede reclamar dos índices.
+   *
+   * Que esta función se evalúe para TODOS los slots en cada pintado es lo que
+   * vuelve intrínsecamente seguro el cambio de tamaño del pool: cuando la base
+   * del módulo se mueve, cada slot recibe el índice que le corresponde con la
+   * base nueva o se oculta, y no queda nada viejo pintado. No hace falta una
+   * pasada de invalidación aparte, y no puede quedar un slot sin visitar.
+   */
+  function windowIndexForSlot(
+    slot: number,
+    start: number,
+    count: number,
+    poolSize: number,
+  ): number {
+    if (count <= 0) return -1
+    const offset = slotFor(slot - start, poolSize)
+    return offset < count ? start + offset : -1
   }
 
   function paint(state: RowPoolPaintState<TRow>): void {
@@ -291,6 +414,12 @@ export function useRowPool<TRow extends Record<string, unknown>>(
     const { rowRange, columns, rowHeight, editing, active, selectionMode, stripe } = state
     const visibleRowCount = Math.max(0, rowRange.end - rowRange.start)
     const visibleColumnCount = columns.length
+    // Índice ABSOLUTO de la primera columna del tramo, que es la base de la
+    // rotación horizontal. `columns` llega ya recortado, así que su índice 0 no
+    // es la columna 0 de la tabla; `ResolvedColumn.index` sí es la posición real
+    // dentro de las columnas visibles y es lo único con lo que el módulo tiene
+    // sentido de un frame al siguiente.
+    const columnStart = columns[0]?.index ?? 0
 
     growRows(visibleRowCount)
 
@@ -334,13 +463,21 @@ export function useRowPool<TRow extends Record<string, unknown>>(
       cellSelectionActive: selectionMode === 'cell',
     }
 
-    for (let slot = 0; slot < rows.length; slot += 1) {
+    // Se lee una sola vez: es la base del módulo de toda la rotación y no puede
+    // cambiar en medio del recorrido, porque `growRows` ya terminó.
+    const poolSize = rows.length
+
+    for (let slot = 0; slot < poolSize; slot += 1) {
       const rowNode = rows[slot]
       if (!rowNode) continue
 
+      const rowIndex = windowIndexForSlot(slot, rowRange.start, visibleRowCount, poolSize)
+
       // Los slots sobrantes se ocultan, no se eliminan: el próximo scroll hacia
-      // abajo o un resize los va a volver a pedir.
-      if (slot >= visibleRowCount) {
+      // abajo o un resize los va a volver a pedir. Con el pool rotando, cuál es
+      // el slot sobrante cambia en cada paso, pero la CANTIDAD de sobrantes es
+      // siempre `poolSize - visibleRowCount`.
+      if (rowIndex < 0) {
         if (rowNode.__dtRowIndex !== UNPAINTED_ROW_INDEX) {
           rowNode.__dtRowIndex = UNPAINTED_ROW_INDEX
         }
@@ -348,7 +485,6 @@ export function useRowPool<TRow extends Record<string, unknown>>(
         continue
       }
 
-      const rowIndex = rowRange.start + slot
       const row = state.rows[rowIndex]
       // Guarda de `noUncheckedIndexedAccess`. Además cubre el caso real de que
       // `rows` se haya acortado entre el cálculo de la ventana y este pintado.
@@ -376,18 +512,30 @@ export function useRowPool<TRow extends Record<string, unknown>>(
 
       growCells(rowNode, visibleColumnCount)
       const cells = rowNode.__dtCells
+      const cellPoolSize = cells.length
 
-      for (let slotIndex = 0; slotIndex < cells.length; slotIndex += 1) {
+      for (let slotIndex = 0; slotIndex < cellPoolSize; slotIndex += 1) {
         const cellNode = cells[slotIndex]
         if (!cellNode) continue
 
-        if (slotIndex >= visibleColumnCount) {
+        // Mismo módulo que en las filas, con la columna absoluta como índice y el
+        // pool de celdas de esta fila como base. `columnStart` se resta después
+        // para volver a la posición dentro del tramo recortado que llegó por
+        // `columns`, que es lo que indexan `columns` y `renderers`.
+        const columnIndex = windowIndexForSlot(
+          slotIndex,
+          columnStart,
+          visibleColumnCount,
+          cellPoolSize,
+        )
+        if (columnIndex < 0) {
           setHidden(cellNode, true)
           continue
         }
 
-        const resolved = columns[slotIndex]
-        const renderer = renderers[slotIndex]
+        const local = columnIndex - columnStart
+        const resolved = columns[local]
+        const renderer = renderers[local]
         if (!resolved || !renderer) {
           setHidden(cellNode, true)
           continue
@@ -409,6 +557,10 @@ export function useRowPool<TRow extends Record<string, unknown>>(
    * renderers distintos, el nodo trae adentro la estructura que armó el renderer
    * anterior —un badge con su chevron, por ejemplo— y un `update` del renderer
    * de texto escribiría sobre una estructura que no es la suya.
+   *
+   * La rotación horizontal reduce muchísimo cuántas veces pasa —solo cambia de
+   * columna el slot al que le toca la columna entrante, no todos— pero no lo
+   * elimina, y ese slot es exactamente el que puede recibir otro renderer.
    *
    * Por eso cada nodo recuerda con qué tipo de renderer fue construido. Si el
    * tipo entrante coincide, que es el caso común y el único que ocurre durante
@@ -518,13 +670,31 @@ export function useRowPool<TRow extends Record<string, unknown>>(
     setCellCustomClass(cellNode, cellClass ? (cellClass(value, row, rowIndex) ?? '') : '')
   }
 
+  /**
+   * Nodo de celda de una posición lógica, o `null`.
+   *
+   * Resuelve la fila POR ROTACIÓN y no barriendo el pool: con el mapeo por
+   * módulo, el nodo de una fila está siempre en `rowIndex % poolSize`, así que la
+   * búsqueda es O(1) y no O(filas visibles). La comparación posterior contra
+   * `__dtRowIndex` no es una formalidad: es la que distingue "el slot de esta
+   * fila" de "el slot de esta fila, y además está pintada ahí ahora mismo". Un
+   * slot puede corresponder aritméticamente a una fila que quedó fuera de la
+   * ventana, y en ese caso la respuesta correcta es `null`.
+   *
+   * La horizontal sí es un barrido: las celdas también rotan, pero acá se entra
+   * con una CLAVE de columna y no con su índice, así que no hay módulo que
+   * aplicar. Son ~15 comparaciones y solo ocurren en respuesta a una interacción
+   * o una vez por frame mientras hay una celda en edición.
+   */
   function getCellElement(rowIndex: number, columnKey: string): HTMLElement | null {
-    for (const rowNode of rows) {
-      if (rowNode.__dtRowIndex !== rowIndex || rowNode.hidden) continue
-      for (const cellNode of rowNode.__dtCells) {
-        if (cellNode.__dtColumnKey === columnKey && !cellNode.hidden) return cellNode
-      }
-      return null
+    const poolSize = rows.length
+    if (poolSize === 0 || rowIndex < 0) return null
+
+    const rowNode = rows[slotFor(rowIndex, poolSize)]
+    if (!rowNode || rowNode.__dtRowIndex !== rowIndex || rowNode.hidden) return null
+
+    for (const cellNode of rowNode.__dtCells) {
+      if (cellNode.__dtColumnKey === columnKey && !cellNode.hidden) return cellNode
     }
     return null
   }

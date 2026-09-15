@@ -171,8 +171,9 @@ export function useCellEditor<TRow extends Record<string, unknown>>(
   /**
    * Evita la reentrada mientras se cierra.
    *
-   * Cerrar oculta el control, lo que dispara `blur`, cuyo handler intentaría
-   * confirmar otra vez y emitir eventos duplicados.
+   * Cerrar oculta el control y le suelta el foco, y las dos cosas disparan
+   * `blur`, cuyo handler intentaría confirmar otra vez y emitir eventos
+   * duplicados.
    */
   let closing = false
 
@@ -498,10 +499,43 @@ export function useCellEditor<TRow extends Record<string, unknown>>(
     })
   }
 
+  /**
+   * Cierra la sesión de edición en curso.
+   *
+   * ## El foco se suelta acá, a propósito y en este orden
+   *
+   * Cerrar sin soltar el foco dejaba una carrera real al pasar de un editor a
+   * otro. La secuencia era: `beginEdit` confirmaba el anterior, `close()` ocultaba
+   * su control pero lo dejaba con el foco del DOM, `editing` pasaba a la celda
+   * nueva y recién entonces `control.focus()` sobre el control nuevo disparaba el
+   * `blur` del viejo. Ese `blur` llamaba a `commit()`, que cerraba el editor
+   * RECIÉN ABIERTO y emitía un `afterEdit` fantasma sobre una edición que el
+   * usuario nunca terminó. La guarda `closing` no lo cubría porque el `blur`
+   * aterrizaba después de que `close()` ya había vuelto.
+   *
+   * El arreglo es mover la transición de foco adentro de la región guardada: se
+   * llama a `blur()` explícitamente con `closing` ya en `true`, así el handler
+   * entra, encuentra la guarda levantada y no hace nada. Cuando después se
+   * enfoca el control nuevo, el viejo ya no tiene el foco y no hay ningún `blur`
+   * pendiente que pueda llegar tarde.
+   *
+   * El `blur` explícito NO alcanza por sí solo, y por eso {@link handleBlur}
+   * además compara la identidad del control: un entorno que difiera la entrega
+   * del evento lo haría aterrizar igual después de `close()`. Y la comparación de
+   * identidad tampoco alcanza sola, porque al pasar entre dos celdas del mismo
+   * tipo de editor el control viejo y el nuevo son el MISMO nodo y la comparación
+   * no distingue nada. Hacen falta las dos, y juntas cubren tanto el orden de
+   * `happy-dom` como el de un navegador real.
+   *
+   * Se consulta `document.activeElement` antes de llamar a `blur()` para no
+   * emitir un evento sobre un control que no tenía el foco: es el caso de una
+   * confirmación por scroll, donde el usuario nunca llegó a tipear.
+   */
   function close(): void {
     closing = true
     const control = activeControl
     if (control) {
+      if (control.ownerDocument.activeElement === control) control.blur()
       control.hidden = true
       control.value = ''
     }
@@ -582,7 +616,16 @@ export function useCellEditor<TRow extends Record<string, unknown>>(
     event.stopPropagation()
   }
 
-  function handleBlur(): void {
+  /**
+   * Salir del control confirma, como al dejar una celda de una planilla.
+   *
+   * Solo confirma el control que en este momento ES el activo. Un `blur` de
+   * cualquier otro es el eco de una sesión que ya se cerró —el control anterior
+   * al cambiar de celda, típicamente— y hacerle caso cerraría el editor que se
+   * acaba de abrir. Ver el razonamiento completo en {@link close}.
+   */
+  function handleBlur(event: Event): void {
+    if (event.target !== activeControl) return
     commit()
   }
 

@@ -226,25 +226,64 @@ describe('keyboard — arrows clamp at the edges instead of wrapping', () => {
     harness.unmount()
   })
 
-  it('starts from the first cell and applies the delta when nothing is selected', async () => {
+  it('ArrowDown with nothing selected lands on row 0, it does not skip it', async () => {
     const harness = await mountGrid()
 
     await harness.press('ArrowDown')
 
-    // Sin celda activa el origen es (0, primera columna) y la tecla se aplica
-    // sobre ese origen, así que la primera flecha hacia abajo aterriza en la
-    // fila 1. Es el comportamiento vigente; cambiarlo a "la primera flecha
-    // selecciona la celda 0" sería una decisión de producto, no un arreglo.
-    expect(lastActiveCell(harness.wrapper)).toEqual({ rowIndex: 1, columnKey: 'id' })
+    // Sin celda activa no hay "donde está" al que aplicarle un desplazamiento,
+    // así que la primera tecla SIEMBRA la posición en lugar de moverse desde un
+    // origen inventado. Antes se sembraba en (0, primera columna) y recién
+    // después se aplicaba el delta, con lo cual la primera flecha hacia abajo
+    // aterrizaba en la fila 1 y la fila 0 no había forma de alcanzarla con el
+    // teclado sin pasar antes por otra.
+    expect(lastActiveCell(harness.wrapper)).toEqual({ rowIndex: 0, columnKey: 'id' })
     harness.unmount()
   })
 
-  it('clamps to the first cell when the first key press moves backwards', async () => {
-    const harness = await mountGrid()
+  it('ArrowRight with nothing selected lands on the first visible column', async () => {
+    const harness = await mountGrid({ columnVisibility: { id: false } })
+
+    await harness.press('ArrowRight')
+
+    // La primera columna VISIBLE, no la primera declarada: una columna oculta no
+    // ocupa lugar en la navegación.
+    expect(lastActiveCell(harness.wrapper)).toEqual({ rowIndex: 0, columnKey: 'name' })
+    harness.unmount()
+  })
+
+  it('ArrowUp with nothing selected enters from the bottom', async () => {
+    const harness = await mountGrid({}, 100)
 
     await harness.press('ArrowUp')
 
-    expect(lastActiveCell(harness.wrapper)).toEqual({ rowIndex: 0, columnKey: 'id' })
+    // La selección entra a la grilla por el borde OPUESTO al sentido del
+    // movimiento, que es de donde viene: bajando se entra por arriba, subiendo
+    // se entra por abajo. Antes esta tecla aterrizaba en (0, primera columna),
+    // pero solo porque el acotado tapaba un índice negativo, no porque alguien
+    // lo hubiera decidido.
+    expect(lastActiveCell(harness.wrapper)).toEqual({ rowIndex: 99, columnKey: 'id' })
+    harness.unmount()
+  })
+
+  it('ArrowLeft with nothing selected enters from the right', async () => {
+    const harness = await mountGrid()
+
+    await harness.press('ArrowLeft')
+
+    expect(lastActiveCell(harness.wrapper)).toEqual({ rowIndex: 0, columnKey: 'extra' })
+    harness.unmount()
+  })
+
+  it('announces the seeded cell exactly once, not twice', async () => {
+    const harness = await mountGrid()
+
+    await harness.press('ArrowDown')
+
+    // Sembrar no puede degenerar en "seleccionar el origen y después moverse":
+    // eso emitiría dos veces y un padre controlado vería un parpadeo de
+    // selección en una celda que el usuario nunca eligió.
+    expect(activeCellEmissions(harness.wrapper)).toBe(1)
     harness.unmount()
   })
 })
@@ -379,6 +418,43 @@ describe('keyboard — Home, End and paging', () => {
 
     expect(lastActiveCell(harness.wrapper)).toEqual({ rowIndex: 0, columnKey: 'name' })
     harness.unmount()
+  })
+
+  it('Home with nothing selected still means the FIRST column', async () => {
+    const harness = await mountGrid()
+
+    await harness.press('Home')
+
+    // `Home` es un salto absoluto, no un movimiento con sentido. Expresarlo como
+    // un delta negativo enorme lo volvía indistinguible de "hacia la izquierda",
+    // y con la siembra por sentido habría entrado por el borde derecho: el
+    // opuesto exacto de lo que significa la tecla.
+    expect(lastActiveCell(harness.wrapper)).toEqual({ rowIndex: 0, columnKey: 'id' })
+    harness.unmount()
+  })
+
+  it('End with nothing selected means the last column of the first row', async () => {
+    const harness = await mountGrid()
+
+    await harness.press('End')
+
+    expect(lastActiveCell(harness.wrapper)).toEqual({ rowIndex: 0, columnKey: 'extra' })
+    harness.unmount()
+  })
+
+  it('paging with nothing selected seeds by direction, like the arrows', async () => {
+    const down = await mountGrid({}, 100)
+    await down.press('PageDown')
+    // Misma regla que ArrowDown: la primera tecla siembra en la primera fila en
+    // lugar de aplicarle una página a un origen inventado. Antes aterrizaba en
+    // la fila 10.
+    expect(lastActiveCell(down.wrapper)).toEqual({ rowIndex: 0, columnKey: 'id' })
+    down.unmount()
+
+    const up = await mountGrid({}, 100)
+    await up.press('PageUp')
+    expect(lastActiveCell(up.wrapper)).toEqual({ rowIndex: 99, columnKey: 'id' })
+    up.unmount()
   })
 })
 
