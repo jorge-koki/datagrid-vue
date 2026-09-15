@@ -32,7 +32,8 @@ import {
   progressRenderer,
   textRenderer,
 } from '../internal/renderers'
-import type { CellRenderer, DataTableColumn } from '../types'
+import { useRowGrouping } from '../composables/useRowGrouping'
+import type { CellRenderer, DataTableColumn, FlatRow } from '../types'
 
 /**
  * Columnas de ejemplo para cada uno de los ocho renderers incluidos.
@@ -342,6 +343,283 @@ describe('scroll cost — writes per frame track the rows that entered, not the 
     for (let rowIndex = 30; rowIndex < 36; rowIndex += 1) {
       expect(fixture.pool.getCellElement(rowIndex, 'name')?.textContent).toBe(`Row ${rowIndex}`)
     }
+    fixture.destroy()
+  })
+})
+
+/**
+ * La rotación con agrupación activa.
+ *
+ * ## Qué está en juego
+ *
+ * La agrupación cambia QUÉ hay en cada posición vertical, no CÓMO se llega a
+ * ella: el aplanado se reconstruye cuando cambian los datos o la expansión, y el
+ * virtualizador sigue resolviendo la ventana con una división. Si esa separación
+ * se rompiera —si el pool tuviera que buscar la fila de una posición en lugar de
+ * indexarla, o si aplanar ocurriera por frame— la tabla se vería exactamente
+ * igual y scrollearía mucho peor.
+ *
+ * Por eso lo que se mide acá es que el presupuesto de un paso de scroll sea el
+ * MISMO que sin grupos: seis escrituras por fila entrante, con las otras nueve
+ * filas visibles —cabeceras incluidas— atravesando el pintado sin tocar el DOM.
+ *
+ * Los tests del camino SIN agrupación que están más arriba en este archivo son
+ * la otra mitad del contrato: pasan sin un solo cambio, y eso es lo que verifica
+ * que agregar esta función no le costó nada a quien no la usa.
+ */
+describe('grouping — a scroll step still costs only the rows that entered', () => {
+  const columns: readonly DataTableColumn<DemoRow>[] = [
+    { key: 'name' },
+    { key: 'id' },
+    { key: 'amount' },
+  ]
+
+  /**
+   * Doscientas filas en DOS grupos de cien.
+   *
+   * Grupos grandes a propósito: con cabeceras cada tres filas, cualquier paso de
+   * scroll cruzaría una y el número mediría el cambio de tipo en lugar del costo
+   * del scroll. Así hay tramos largos de filas de datos puras, que es la forma de
+   * una tabla agrupada real.
+   */
+  const GROUPED_ROWS: readonly DemoRow[] = makeRows(200).map((row, index) => ({
+    ...row,
+    status: index < 100 ? 'open' : 'done',
+  }))
+
+  /** Aplana con el mismo código que usa el componente, sin montar nada. */
+  function groupedView(collapsed: readonly string[] = []): readonly FlatRow<DemoRow>[] {
+    const grouping = useRowGrouping<DemoRow>({
+      rows: () => GROUPED_ROWS,
+      columns: () => [{ key: 'name' }, { key: 'id' }, { key: 'amount' }, { key: 'status' }],
+      groupBy: () => ['status'],
+      expandedGroups: () => undefined,
+      defaultExpanded: () => true,
+    })
+    for (const groupId of collapsed) grouping.toggleGroup(groupId)
+
+    const flat = grouping.flatRows.value
+    if (flat === null) throw new Error('[test] se esperaba una vista agrupada')
+    return flat
+  }
+
+  it('one step over a window of data rows writes exactly the entering row: 6', () => {
+    const flatRows = groupedView()
+    const fixture = createPoolFixture({
+      rows: GROUPED_ROWS,
+      flatRows,
+      groupDepth: 1,
+      columns,
+      visibleRows: 10,
+    })
+    // Se arranca en 1 para que la ventana quede íntegramente sobre filas de
+    // datos: la posición 0 es la cabecera de `open`.
+    fixture.paint({ start: 1, end: 11 })
+    fixture.paint({ start: 1, end: 11 })
+
+    const measured = measureDomWrites(fixture.container, () => fixture.paint({ start: 2, end: 12 }))
+
+    // El mismo presupuesto que sin grupos. `aria-level` no aparece: es constante
+    // entre filas de datos, así que se escribió una vez al construir el nodo y el
+    // caché lo saltea desde entonces.
+    expect(measured.counts.total, measured.report).toBe(ENTERING_ROW_WRITES)
+    expect(measured.counts.textContent, measured.report).toBe(3)
+    expect(measured.counts.style, measured.report).toBe(1)
+    expect(measured.counts.attribute, measured.report).toBe(2)
+    expect(measured.counts.hidden, measured.report).toBe(0)
+    fixture.destroy()
+  })
+
+  it('a group header that stays in the window writes nothing', () => {
+    const flatRows = groupedView()
+    const fixture = createPoolFixture({
+      rows: GROUPED_ROWS,
+      flatRows,
+      groupDepth: 1,
+      columns,
+      visibleRows: 10,
+    })
+    // La ventana 0..10 contiene la cabecera de `open` en la posición 0.
+    fixture.paint({ start: 0, end: 10 })
+    fixture.paint({ start: 0, end: 10 })
+
+    const measured = measureDomWrites(fixture.container, () => fixture.paint({ start: 0, end: 10 }))
+
+    // Repintado redundante con una cabecera en pantalla: cero. La cabecera
+    // respeta el mismo contrato de caché que una fila de datos.
+    expect(measured.counts.total, measured.report).toBe(0)
+    fixture.destroy()
+  })
+
+  it('a long jump is still bounded by the window, never more', () => {
+    const flatRows = groupedView()
+    const fixture = createPoolFixture({
+      rows: GROUPED_ROWS,
+      flatRows,
+      groupDepth: 1,
+      columns,
+      visibleRows: 10,
+    })
+    fixture.paint({ start: 1, end: 11 })
+    fixture.paint({ start: 1, end: 11 })
+
+    // Un salto a otro tramo de filas de datos: entran las diez y no hay cabeceras
+    // de por medio, así que la cota es la misma que sin agrupación.
+    const measured = measureDomWrites(fixture.container, () =>
+      fixture.paint({ start: 60, end: 70 }),
+    )
+
+    expect(measured.counts.total, measured.report).toBe(FULL_WINDOW_WRITES)
+    fixture.destroy()
+  })
+
+  it('collapsing a group BELOW the window writes absolutely nothing', () => {
+    const fixture = createPoolFixture({
+      rows: GROUPED_ROWS,
+      flatRows: groupedView(),
+      groupDepth: 1,
+      columns,
+      visibleRows: 10,
+    })
+    fixture.paint({ start: 0, end: 10 })
+    fixture.paint({ start: 0, end: 10 })
+
+    const measured = measureDomWrites(fixture.container, () =>
+      fixture.paint({ flatRows: groupedView(['status:done']), start: 0, end: 10 }),
+    )
+
+    // Plegar el segundo grupo cambia el aplanado entero —es un array nuevo de 102
+    // entradas en lugar de 202— y no mueve ni una de las diez posiciones
+    // visibles. El pool no recorre el aplanado: lo indexa, así que el tamaño del
+    // cambio es irrelevante y solo cuenta lo que cayó dentro de la ventana.
+    expect(measured.counts.total, measured.report).toBe(0)
+    fixture.destroy()
+  })
+
+  it('collapsing a group ABOVE the window repaints only the content, not the geometry', () => {
+    const fixture = createPoolFixture({
+      rows: GROUPED_ROWS,
+      flatRows: groupedView(),
+      groupDepth: 1,
+      columns,
+      visibleRows: 10,
+    })
+    fixture.paint({ start: 50, end: 60 })
+    fixture.paint({ start: 50, end: 60 })
+
+    const measured = measureDomWrites(fixture.container, () =>
+      fixture.paint({ flatRows: groupedView(['status:open']), start: 50, end: 60 }),
+    )
+
+    // Las diez posiciones pasan a mostrar filas distintas, así que se reescriben
+    // las tres celdas y la clave de cada una: 4 x 10 = 40. Son VEINTE menos que
+    // un salto de ventana equivalente, y el motivo es que la posición vertical no
+    // cambió: ni el `transform` ni el `aria-rowindex` de ninguna fila se tocan,
+    // porque siguen estando donde estaban. El caché de `internal/dom.ts` separa
+    // "esta fila muestra otra cosa" de "esta fila se movió", y acá solo pasó lo
+    // primero.
+    expect(measured.counts.total, measured.report).toBe(40)
+    expect(measured.counts.textContent, measured.report).toBe(30)
+    expect(measured.counts.attribute, measured.report).toBe(10)
+    expect(measured.counts.style, measured.report).toBe(0)
+    expect(measured.counts.createNode, measured.report).toBe(0)
+    expect(measured.counts.removeNode, measured.report).toBe(0)
+    fixture.destroy()
+  })
+
+  it('a slot that flips between a data row and a group row rebuilds exactly once', () => {
+    const flatRows = groupedView()
+    const fixture = createPoolFixture({
+      rows: GROUPED_ROWS,
+      flatRows,
+      groupDepth: 1,
+      columns,
+      visibleRows: 10,
+    })
+
+    // La cabecera de `done` está en la posición 101. Con la ventana 91..101 el
+    // slot 1 pasa de mostrar una fila de datos a mostrarla a ella.
+    fixture.paint({ start: 91, end: 101 })
+    fixture.paint({ start: 91, end: 101 })
+
+    const first = measureDomWrites(fixture.container, () => fixture.paint({ start: 92, end: 102 }))
+    // La cabecera construye su estructura por primera y única vez: la caja, el
+    // SVG del chevrón con su trazo, la etiqueta y el contador.
+    expect(first.counts.createNode, first.report).toBe(5)
+
+    // Se aleja la ventana y se vuelve: el slot que ya había sido cabecera no
+    // reconstruye nada. Las dos estructuras conviven en el nodo y se turnan con
+    // `hidden`, igual que las píldoras sobrantes del renderer `tags`.
+    fixture.paint({ start: 91, end: 101 })
+    const second = measureDomWrites(fixture.container, () => fixture.paint({ start: 92, end: 102 }))
+
+    expect(second.counts.createNode, second.report).toBe(0)
+    expect(second.counts.removeNode, second.report).toBe(0)
+
+    // El costo estable de un cambio de tipo: trece escrituras, poco más que dos
+    // filas de datos entrantes, y ocurre solo en el slot que cruza la frontera de
+    // un grupo. Se desglosa en esconder las tres celdas, mostrar la cabecera,
+    // reposicionarla, reescribir su clave y su `aria-rowindex`, y los cinco
+    // atributos y clases del árbol (`dt-group-row`, `dt-group-row--expanded`,
+    // `aria-expanded`, `aria-level`, `aria-posinset`/`aria-setsize`).
+    //
+    // Si este número creciera de golpe, lo más probable es que `ensureRowKind`
+    // haya empezado a destruir y reconstruir en vez de turnar con `hidden`.
+    expect(second.counts.total, second.report).toBe(13)
+    fixture.destroy()
+  })
+
+  it('a slot whose kind does NOT change never pays the flip', () => {
+    const flatRows = groupedView()
+    const fixture = createPoolFixture({
+      rows: GROUPED_ROWS,
+      flatRows,
+      groupDepth: 1,
+      columns,
+      visibleRows: 10,
+    })
+    fixture.paint({ start: 1, end: 11 })
+    fixture.paint({ start: 1, end: 11 })
+
+    const measured = measureDomWrites(fixture.container, () => {
+      // Veinte pasos por un tramo de filas de datos puras: ningún slot cambia de
+      // tipo, así que nada se esconde, nada se muestra y nada se crea.
+      for (let step = 2; step <= 21; step += 1) fixture.paint({ start: step, end: step + 10 })
+    })
+
+    expect(measured.counts.createNode, measured.report).toBe(0)
+    expect(measured.counts.removeNode, measured.report).toBe(0)
+    expect(measured.counts.hidden, measured.report).toBe(0)
+    // Veinte filas entrantes por seis escrituras: el costo sigue siendo lineal en
+    // lo que entró, no en la ventana por la cantidad de pasos.
+    expect(measured.counts.total, measured.report).toBe(ENTERING_ROW_WRITES * 20)
+    fixture.destroy()
+  })
+
+  it('100k grouped rows cost the same per frame as 200', () => {
+    const rows: DemoRow[] = makeRows(100_000).map((row, index) => ({
+      ...row,
+      status: index < 50_000 ? 'open' : 'done',
+    }))
+    const grouping = useRowGrouping<DemoRow>({
+      rows: () => rows,
+      columns: () => [{ key: 'name' }, { key: 'id' }, { key: 'amount' }, { key: 'status' }],
+      groupBy: () => ['status'],
+      expandedGroups: () => undefined,
+      defaultExpanded: () => true,
+    })
+    const flatRows = grouping.flatRows.value
+    expect(flatRows).not.toBeNull()
+
+    const fixture = createPoolFixture({ rows, flatRows, groupDepth: 1, columns, visibleRows: 10 })
+    fixture.paint({ start: 90_000, end: 90_010 })
+    fixture.paint({ start: 90_000, end: 90_010 })
+
+    const measured = measureDomWrites(fixture.container, () =>
+      fixture.paint({ start: 90_001, end: 90_011 }),
+    )
+
+    expect(measured.counts.total, measured.report).toBe(ENTERING_ROW_WRITES)
     fixture.destroy()
   })
 })

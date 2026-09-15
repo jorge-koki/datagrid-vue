@@ -76,3 +76,19 @@ export const UNPAINTED_GENERATION = -1
 
 /** Índice de fila centinela para un nodo del pool que no muestra nada. */
 export const UNPAINTED_ROW_INDEX = -1
+
+/**
+ * Tipo de contenido con el que está construida una fila del pool.
+ *
+ * Es la clave de segmentación VERTICAL del pool, hermana de `__dtRendererType` en
+ * el eje horizontal: un mismo nodo de fila puede mostrar datos en un frame y una
+ * cabecera de grupo en el siguiente, y las dos estructuras no se parecen en nada.
+ * Ver `ensureRowKind` en `useRowPool`.
+ */
+export const ROW_KIND_DATA = 'data'
+
+/** El otro valor posible de `__dtRowKind`. Ver {@link ROW_KIND_DATA}. */
+export const ROW_KIND_GROUP = 'group'
+
+/** Sangría en px que suma cada nivel de anidamiento de grupo. */
+export const GROUP_INDENT_STEP = 16

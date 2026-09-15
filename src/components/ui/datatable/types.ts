@@ -97,6 +97,21 @@ export interface DataTableColumn<TRow> {
   max?: number
   /** Paso del editor `number`. Se traslada al atributo `step` del input. */
   step?: number
+  /**
+   * Si la columna puede usarse para agrupar. Por defecto `true`.
+   *
+   * Poner `false` no oculta la columna: solo hace que una clave suya dentro de
+   * `groupBy` se descarte, igual que se descarta una clave desconocida.
+   */
+  groupable?: boolean
+  /**
+   * Agregación que muestra esta columna en las cabeceras de grupo.
+   *
+   * Sin `aggregate` la columna no aporta nada a la cabecera. El cálculo ocurre al
+   * aplanar —una vez por reconstrucción, nunca por frame— y siempre sobre todas
+   * las filas descendientes del grupo, también en los niveles intermedios.
+   */
+  aggregate?: ColumnAggregation<TRow>
 }
 
 /**
@@ -125,6 +140,117 @@ export interface CellOption {
   color?: string
 }
 
+/**
+ * Claves de columna por las que se agrupa, en orden de anidamiento.
+ *
+ * `['status', 'priority']` produce un primer nivel por estado y, dentro de cada
+ * estado, un segundo nivel por prioridad. Una clave que no corresponde a ninguna
+ * columna, o que corresponde a una columna con `groupable: false`, se ignora.
+ */
+export type GroupByState = readonly string[]
+
+/**
+ * Agregación incluida, por nombre.
+ *
+ * - `count`: cantidad de filas descendientes cuyo valor en la columna no es
+ *   `null` ni `undefined`. Es el `COUNT(columna)` de SQL, no el `COUNT(*)`: para
+ *   la cantidad total de filas del grupo está el contador de la cabecera.
+ * - `sum` y `avg`: operan solo sobre números finitos. Devuelven `null` si el
+ *   grupo no tiene ninguno, en lugar de un `0` que se confundiría con un total
+ *   real.
+ * - `min` y `max`: operan sobre números finitos y, si el grupo no tiene ninguno,
+ *   sobre fechas válidas. Devuelven `null` si no hay nada comparable.
+ */
+export type BuiltInAggregation = 'sum' | 'avg' | 'count' | 'min' | 'max'
+
+/**
+ * Función de agregación sobre los valores de una columna dentro de un grupo.
+ *
+ * Recibe TODAS las filas descendientes del grupo, no las de sus subgrupos ya
+ * agregadas: un promedio de promedios no es el promedio, y el único modo de que
+ * una agregación propia sea correcta en niveles anidados es darle las filas
+ * originales.
+ *
+ * Corre una vez por grupo y por reconstrucción del aplanado, nunca por frame.
+ */
+export type AggregationFn<TRow> = (rows: readonly TRow[], columnKey: string) => CellValue
+
+/** Agregación declarada en una columna: una incluida o una función propia. */
+export type ColumnAggregation<TRow> = BuiltInAggregation | AggregationFn<TRow>
+
+/**
+ * Una cabecera de grupo dentro de la secuencia aplanada.
+ *
+ * `kind` es un literal y no una marca calculada: distinguir una cabecera de una
+ * fila de datos tiene que costar una comparación de string, porque el pool lo
+ * pregunta una vez por fila visible y por frame.
+ */
+export interface GroupRow {
+  /** Discriminante de la unión {@link FlatRow}. */
+  readonly kind: 'group'
+  /**
+   * Identidad estable del grupo, construida por camino.
+   *
+   * Tiene la forma `columna:valor` por nivel, unidos con `/`:
+   * `status:active/priority:high`. Es estable entre sesiones mientras no cambien
+   * ni las columnas de agrupación ni los valores, que es exactamente lo que
+   * hace falta para persistir qué grupos quedaron colapsados.
+   */
+  readonly groupId: string
+  /** Clave de la columna por la que agrupa este nivel. */
+  readonly columnKey: string
+  /** Valor común a todas las filas del grupo. */
+  readonly value: CellValue
+  /** Texto mostrado en la cabecera, ya resuelto contra `column.options`. */
+  readonly label: string
+  /** Nivel de anidamiento, 0 para el primero. Gobierna la sangría. */
+  readonly depth: number
+  /** Cantidad de filas de datos descendientes, incluidas las de sus subgrupos. */
+  readonly count: number
+  /** Si el grupo muestra su contenido. Un grupo colapsado aporta solo su cabecera. */
+  readonly expanded: boolean
+  /** Cantidad de hermanos en este nivel. Alimenta `aria-setsize`. */
+  readonly setSize: number
+  /** Posición entre sus hermanos, 1-based. Alimenta `aria-posinset`. */
+  readonly posInSet: number
+  /** Agregados por clave de columna, calculados sobre TODOS los descendientes. */
+  readonly aggregates: Readonly<Record<string, CellValue>>
+}
+
+/**
+ * Una fila de datos dentro de la secuencia aplanada.
+ *
+ * `rowIndex` es el índice dentro de la prop `rows` ORIGINAL, no la posición en la
+ * secuencia aplanada. Esa distinción es la que sostiene la corrección de la
+ * edición: `editCommit` reporta este índice, y reportar el aplanado escribiría la
+ * edición sobre otra fila del dataset del consumidor.
+ */
+export interface DataRow<TRow> {
+  /** Discriminante de la unión {@link FlatRow}. */
+  readonly kind: 'data'
+  /** La fila tal como vive en `rows`. */
+  readonly row: TRow
+  /** Índice de `row` dentro de la prop `rows`. */
+  readonly rowIndex: number
+}
+
+/**
+ * Una entrada de la secuencia visible cuando hay agrupación activa.
+ *
+ * El virtualizador indexa sobre este array en lugar de sobre `rows`: con grupos,
+ * la posición vertical ya no corresponde a un índice del dataset, porque se
+ * intercalan cabeceras y los grupos colapsados esconden a sus hijos.
+ */
+export type FlatRow<TRow> = GroupRow | DataRow<TRow>
+
+/** Se emite cuando se expande o colapsa un grupo. */
+export interface GroupToggleEvent {
+  /** {@link GroupRow.groupId} del grupo afectado. */
+  groupId: string
+  /** Estado resultante. */
+  expanded: boolean
+}
+
 /** Mapa de visibilidad por columna. Una clave ausente se interpreta como visible. */
 export type ColumnVisibilityState = Readonly<Record<string, boolean>>
 
@@ -148,6 +274,25 @@ export interface PersistedTableState {
   columnWidths: Record<string, number>
   /** Claves de columna en el orden elegido por el usuario. */
   columnOrder: string[]
+  /**
+   * Claves por las que se agrupa, en orden de anidamiento.
+   *
+   * Opcional a propósito, y es la razón por la que la agregación de grupos no
+   * obligó a subir la versión del esquema: un payload escrito antes de que
+   * existiera esta función no trae la clave, y uno de una tabla que nunca agrupó
+   * tampoco la escribe. Ausente significa "sin agrupación persistida", que es
+   * distinto de "agrupación vacía persistida" solo en que no ensucia el
+   * almacenamiento de las tablas que no usan la función.
+   */
+  groupBy?: string[]
+  /**
+   * {@link GroupRow.groupId} de los grupos que quedaron colapsados.
+   *
+   * Se guarda el conjunto COLAPSADO y no el expandido porque el valor por
+   * defecto es expandido: con miles de grupos, la lista de excepciones es de unas
+   * pocas entradas y la de expandidos sería de miles.
+   */
+  collapsedGroups?: string[]
 }
 
 /**
@@ -170,8 +315,16 @@ export interface DataTablePersistOptions {
   enabled?: boolean
   /** Dónde se guarda. Por defecto, un adaptador sobre `localStorage`. */
   adapter?: DataTableStorageAdapter
-  /** Qué partes del estado se persisten. Por defecto, todas. */
-  include?: { visibility?: boolean; widths?: boolean; order?: boolean }
+  /**
+   * Qué partes del estado se persisten. Por defecto, todas.
+   *
+   * `grouping` es una bandera propia y no una ampliación silenciosa de otra: un
+   * consumidor que ya tenía `include: { order: true, widths: true }` escrito
+   * esperaba que eso fuera una lista cerrada, y colgar la agrupación de `order`
+   * —que es lo más parecido— le cambiaría el comportamiento sin que haya tocado
+   * nada.
+   */
+  include?: { visibility?: boolean; widths?: boolean; order?: boolean; grouping?: boolean }
   /** Ms de espera antes de escribir. Evita escribir en cada frame del drag de resize. */
   debounce?: number
   /**
@@ -384,6 +537,35 @@ export interface DataTableProps<TRow> {
    * componente solo emite `update:activeCell`.
    */
   activeCell?: CellPosition | null
+  /**
+   * Claves de columna por las que agrupar. `v-model:group-by`.
+   *
+   * Con la lista vacía —el valor por defecto— la tabla no paga absolutamente
+   * nada por esta función: no se construye ningún árbol, no se aplana nada y el
+   * pool recorre el mismo camino de siempre sobre `rows`.
+   *
+   * Igual que el trío de columnas, si se omite la prop el estado vive adentro y
+   * la tabla funciona sola; si se pasa, la prop manda y el componente solo emite
+   * `update:groupBy`.
+   */
+  groupBy?: GroupByState
+  /**
+   * {@link GroupRow.groupId} de los grupos expandidos. `v-model:expanded-groups`.
+   *
+   * **Controlado**: si la prop llega con valor, es la verdad literal —un id que
+   * no está en la lista está colapsado— y `groupsDefaultExpanded` deja de
+   * intervenir, porque el padre ya está diciendo el estado de cada grupo.
+   *
+   * **No controlado**: si llega `undefined`, la tabla guarda internamente solo
+   * las EXCEPCIONES a `groupsDefaultExpanded`, que con el valor por defecto son
+   * los grupos colapsados. Igual emite la lista completa de expandidos, para que
+   * un consumidor pueda escucharla sin tomar posesión del estado.
+   */
+  expandedGroups?: readonly string[]
+  /** Estado inicial de un grupo del que todavía no se sabe nada. Por defecto `true`. */
+  groupsDefaultExpanded?: boolean
+  /** Si la cabecera de grupo muestra cuántas filas contiene. Por defecto `true`. */
+  showGroupCount?: boolean
 }
 
 /**
@@ -410,9 +592,29 @@ export interface CellSelectEvent<TRow> {
   readonly value: CellValue
 }
 
-/** Direcciona una celda por índice de fila y clave de columna. */
+/**
+ * Direcciona una celda por índice de fila y clave de columna.
+ *
+ * ## Qué indexa `rowIndex` cuando hay grupos
+ *
+ * Indexa la SECUENCIA VISIBLE, no la prop `rows`. Sin agrupación las dos
+ * coinciden exactamente y no hay nada que distinguir; con agrupación la
+ * secuencia visible intercala cabeceras de grupo y esconde los hijos de los
+ * grupos colapsados, así que la posición vertical de una celda ya no es su
+ * índice en el dataset.
+ *
+ * Es deliberado que sea la secuencia visible: todo lo que consume una posición
+ * dentro del componente —la geometría del editor, el auto-scroll, el movimiento
+ * con flechas— es geométrico, y una posición que no se pueda traducir a píxeles
+ * sin una búsqueda no serviría para nada de eso. Una cabecera de grupo, además,
+ * no tiene índice en `rows` y aun así se puede seleccionar.
+ *
+ * Los EVENTOS hacen el camino inverso: `cellSelect`, `rowClick`, `beforeEdit`,
+ * `afterEdit` y `editCommit` reportan siempre el índice dentro de `rows`, porque
+ * es el único con el que el consumidor puede escribir en su propio dataset.
+ */
 export interface CellPosition {
-  /** Índice dentro de la prop `rows`. No es un slot del viewport. */
+  /** Índice dentro de la secuencia visible. No es un slot del viewport. */
   rowIndex: number
   /** {@link DataTableColumn.key} de la columna. */
   columnKey: string
@@ -483,7 +685,13 @@ export interface AfterEditEvent<TRow> {
 export interface EditCommitEvent<TRow> {
   /** El objeto de fila sobre el que hay que escribir. */
   row: TRow
-  /** Índice de `row` dentro de la prop `rows`. */
+  /**
+   * Índice de `row` dentro de la prop `rows`.
+   *
+   * Con grupos activos NO es la posición vertical de la celda editada: es el
+   * índice en el dataset original, que es el único sobre el que tiene sentido
+   * escribir. Ver {@link CellPosition}.
+   */
   rowIndex: number
   /** La definición de columna que se editó. */
   column: DataTableColumn<TRow>
@@ -535,7 +743,13 @@ export interface VirtualWindow {
  * diseño).
  */
 export interface DataTableInstance {
-  /** Scrollea hasta que `index` sea la primera fila totalmente visible. Se acota. */
+  /**
+   * Scrollea hasta que `index` sea la primera fila totalmente visible. Se acota.
+   *
+   * `index` recorre la secuencia visible, igual que {@link CellPosition.rowIndex}:
+   * con grupos activos cuenta también las cabeceras y saltea a los hijos de los
+   * grupos colapsados.
+   */
   scrollToRow(index: number): void
   /**
    * Scrollea hasta que la columna con esa clave quede en el borde izquierdo.
@@ -579,4 +793,10 @@ export interface DataTableInstance {
    * vuelca lo pendiente por su cuenta.
    */
   flushPersistence(): void
+  /** Invierte el estado de un grupo por su {@link GroupRow.groupId}. */
+  toggleGroup(groupId: string): void
+  /** Expande todos los grupos. */
+  expandAllGroups(): void
+  /** Colapsa todos los grupos. */
+  collapseAllGroups(): void
 }

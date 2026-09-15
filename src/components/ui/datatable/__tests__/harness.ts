@@ -27,6 +27,7 @@ import type {
   DataTableColumn,
   DataTableProps,
   EditCommitEvent,
+  FlatRow,
   SelectionMode,
 } from '../types'
 import { defaultAlignFor } from '../internal/renderers'
@@ -119,6 +120,10 @@ export interface PaintOverrides {
   editing?: CellPosition | null
   selectionMode?: SelectionMode
   stripe?: boolean
+  /** Secuencia aplanada, o `null` para volver al camino sin agrupación. */
+  flatRows?: readonly FlatRow<DemoRow>[] | null
+  groupDepth?: number
+  showGroupCount?: boolean
 }
 
 /** Pool instanciado sobre un contenedor real, listo para pintar. */
@@ -143,6 +148,10 @@ export interface PoolFixtureOptions {
   rowHeight?: number
   visibleRows?: number
   callbacks?: RowPoolCallbacks
+  /** Secuencia aplanada inicial. `null` o ausente pinta sin agrupación. */
+  flatRows?: readonly FlatRow<DemoRow>[] | null
+  groupDepth?: number
+  showGroupCount?: boolean
 }
 
 /** Altura de fila usada por el andamiaje, en px. */
@@ -169,6 +178,9 @@ export function createPoolFixture(options: PoolFixtureOptions = {}): PoolFixture
 
   let state: RowPoolPaintState<DemoRow> = {
     rows,
+    flatRows: options.flatRows ?? null,
+    groupDepth: options.groupDepth ?? 0,
+    showGroupCount: options.showGroupCount ?? true,
     rowRange: { start: 0, end: visibleRows, offset: 0 },
     columns,
     rowHeight: options.rowHeight ?? FIXTURE_ROW_HEIGHT,
@@ -193,6 +205,12 @@ export function createPoolFixture(options: PoolFixtureOptions = {}): PoolFixture
 
       state = {
         rows: overrides.rows ?? state.rows,
+        // `null` es un valor con significado —"sin agrupación"—, así que la
+        // distinción entre "no lo pasaron" y "lo pasaron nulo" tiene que ser
+        // contra `undefined`, igual que con `editing` y `active`.
+        flatRows: overrides.flatRows === undefined ? state.flatRows : overrides.flatRows,
+        groupDepth: overrides.groupDepth ?? state.groupDepth,
+        showGroupCount: overrides.showGroupCount ?? state.showGroupCount,
         rowRange: { start, end, offset: start * (overrides.rowHeight ?? state.rowHeight) },
         columns: overrides.columns ?? state.columns,
         rowHeight: overrides.rowHeight ?? state.rowHeight,

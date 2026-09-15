@@ -72,6 +72,8 @@
   --dt-header-height: 44px;
   --dt-font-size: 0.875rem;
   --dt-cell-px: 0.75rem;
+  /* Sangría que suma cada nivel de anidamiento en una cabecera de grupo. */
+  --dt-group-indent: 16px;
 
   position: relative;
   display: flex;
@@ -343,6 +345,128 @@
 .dt-viewport:focus-visible {
   outline: 2px solid var(--dt-primary);
   outline-offset: -2px;
+}
+
+/* ------------------------------------------------- Cabeceras de grupo */
+
+/*
+ * Una cabecera de grupo ocupa la misma caja que una fila de datos: mismo alto,
+ * misma posición absoluta, mismo `transform`. Lo único que cambia es lo que hay
+ * adentro, y eso es justamente lo que permite que el virtualizador siga siendo
+ * una división: con cabeceras de alto variable habría que mantener un árbol de
+ * offsets acumulados y el costo por frame dejaría de ser constante.
+ */
+.dt-group-row {
+  /* Nivel de anidamiento. Lo escribe el pool, una sola propiedad por fila. */
+  --dt-group-depth: 0;
+
+  background: var(--dt-bg-elevated);
+  font-weight: 600;
+}
+
+/*
+ * El realce de fila activa se declara más arriba, así que sin esta regla el
+ * fondo propio de la cabecera le ganaría por orden y una cabecera seleccionada
+ * con el teclado no se distinguiría de las demás.
+ */
+.dt-group-row.dt-row--active {
+  background: var(--dt-bg-accented);
+}
+
+.dt-root[data-bordered='true'] .dt-group-row {
+  border-bottom: 1px solid var(--dt-border-accented);
+}
+
+/*
+ * La cabecera se extiende por todo el tramo visible y las celdas de agregado se
+ * apoyan ENCIMA con fondo propio. Así la etiqueta usa todo el espacio libre que
+ * tenga sin que nadie calcule dónde termina: el recorte lo hace el agregado que
+ * se le pone arriba, no una cuenta que habría que rehacer con cada cambio de
+ * columnas o cada paso de scroll horizontal.
+ *
+ * La sangría es `padding-left` sobre esta caja y no divs anidados: una escritura
+ * de custom property contra crear y destruir nodos cada vez que un slot pasa de
+ * un nivel a otro.
+ */
+.dt-group-header {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 0;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  height: var(--dt-row-height);
+  padding-right: var(--dt-cell-px);
+  padding-left: calc(var(--dt-cell-px) + var(--dt-group-depth) * var(--dt-group-indent));
+  overflow: hidden;
+  cursor: pointer;
+  user-select: none;
+  will-change: transform;
+}
+
+/*
+ * El chevrón gira por CSS a partir de una clase en la fila. Es lo que permite que
+ * expandir un grupo no reescriba ni un atributo del SVG: el pool alterna una
+ * clase y la transición la resuelve el compositor.
+ */
+.dt-group-chevron {
+  flex: 0 0 auto;
+  width: 0.875em;
+  height: 0.875em;
+  color: var(--dt-text-muted);
+  transform: rotate(0deg);
+  transition: transform 120ms ease;
+}
+
+.dt-group-row--expanded .dt-group-chevron {
+  transform: rotate(90deg);
+}
+
+.dt-group-label {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.dt-group-count {
+  flex: 0 0 auto;
+  min-width: 1.25rem;
+  padding: 0 0.375rem;
+  border-radius: 999px;
+  background: var(--dt-bg-accented);
+  color: var(--dt-text-muted);
+  font-size: 0.75em;
+  font-weight: 600;
+  line-height: 1.5;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * El agregado se pinta sobre la cabecera, en la posición horizontal de SU
+ * columna: es la única manera de que la cifra caiga debajo del encabezado al que
+ * corresponde. `background: inherit` toma el fondo de la fila, que es lo que lo
+ * vuelve opaco sobre la etiqueta sin tener que repetir el color acá ni saber si
+ * la fila está activa.
+ */
+.dt-group-aggregate {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 1;
+  box-sizing: border-box;
+  height: var(--dt-row-height);
+  padding: 0 var(--dt-cell-px);
+  overflow: hidden;
+  background: inherit;
+  color: var(--dt-text-muted);
+  line-height: var(--dt-row-height);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+  will-change: transform;
 }
 
 /* ------------------------------------------------------------------ Editor */
@@ -730,6 +854,13 @@
   --dt-header-height: 34px;
   --dt-font-size: 0.8125rem;
   --dt-cell-px: 0.5rem;
+  /* La sangría acompaña al preset: con filas de 30px, 16px por nivel se come la
+     etiqueta en cuanto hay dos niveles. */
+  --dt-group-indent: 12px;
+}
+
+.dt-root[data-dense='true'] .dt-group-count {
+  padding: 0 0.25rem;
 }
 
 /* ------------------------------------------------------------------ Oscuro */
@@ -820,6 +951,12 @@
 
 @media (prefers-reduced-motion: reduce) {
   .dt-resize-handle::after {
+    transition: none;
+  }
+
+  /* El chevrón sigue girando —la rotación ES la información de estado—, pero sin
+     animarla: lo que molesta es el movimiento, no la posición final. */
+  .dt-group-chevron {
     transition: none;
   }
 }

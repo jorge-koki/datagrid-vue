@@ -1,6 +1,7 @@
-import type { DataTableColumn, PersistedTableState } from '../types'
+import type { DataTableColumn, GroupByState, PersistedTableState } from '../types'
 import { MAX_COLUMN_WIDTH, MIN_COLUMN_WIDTH } from './constants'
 import { clamp } from './values'
+import { groupIdColumnPath, reconcileGroupBy } from './aggregations'
 
 /**
  * Reconciliación del estado persistido contra las columnas actuales.
@@ -122,21 +123,79 @@ export function reconcileColumnWidths<TRow>(
 }
 
 /**
+ * Devuelve los grupos colapsados guardados que todavía pueden existir.
+ *
+ * Un id de grupo es un camino de `columna:valor`, así que su lista de columnas
+ * tiene que ser un PREFIJO de la agrupación vigente: un id
+ * `status:open/priority:high` no puede corresponder a ningún grupo si hoy se
+ * agrupa por `['owner']`, ni si se agrupa por `['status']` a secas, porque en
+ * ese caso no existe un segundo nivel.
+ *
+ * Es la reconciliación exacta sobre la ESTRUCTURA. No se verifica que el valor
+ * siga existiendo en los datos, y es deliberado: los datos cambian entre
+ * sesiones, y descartar el estado de un grupo porque hoy no hay filas con ese
+ * estado haría que el grupo reapareciera expandido en cuanto vuelvan.
+ */
+export function reconcileCollapsedGroups(
+  persisted: readonly string[],
+  groupBy: GroupByState,
+): string[] {
+  if (persisted.length === 0 || groupBy.length === 0) return []
+
+  const result: string[] = []
+  const seen = new Set<string>()
+
+  for (const groupId of persisted) {
+    if (seen.has(groupId)) continue
+
+    const path = groupIdColumnPath(groupId)
+    if (path.length === 0 || path.length > groupBy.length) continue
+
+    let matches = true
+    for (let level = 0; level < path.length; level += 1) {
+      if (path[level] !== groupBy[level]) {
+        matches = false
+        break
+      }
+    }
+    if (!matches) continue
+
+    seen.add(groupId)
+    result.push(groupId)
+  }
+
+  return result
+}
+
+/**
  * Reconcilia un estado persistido completo contra las columnas actuales.
  *
  * La versión ya debe haberse validado antes de llamar acá: esta función asume
  * que el payload es aplicable y solo se ocupa de ajustarlo a las columnas.
+ *
+ * Las claves de agrupación solo aparecen en la salida si aparecían en la
+ * entrada. Es lo que permite que un payload escrito antes de que existiera la
+ * agrupación siga reconciliándose a un estado idéntico al de siempre, sin
+ * inventarle campos que después se escribirían de vuelta al almacenamiento.
  */
 export function reconcilePersistedState<TRow>(
   state: PersistedTableState,
   columns: readonly DataTableColumn<TRow>[],
 ): PersistedTableState {
-  return {
+  const result: PersistedTableState = {
     version: state.version,
     columnVisibility: reconcileColumnVisibility(state.columnVisibility, columns),
     columnWidths: reconcileColumnWidths(state.columnWidths, columns),
     columnOrder: reconcileColumnOrder(state.columnOrder, columns),
   }
+
+  if (state.groupBy !== undefined || state.collapsedGroups !== undefined) {
+    const groupBy = reconcileGroupBy(state.groupBy ?? [], columns)
+    result.groupBy = groupBy
+    result.collapsedGroups = reconcileCollapsedGroups(state.collapsedGroups ?? [], groupBy)
+  }
+
+  return result
 }
 
 /** `true` si el valor es un objeto plano indexable por string. */
@@ -183,5 +242,10 @@ export function isPersistedTableState(value: unknown): value is PersistedTableSt
   if (!isBooleanRecord(value.columnVisibility)) return false
   if (!isFiniteNumberRecord(value.columnWidths)) return false
   if (!isStringArray(value.columnOrder)) return false
+  // Las dos claves de agrupación son OPCIONALES: un payload escrito antes de que
+  // existiera la función no las trae, y rechazarlo por eso le borraría el layout
+  // a todo el que actualice la librería. Si vienen, tienen que ser válidas.
+  if (value.groupBy !== undefined && !isStringArray(value.groupBy)) return false
+  if (value.collapsedGroups !== undefined && !isStringArray(value.collapsedGroups)) return false
   return true
 }

@@ -12,11 +12,15 @@ import type {
   DataTableColumn,
   DataTableProps,
   EditCommitEvent,
+  GroupByState,
+  GroupRow,
+  GroupToggleEvent,
   PersistedTableState,
 } from './types'
 import { useVirtualWindow } from './composables/useVirtualWindow'
 import { useColumnLayout } from './composables/useColumnLayout'
 import type { ResolvedColumn } from './composables/useColumnLayout'
+import { useRowGrouping } from './composables/useRowGrouping'
 import { useRowPool } from './composables/useRowPool'
 import { useScrollSync } from './composables/useScrollSync'
 import { useCellEditor } from './composables/useCellEditor'
@@ -78,12 +82,15 @@ const props = withDefaults(defineProps<DataTableProps<TRow>>(), {
   stripe: false,
   bordered: false,
   selectionMode: 'cell',
-  // `columnVisibility`, `columnOrder`, `columnWidths` y `activeCell` quedan
-  // deliberadamente sin default: `undefined` es lo que distingue el modo no
-  // controlado del controlado, y darles un default borraría esa distinción.
-  // Para `activeCell` la diferencia es doble, porque `null` ya significa
-  // "controlado y sin selección".
+  // `columnVisibility`, `columnOrder`, `columnWidths`, `activeCell`, `groupBy` y
+  // `expandedGroups` quedan deliberadamente sin default: `undefined` es lo que
+  // distingue el modo no controlado del controlado, y darles un default borraría
+  // esa distinción. Para `activeCell` la diferencia es doble, porque `null` ya
+  // significa "controlado y sin selección", y para `expandedGroups` también,
+  // porque una lista vacía significa "controlado y todo colapsado".
   persist: false,
+  groupsDefaultExpanded: true,
+  showGroupCount: true,
 })
 
 const emit = defineEmits<{
@@ -93,10 +100,13 @@ const emit = defineEmits<{
   columnResize: [ColumnResizeEvent]
   rowClick: [{ row: TRow; rowIndex: number }]
   cellSelect: [CellSelectEvent<TRow>]
+  groupToggle: [GroupToggleEvent]
   'update:activeCell': [CellPosition | null]
   'update:columnVisibility': [ColumnVisibilityState]
   'update:columnOrder': [string[]]
   'update:columnWidths': [ColumnWidthState]
+  'update:groupBy': [string[]]
+  'update:expandedGroups': [string[]]
 }>()
 
 /* --------------------------------------------- Estado de layout de columnas */
@@ -140,6 +150,26 @@ function setColumnOrder(next: string[]): void {
 function setColumnWidths(next: Record<string, number>): void {
   if (props.columnWidths === undefined) internalWidths.value = next
   emit('update:columnWidths', next)
+}
+
+/* ------------------------------------------------------- Estado de agrupación */
+
+/**
+ * Agrupación y expansión: exactamente la misma disciplina que las columnas.
+ *
+ * Si la prop llega `undefined` el estado vive adentro; si llega con valor, la
+ * prop manda y el componente solo emite. La única diferencia con el trío de
+ * columnas es que acá el estado interno de expansión no lo guarda este
+ * componente sino `useRowGrouping`, porque para decidir si un grupo está
+ * expandido hace falta además saber cuáles existen.
+ */
+const internalGroupBy = shallowRef<string[]>([])
+
+const groupBy = computed<GroupByState>(() => props.groupBy ?? internalGroupBy.value)
+
+function setGroupBy(next: string[]): void {
+  if (props.groupBy === undefined) internalGroupBy.value = next
+  emit('update:groupBy', next)
 }
 
 /* ------------------------------------------------------------ Referencias DOM */
@@ -192,6 +222,28 @@ const layout = useColumnLayout<TRow>({
 // `.value` en el markup.
 const { resolvedColumns, totalWidth } = layout
 
+/* ------------------------------------------------------------- Agrupación */
+
+/**
+ * La vista aplanada que consume el virtualizador.
+ *
+ * Con `groupBy` vacío devuelve `null` y el resto del componente sigue indexando
+ * `props.rows` exactamente como antes: la agrupación no cuesta nada mientras no
+ * se use.
+ */
+const grouping = useRowGrouping<TRow>({
+  rows: () => props.rows,
+  columns: () => props.columns,
+  groupBy,
+  expandedGroups: () => props.expandedGroups,
+  defaultExpanded: () => props.groupsDefaultExpanded,
+  onExpandedChange: (expanded) => emit('update:expandedGroups', expanded),
+  onToggle: (groupId, expanded) => emit('groupToggle', { groupId, expanded }),
+})
+
+/** Cantidad de entradas verticales: filas del dataset, o de la vista aplanada. */
+const visibleRowCount = computed(() => grouping.totalCount.value)
+
 /* ------------------------------------------------------------- Persistencia */
 
 /**
@@ -202,12 +254,27 @@ const { resolvedColumns, totalWidth } = layout
  * está vacío, y guardar un orden vacío haría que al volver no se restaure nada.
  * Guardar el orden efectivo deja el layout reproducible desde la primera sesión.
  */
-const persistedState = computed<PersistedTableState>(() => ({
-  version: DEFAULT_PERSIST_VERSION,
-  columnVisibility: { ...columnVisibility.value },
-  columnWidths: { ...columnWidths.value },
-  columnOrder: layout.orderedColumns.value.map((column) => column.key),
-}))
+const persistedState = computed<PersistedTableState>(() => {
+  const state: PersistedTableState = {
+    version: DEFAULT_PERSIST_VERSION,
+    columnVisibility: { ...columnVisibility.value },
+    columnWidths: { ...columnWidths.value },
+    columnOrder: layout.orderedColumns.value.map((column) => column.key),
+  }
+
+  // El corte de agrupación solo aparece si hay algo que decir. Una tabla que
+  // nunca agrupó escribe exactamente el mismo payload que antes de que esta
+  // función existiera, que es lo que permitió sumarla sin subir la versión del
+  // esquema ni invalidarle el layout guardado a nadie.
+  const currentGroupBy = groupBy.value
+  const collapsed = grouping.collapsedGroups.value
+  if (currentGroupBy.length > 0 || collapsed.length > 0) {
+    state.groupBy = [...currentGroupBy]
+    state.collapsedGroups = [...collapsed]
+  }
+
+  return state
+})
 
 const persistence = useTablePersistence<TRow>({
   tableId: () => props.tableId,
@@ -221,6 +288,11 @@ const persistence = useTablePersistence<TRow>({
     setColumnVisibility(loaded.columnVisibility)
     setColumnWidths(loaded.columnWidths)
     setColumnOrder(loaded.columnOrder)
+    // El orden importa: `useRowGrouping` reconstruye su árbol de forma síncrona
+    // al cambiar `groupBy`, y el conjunto colapsado se resuelve contra los grupos
+    // que ese árbol tiene. Aplicarlo al revés lo resolvería contra el árbol viejo.
+    if (loaded.groupBy !== undefined) setGroupBy([...loaded.groupBy])
+    if (loaded.collapsedGroups !== undefined) grouping.setCollapsedGroups(loaded.collapsedGroups)
   },
 })
 
@@ -231,7 +303,7 @@ const scroll = useScrollSync({
 })
 
 const rowVirtual = useVirtualWindow({
-  itemCount: () => props.rows.length,
+  itemCount: visibleRowCount,
   itemSize: rowHeight,
   viewportSize: () => scroll.state.value.viewportHeight,
   scrollOffset: () => scroll.state.value.scrollTop,
@@ -269,9 +341,12 @@ const pool = useRowPool<TRow>({
     editor.beginEdit(position)
   },
   onRowClick: (rowIndex) => {
-    const row = props.rows[rowIndex]
+    const row = grouping.rowAt(rowIndex)
     if (row === undefined) return
-    emit('rowClick', { row, rowIndex })
+    // El índice que ve el consumidor es SIEMPRE el de su propio array: la
+    // posición dentro de la vista aplanada no le sirve para nada, y confundirlas
+    // le haría escribir sobre otra fila.
+    emit('rowClick', { row, rowIndex: grouping.toSourceIndex(rowIndex) })
   },
   onCellPointerDown: (position) => {
     // Un clic simple SELECCIONA. No abre el editor: eso lo hacen el doble clic,
@@ -282,14 +357,35 @@ const pool = useRowPool<TRow>({
   onCellToggle: (position, nextValue) => {
     editor.commitValue(position, nextValue)
   },
+  onGroupToggle: (groupId) => {
+    grouping.toggleGroup(groupId)
+  },
 })
 
 /** Valor actual de una celda, para poder alternarlo desde el teclado. */
 function readCurrentValue(position: CellPosition): CellValue {
-  const row = props.rows[position.rowIndex]
+  const row = grouping.rowAt(position.rowIndex)
   const column = layout.getResolvedColumn(position.columnKey)?.column
   if (row === undefined || !column) return undefined
   return readCellValue(column, row)
+}
+
+/**
+ * Reescribe el índice de fila de un evento al del dataset del consumidor.
+ *
+ * Es el ÚNICO punto por el que un índice de la vista aplanada puede salir del
+ * componente, y por eso se hace acá y no en cada emisión. Adentro todo trabaja en
+ * coordenadas visibles —que es lo que necesitan la geometría del editor, el
+ * auto-scroll y las flechas—; afuera, el consumidor solo puede escribir sobre su
+ * propio array.
+ *
+ * Se muta el evento en lugar de copiarlo a propósito: `BeforeEditEvent` lleva un
+ * `cancel()` que cierra sobre el objeto original, y una copia dejaría al listener
+ * viendo `canceled: false` después de haber vetado la edición.
+ */
+function withSourceRowIndex<TEvent extends { rowIndex: number }>(event: TEvent): TEvent {
+  event.rowIndex = grouping.toSourceIndex(event.rowIndex)
+  return event
 }
 
 /* --------------------------------------------------------------- Selección */
@@ -338,13 +434,15 @@ function selectCell(position: CellPosition | null): void {
 
   if (!position) return
 
-  const row = props.rows[position.rowIndex]
+  // Una cabecera de grupo se puede recorrer con el teclado, pero no representa
+  // ninguna fila: `rowAt` devuelve `undefined` y no hay selección que anunciar.
+  const row = grouping.rowAt(position.rowIndex)
   const column = layout.getResolvedColumn(position.columnKey)?.column
   if (row === undefined || !column) return
 
   emit('cellSelect', {
     row,
-    rowIndex: position.rowIndex,
+    rowIndex: grouping.toSourceIndex(position.rowIndex),
     column,
     columnKey: position.columnKey,
     value: readCellValue(column, row),
@@ -406,7 +504,7 @@ function pageSize(): number {
  */
 function moveActiveTo(rowIndex: number, columnIndex: number): void {
   const columns = resolvedColumns.value
-  const rowCount = props.rows.length
+  const rowCount = visibleRowCount.value
   if (columns.length === 0 || rowCount === 0) return
 
   const clampedRow = Math.min(Math.max(rowIndex, 0), rowCount - 1)
@@ -456,7 +554,7 @@ function moveActiveBy(rowDelta: number, columnDelta: number): void {
   const current = activeCell.value
   if (!current) {
     moveActiveTo(
-      seedIndexFor(rowDelta, props.rows.length),
+      seedIndexFor(rowDelta, visibleRowCount.value),
       seedIndexFor(columnDelta, resolvedColumns.value.length),
     )
     return
@@ -474,7 +572,7 @@ function moveActiveBy(rowDelta: number, columnDelta: number): void {
  */
 function moveActiveInReadingOrder(forward: boolean): void {
   const columns = resolvedColumns.value
-  const rowCount = props.rows.length
+  const rowCount = visibleRowCount.value
   if (columns.length === 0 || rowCount === 0) return
 
   const current = activeCell.value
@@ -489,6 +587,21 @@ function moveActiveInReadingOrder(forward: boolean): void {
 
   if (columnIndex > 0) moveActiveTo(rowIndex, columnIndex - 1)
   else if (rowIndex > 0) moveActiveTo(rowIndex - 1, columns.length - 1)
+}
+
+/**
+ * Cabecera de grupo bajo la celda activa, o `null`.
+ *
+ * Es lo que decide si una tecla significa "plegar" o lo que significa siempre.
+ * Se consulta por posición y no por un estado aparte: la fila activa puede pasar
+ * de ser un grupo a ser una fila de datos sin que nadie mueva la selección, con
+ * solo colapsar el grupo de más arriba.
+ */
+function activeGroupRow(): GroupRow | null {
+  const current = activeCell.value
+  if (!current) return null
+  const entry = grouping.entryAt(current.rowIndex)
+  return entry !== null && entry.kind === 'group' ? entry : null
 }
 
 /** Abre el editor sobre la celda activa, o alterna si es una casilla. */
@@ -519,7 +632,7 @@ function onViewportKeyDown(event: KeyboardEvent): void {
   // consume el editor, que además detiene su propagación.
   if (editor.editing.value) return
 
-  const rowCount = props.rows.length
+  const rowCount = visibleRowCount.value
   if (rowCount === 0) return
 
   const ctrl = event.ctrlKey || event.metaKey
@@ -532,18 +645,27 @@ function onViewportKeyDown(event: KeyboardEvent): void {
       event.preventDefault()
       moveActiveBy(1, 0)
       return
+    case 'ArrowRight': {
+      event.preventDefault()
+      // Comportamiento de `treegrid`: sobre un grupo plegado, la flecha derecha
+      // lo abre en lugar de moverse. Sobre uno ya abierto no hay nada que abrir
+      // y la tecla vuelve a significar lo de siempre.
+      const group = activeGroupRow()
+      if (group && !group.expanded) grouping.toggleGroup(group.groupId)
+      else moveActiveBy(0, 1)
+      return
+    }
     case 'ArrowUp':
       event.preventDefault()
       moveActiveBy(-1, 0)
       return
-    case 'ArrowRight':
+    case 'ArrowLeft': {
       event.preventDefault()
-      moveActiveBy(0, 1)
+      const group = activeGroupRow()
+      if (group && group.expanded) grouping.toggleGroup(group.groupId)
+      else moveActiveBy(0, -1)
       return
-    case 'ArrowLeft':
-      event.preventDefault()
-      moveActiveBy(0, -1)
-      return
+    }
     case 'Tab':
       event.preventDefault()
       moveActiveInReadingOrder(!event.shiftKey)
@@ -571,10 +693,26 @@ function onViewportKeyDown(event: KeyboardEvent): void {
       moveActiveBy(-pageSize(), 0)
       return
     case 'Enter':
-    case 'F2':
+    case 'F2': {
       event.preventDefault()
-      editActiveCell()
+      // Sobre una cabecera, Enter pliega: es la misma acción que el click, y no
+      // compite con la edición porque un grupo no tiene ninguna celda que editar.
+      const group = activeGroupRow()
+      if (group) grouping.toggleGroup(group.groupId)
+      else editActiveCell()
       return
+    }
+    case ' ': {
+      const group = activeGroupRow()
+      if (group) {
+        event.preventDefault()
+        grouping.toggleGroup(group.groupId)
+        return
+      }
+      // Sobre una fila de datos el espacio sigue siendo un carácter imprimible y
+      // cae en el camino de "escribir para editar", más abajo.
+      break
+    }
     case 'Escape':
       // Sin editor abierto, Escape no limpia la selección: perder de vista
       // dónde estabas parado es más molesto que seguir seleccionado.
@@ -649,13 +787,16 @@ function getCellGeometry(position: CellPosition): CellGeometry | null {
 
 const editor = useCellEditor<TRow>({
   host: editorHostEl,
-  getRow: (rowIndex) => props.rows[rowIndex],
+  // El editor trabaja en coordenadas VISIBLES, igual que el pool: es lo que le
+  // permite ubicar su control con una multiplicación. La traducción al índice
+  // del dataset ocurre al emitir, y solo ahí.
+  getRow: (rowIndex) => grouping.rowAt(rowIndex),
   getColumn: getColumnDefinition,
   getCellGeometry,
   isCellPainted: (position) => pool.getCellElement(position.rowIndex, position.columnKey) !== null,
-  emitBeforeEdit: (event) => emit('beforeEdit', event),
-  emitAfterEdit: (event) => emit('afterEdit', event),
-  emitEditCommit: (event) => emit('editCommit', event),
+  emitBeforeEdit: (event) => emit('beforeEdit', withSourceRowIndex(event)),
+  emitAfterEdit: (event) => emit('afterEdit', withSourceRowIndex(event)),
+  emitEditCommit: (event) => emit('editCommit', withSourceRowIndex(event)),
   onEnterCommit: () => {
     // Enter confirma y baja una fila, como en una planilla. La selección se
     // mueve aunque el padre no persista el valor: es navegación, no edición.
@@ -683,6 +824,9 @@ function resolveRowKey(row: TRow, index: number): string {
 function paintFrame(): void {
   pool.paint({
     rows: props.rows,
+    flatRows: grouping.flatRows.value,
+    groupDepth: grouping.depth.value,
+    showGroupCount: props.showGroupCount,
     rowRange: rowVirtual.window.value,
     columns: visibleColumns.value,
     rowHeight: rowHeight.value,
@@ -720,6 +864,11 @@ watch(
     // pintaría hasta el próximo scroll.
     activeCell,
     () => props.selectionMode,
+    // La vista aplanada es un array nuevo en cada reconstrucción, así que alcanza
+    // con observarla para cubrir `groupBy`, la expansión y los agregados de una
+    // sola vez. Durante el scroll no cambia, y por eso no agenda nada.
+    grouping.flatRows,
+    () => props.showGroupCount,
   ],
   () => scroll.requestFrame(),
   { flush: 'post' },
@@ -792,7 +941,7 @@ function onResizePointerDown(event: PointerEvent, column: ResolvedColumn<TRow>):
 
 /** Scrollea hasta dejar `index` como primera fila visible. */
 function scrollToRow(index: number): void {
-  const maxIndex = Math.max(0, props.rows.length - 1)
+  const maxIndex = Math.max(0, visibleRowCount.value - 1)
   const clamped = Math.min(Math.max(Math.floor(index), 0), maxIndex)
   scroll.scrollTo({ top: clamped * rowHeight.value })
 }
@@ -824,6 +973,12 @@ function scrollToColumn(key: string): void {
  */
 function refresh(): void {
   pool.invalidate()
+  // Con grupos, el caché de celdas no es el único que quedó viejo: los
+  // contadores y los agregados salen del árbol, y el árbol se reconstruye por
+  // identidad de `rows`. Una mutación en el lugar no la cambia, así que sin esto
+  // las cabeceras seguirían anunciando los totales anteriores mientras las celdas
+  // ya muestran los nuevos. Sin agrupación es un no-op.
+  grouping.rebuild()
   scroll.requestFrame()
 }
 
@@ -839,6 +994,8 @@ function resetLayout(): void {
   setColumnVisibility({})
   setColumnWidths({})
   setColumnOrder([])
+  setGroupBy([])
+  grouping.setCollapsedGroups([])
 }
 
 /** Escribe de inmediato el layout pendiente por el debounce. */
@@ -866,6 +1023,9 @@ defineExpose({
   refresh,
   resetLayout,
   flushPersistence,
+  toggleGroup: grouping.toggleGroup,
+  expandAllGroups: grouping.expandAll,
+  collapseAllGroups: grouping.collapseAll,
 })
 
 /* ------------------------------------------------------------- Ciclo de vida */
@@ -893,6 +1053,16 @@ const canvasStyle = computed(() => ({
   width: `${totalWidth.value}px`,
   height: `${rowVirtual.totalSize.value}px`,
 }))
+
+/**
+ * Rol de la grilla.
+ *
+ * Con grupos activos la estructura ES un árbol tabular: filas que se pliegan,
+ * anidadas en niveles. `treegrid` es lo que hace que un lector de pantalla
+ * anuncie `aria-expanded` y `aria-level`, que con `grid` simplemente ignoraría.
+ * Sin grupos vuelve a ser una grilla plana, que es exactamente lo que es.
+ */
+const gridRole = computed(() => (grouping.active.value ? 'treegrid' : 'grid'))
 
 function headerAlignClass(column: ResolvedColumn<TRow>): string | undefined {
   if (column.align === 'center') return 'dt-header-cell--center'
@@ -951,9 +1121,9 @@ function headerAlignClass(column: ResolvedColumn<TRow>): string | undefined {
     <div
       ref="viewportEl"
       class="dt-viewport"
-      role="grid"
+      :role="gridRole"
       :tabindex="selectionMode === 'none' ? -1 : 0"
-      :aria-rowcount="rows.length + 1"
+      :aria-rowcount="visibleRowCount + 1"
       :aria-colcount="resolvedColumns.length"
       v-on="viewportListeners"
     >

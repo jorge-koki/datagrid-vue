@@ -110,6 +110,7 @@ interface ResolvedPersistOptions {
   includeVisibility: boolean
   includeWidths: boolean
   includeOrder: boolean
+  includeGrouping: boolean
   storageKey: string
 }
 
@@ -162,6 +163,7 @@ export function useTablePersistence<TRow>(
       includeVisibility: include?.visibility ?? true,
       includeWidths: include?.widths ?? true,
       includeOrder: include?.order ?? true,
+      includeGrouping: include?.grouping ?? true,
       storageKey: `${STORAGE_KEY_PREFIX}${tableId}`,
     }
   })
@@ -195,10 +197,18 @@ export function useTablePersistence<TRow>(
     { immediate: true },
   )
 
-  /** Arma el payload a guardar, respetando `include`. */
+  /**
+   * Arma el payload a guardar, respetando `include`.
+   *
+   * El corte de agrupación se comporta distinto de los otros tres: en vez de
+   * escribirse vacío cuando está apagado, directamente NO aparece. Es lo que hace
+   * que una tabla que no agrupa produzca exactamente el mismo payload que antes
+   * de que la función existiera, sin ensuciar el almacenamiento con dos arrays
+   * vacíos y sin obligar a subir la versión del esquema.
+   */
   function buildPayload(config: ResolvedPersistOptions): PersistedTableState {
     const current = toValue(options.state)
-    return {
+    const payload: PersistedTableState = {
       version: config.version,
       // Se copian los objetos: lo que va al almacenamiento no debe ser una
       // referencia viva al estado del componente.
@@ -206,6 +216,13 @@ export function useTablePersistence<TRow>(
       columnWidths: config.includeWidths ? { ...current.columnWidths } : {},
       columnOrder: config.includeOrder ? [...current.columnOrder] : [],
     }
+
+    if (config.includeGrouping && current.groupBy !== undefined) {
+      payload.groupBy = [...current.groupBy]
+      payload.collapsedGroups = [...(current.collapsedGroups ?? [])]
+    }
+
+    return payload
   }
 
   function cancelPending(): void {
@@ -296,12 +313,20 @@ export function useTablePersistence<TRow>(
     if (loaded && loaded.version === config.version) {
       const columns = toValue(options.columns)
       const reconciled = reconcilePersistedState(loaded, columns)
-      options.onLoad({
+      const applied: PersistedTableState = {
         version: config.version,
         columnVisibility: config.includeVisibility ? reconciled.columnVisibility : {},
         columnWidths: config.includeWidths ? reconciled.columnWidths : {},
         columnOrder: config.includeOrder ? reconciled.columnOrder : [],
-      })
+      }
+      // Las claves de agrupación siguen siendo opcionales también acá: ausentes
+      // significan "no había nada que restaurar", y el componente distingue eso
+      // de "había, y era vacío".
+      if (config.includeGrouping && reconciled.groupBy !== undefined) {
+        applied.groupBy = reconciled.groupBy
+        applied.collapsedGroups = reconciled.collapsedGroups ?? []
+      }
+      options.onLoad(applied)
     }
 
     // Se marca listo incluso cuando no había nada o la versión no coincidía: a

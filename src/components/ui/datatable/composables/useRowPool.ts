@@ -1,10 +1,23 @@
-import type { CellPosition, SelectionMode, VirtualWindow } from '../types'
+import type { CellPosition, FlatRow, GroupRow, SelectionMode, VirtualWindow } from '../types'
 import type { ResolvedColumn } from './useColumnLayout'
-import type { PooledCellElement, PooledRowElement } from '../internal/dom'
+import type {
+  PooledAggregateElement,
+  PooledCellElement,
+  PooledGroupParts,
+  PooledRowElement,
+} from '../internal/dom'
 import {
   clearCellContent,
+  clearRowAriaLevel,
+  clearRowAriaSet,
+  clearRowExpanded,
+  createAggregateElement,
   createCellElement,
+  createGroupParts,
   createRowElement,
+  setAggregateAlign,
+  setAggregateBox,
+  setAggregateText,
   setCellActive,
   setCellAlign,
   setCellAriaIndex,
@@ -12,16 +25,29 @@ import {
   setCellBox,
   setCellCustomClass,
   setCellEditing,
+  setGroupCount,
+  setGroupHeaderBox,
+  setGroupLabel,
   setHidden,
   setRowActive,
   setRowAriaIndex,
+  setRowAriaLevel,
   setRowAriaSelected,
+  setRowAriaSet,
+  setRowExpanded,
+  setRowGroupClass,
+  setRowGroupDepth,
   setRowKey,
   setRowOffset,
   setRowStripe,
 } from '../internal/dom'
-import { ROW_POOL_SLACK, UNPAINTED_ROW_INDEX } from '../internal/constants'
-import { rawValuesEqual, readRawValue, toCellValue } from '../internal/values'
+import {
+  ROW_KIND_DATA,
+  ROW_KIND_GROUP,
+  ROW_POOL_SLACK,
+  UNPAINTED_ROW_INDEX,
+} from '../internal/constants'
+import { formatCellValue, rawValuesEqual, readRawValue, toCellValue } from '../internal/values'
 import { resolveRenderer, revertCheckbox } from '../internal/renderers'
 import type { CellRenderer } from '../types'
 
@@ -57,6 +83,10 @@ import type { CellRenderer } from '../types'
  *    nodos se reciclan por slot horizontal, un mismo nodo puede pasar de una
  *    columna a otra con renderer distinto, y ahí hay que reconstruirlo. Ver
  *    `ensureRenderer`, que es el punto más sutil de este archivo.
+ * 5. **Y se segmenta también por tipo de FILA.** Con agrupación activa, la
+ *    secuencia visible intercala cabeceras de grupo entre las filas de datos, y
+ *    las dos estructuras no se parecen en nada. Es el mismo peligro que resuelve
+ *    `ensureRenderer`, un eje más arriba. Ver `ensureRowKind`.
  *
  * ## El pool ROTA: por qué un paso de scroll no repinta la ventana
  *
@@ -121,6 +151,15 @@ import type { CellRenderer } from '../types'
  * anuncia un lector de pantalla viaja por `aria-rowindex` y `aria-colindex`, que
  * es justamente para lo que estaban desde el principio.
  *
+ * ## Qué indexa `rowIndex` cuando hay grupos
+ *
+ * La SECUENCIA VISIBLE, no la prop `rows`. Con `flatRows` en `null` —sin
+ * agrupación— las dos coinciden y el pool recorre exactamente el camino de
+ * siempre: se indexa `state.rows` y no se asigna ni se compara nada de más. Con
+ * agrupación, `flatRows` dice qué hay en cada posición visible, y cada fila de
+ * datos trae adosado su índice ORIGINAL para que `data-row-key` y los eventos de
+ * edición sigan hablando del dataset del consumidor.
+ *
  * ## Por qué es TypeScript plano
  *
  * No hay `ref`, `computed` ni `watch` en este archivo. Conserva el nombre
@@ -150,6 +189,14 @@ export interface RowPoolCallbacks {
    * veta o no se persiste, la casilla queda como estaba.
    */
   onCellToggle?: (position: CellPosition, nextValue: boolean) => void
+  /**
+   * Click sobre una cabecera de grupo, en cualquier parte de ella.
+   *
+   * Viaja por el MISMO listener delegado que el resto: el chevrón no registra
+   * nada propio. Un listener por cabecera de grupo visible sería exactamente el
+   * costo que la regla 3 existe para evitar, y encima sobre nodos que se reciclan.
+   */
+  onGroupToggle?: (groupId: string) => void
 }
 
 /**
@@ -162,6 +209,18 @@ export interface RowPoolCallbacks {
 export interface RowPoolPaintState<TRow> {
   /** El dataset completo. El pool indexa, nunca copia ni recorre entero. */
   rows: readonly TRow[]
+  /**
+   * Secuencia visible aplanada, o `null`/ausente cuando no hay agrupación.
+   *
+   * `null` no significa "todavía no está": significa que `rowRange` indexa
+   * directo en `rows`, que es el camino sin agrupación y el que no debe pagar
+   * nada por esta función. La rama se decide UNA vez por pintado, no por fila.
+   */
+  flatRows?: readonly FlatRow<TRow>[] | null
+  /** Niveles de agrupación. Alimenta el `aria-level` de las filas de datos. */
+  groupDepth?: number
+  /** Si la cabecera de grupo muestra su contador de filas. */
+  showGroupCount?: boolean
   /** Tramo vertical de filas a pintar. */
   rowRange: VirtualWindow
   /** Tramo horizontal de columnas a pintar, ya recortado por el componente. */
@@ -412,6 +471,12 @@ export function useRowPool<TRow extends Record<string, unknown>>(
     if (!container) return
 
     const { rowRange, columns, rowHeight, editing, active, selectionMode, stripe } = state
+    // Se resuelven una vez por pintado. Con `flatRows` en `null` el bucle de
+    // filas ni siquiera mira la agrupación: es una comparación contra `null` por
+    // FILA VISIBLE, no por celda, y es lo único que el camino sin grupos paga.
+    const flatRows = state.flatRows ?? null
+    const groupDepth = state.groupDepth ?? 0
+    const showGroupCount = state.showGroupCount ?? true
     const visibleRowCount = Math.max(0, rowRange.end - rowRange.start)
     const visibleColumnCount = columns.length
     // Índice ABSOLUTO de la primera columna del tramo, que es la base de la
@@ -485,23 +550,56 @@ export function useRowPool<TRow extends Record<string, unknown>>(
         continue
       }
 
-      const row = state.rows[rowIndex]
+      // Sin agrupación, la fila de la posición visible `rowIndex` es
+      // `rows[rowIndex]` y su índice original es el mismo número. Con
+      // agrupación, las dos cosas las dice el aplanado.
+      let row: TRow | undefined
+      let sourceRowIndex = rowIndex
+
+      if (flatRows !== null) {
+        const entry = flatRows[rowIndex]
+        if (entry === undefined) {
+          retireRow(rowNode)
+          continue
+        }
+        if (entry.kind === 'group') {
+          paintGroupRow(rowNode, entry, rowIndex, columns, rowHeight, frame, showGroupCount)
+          continue
+        }
+        row = entry.row
+        sourceRowIndex = entry.rowIndex
+      } else {
+        row = state.rows[rowIndex]
+      }
+
       // Guarda de `noUncheckedIndexedAccess`. Además cubre el caso real de que
       // `rows` se haya acortado entre el cálculo de la ventana y este pintado.
       if (row === undefined) {
-        rowNode.__dtRowIndex = UNPAINTED_ROW_INDEX
-        setHidden(rowNode, true)
+        retireRow(rowNode)
         continue
       }
+
+      ensureRowKind(rowNode, ROW_KIND_DATA)
 
       setHidden(rowNode, false)
       setRowOffset(rowNode, rowIndex * rowHeight)
       setRowStripe(rowNode, stripe && rowIndex % 2 === 1)
-      if (rowNode.__dtRowIndex !== rowIndex) {
+      // La identidad de una fila pintada son sus DOS índices. Sin grupos el
+      // segundo es redundante; con grupos, expandir o colapsar corre las filas de
+      // abajo sin cambiar su posición visible, y comparar solo la posición
+      // dejaría `data-row-key` apuntando a la fila anterior.
+      if (rowNode.__dtRowIndex !== rowIndex || rowNode.__dtSourceRowIndex !== sourceRowIndex) {
         rowNode.__dtRowIndex = rowIndex
-        setRowKey(rowNode, state.resolveRowKey(row, rowIndex))
+        rowNode.__dtSourceRowIndex = sourceRowIndex
+        setRowKey(rowNode, state.resolveRowKey(row, sourceRowIndex))
         setRowAriaIndex(rowNode, rowIndex)
       }
+
+      // Las filas de datos de un `treegrid` cuelgan un nivel por debajo del
+      // último grupo. Es un número constante mientras no cambie la agrupación,
+      // así que se escribe una vez por nodo y el caché lo saltea después.
+      if (groupDepth > 0) setRowAriaLevel(rowNode, groupDepth + 1)
+      else clearRowAriaLevel(rowNode)
 
       const rowIsActive = rowIndex === activeRowIndex
       setRowActive(rowNode, rowIsActive)
@@ -543,6 +641,168 @@ export function useRowPool<TRow extends Record<string, unknown>>(
 
         paintCell(cellNode, resolved, renderer, row, rowIndex, frame)
       }
+    }
+  }
+
+  /** Deja un nodo de fila fuera de juego: sin identidad y escondido. */
+  function retireRow(rowNode: PooledRowElement): void {
+    rowNode.__dtRowIndex = UNPAINTED_ROW_INDEX
+    rowNode.__dtSourceRowIndex = UNPAINTED_ROW_INDEX
+    setHidden(rowNode, true)
+  }
+
+  /**
+   * Garantiza que el nodo de fila esté construido para el tipo que le toca.
+   *
+   * ## El invariante que agrega la agrupación
+   *
+   * Es el mismo peligro que resuelve {@link ensureRenderer}, un eje más arriba.
+   * Los nodos de fila se reciclan por slot VERTICAL, y con grupos la secuencia
+   * visible mezcla cabeceras y filas de datos: el slot 3 puede mostrar una fila
+   * de datos en un frame y una cabecera de grupo en el siguiente. Las dos
+   * estructuras no se parecen —una tiene celdas con renderers, la otra un
+   * chevrón, una etiqueta, un contador y agregados— y pintar una sobre la otra
+   * escribiría encima de nodos que pertenecen a la forma anterior.
+   *
+   * La respuesta es idéntica y por los mismos motivos: cada nodo recuerda con qué
+   * tipo está construido, y si el tipo entrante coincide —que es el caso común y
+   * el único que ocurre durante el scroll, porque la rotación conserva el slot de
+   * cada fila visible— no se hace absolutamente nada.
+   *
+   * Lo que sí difiere de `ensureRenderer` es que acá NO se destruye nada. Las dos
+   * estructuras conviven en el mismo nodo y se turnan con `hidden`: reconstruir
+   * la cabecera de grupo en cada ida y vuelta significaría crear y destruir cinco
+   * nodos —uno de ellos un SVG— en mitad del scroll, y un slot que oscila entre
+   * los dos tipos lo haría en cada paso. Convivir cuesta unos pocos nodos
+   * escondidos por fila del pool; recrear cuesta trabajo por frame.
+   *
+   * Los índices se invalidan en el cambio porque la identidad se compara contra
+   * ellos: sin esto, un slot que vuelve a mostrar datos con el mismo índice
+   * visible que ya tenía se saltearía la reescritura de `data-row-key`.
+   *
+   * @returns `true` si el nodo cambió de tipo.
+   */
+  function ensureRowKind(rowNode: PooledRowElement, kind: string): boolean {
+    if (rowNode.__dtRowKind === kind) return false
+
+    rowNode.__dtRowKind = kind
+    rowNode.__dtRowIndex = UNPAINTED_ROW_INDEX
+    rowNode.__dtSourceRowIndex = UNPAINTED_ROW_INDEX
+    rowNode.__dtGroupId = ''
+
+    const isGroup = kind === ROW_KIND_GROUP
+    setRowGroupClass(rowNode, isGroup)
+
+    if (isGroup) {
+      // Las celdas se esconden, no se destruyen: sus renderers ya están
+      // construidos y el próximo frame que devuelva esta fila a datos los
+      // necesita exactamente como están.
+      for (const cellNode of rowNode.__dtCells) setHidden(cellNode, true)
+      return true
+    }
+
+    const parts = rowNode.__dtGroup
+    if (parts) {
+      setHidden(parts.header, true)
+      for (const aggregate of parts.aggregates) setHidden(aggregate, true)
+    }
+    clearRowExpanded(rowNode)
+    clearRowAriaSet(rowNode)
+    return true
+  }
+
+  /** Devuelve la estructura de cabecera del nodo, construyéndola la primera vez. */
+  function ensureGroupParts(rowNode: PooledRowElement): PooledGroupParts {
+    const existing = rowNode.__dtGroup
+    if (existing) return existing
+    const parts = createGroupParts(rowNode)
+    rowNode.__dtGroup = parts
+    return parts
+  }
+
+  /** Devuelve la celda de agregado de un slot, creándola la primera vez. */
+  function ensureAggregate(
+    rowNode: PooledRowElement,
+    parts: PooledGroupParts,
+    slot: number,
+  ): PooledAggregateElement {
+    const existing = parts.aggregates[slot]
+    if (existing) return existing
+    const element = createAggregateElement(rowNode)
+    parts.aggregates.push(element)
+    return element
+  }
+
+  /**
+   * Pinta una cabecera de grupo.
+   *
+   * La cabecera se extiende desde el borde izquierdo del tramo visible hasta su
+   * borde derecho y las celdas de agregado se dibujan ENCIMA, con fondo propio.
+   * Es lo que permite que la etiqueta use todo el ancho libre que tenga a
+   * disposición sin necesidad de calcular dónde termina: el recorte lo hace el
+   * agregado que se le apoya arriba, no una cuenta que habría que rehacer con
+   * cada cambio de columnas.
+   */
+  function paintGroupRow(
+    rowNode: PooledRowElement,
+    entry: GroupRow,
+    rowIndex: number,
+    columns: readonly ResolvedColumn<TRow>[],
+    rowHeight: number,
+    frame: PaintFrame,
+    showGroupCount: boolean,
+  ): void {
+    ensureRowKind(rowNode, ROW_KIND_GROUP)
+    const parts = ensureGroupParts(rowNode)
+
+    setHidden(rowNode, false)
+    setHidden(parts.header, false)
+    setRowOffset(rowNode, rowIndex * rowHeight)
+    // Una cabecera de grupo nunca se raya: su fondo es el que la separa de las
+    // filas de datos, y alternarlo haría que una de cada dos se confundiera.
+    setRowStripe(rowNode, false)
+
+    if (rowNode.__dtRowIndex !== rowIndex || rowNode.__dtGroupId !== entry.groupId) {
+      rowNode.__dtRowIndex = rowIndex
+      rowNode.__dtGroupId = entry.groupId
+      setRowKey(rowNode, entry.groupId)
+      setRowAriaIndex(rowNode, rowIndex)
+    }
+
+    setRowActive(rowNode, rowIndex === frame.activeRowIndex)
+    // Una cabecera no es una unidad seleccionable de la grilla: se la puede
+    // recorrer con el teclado para plegarla, pero no representa datos.
+    setRowAriaSelected(rowNode, false)
+
+    setRowGroupDepth(rowNode, entry.depth)
+    setRowExpanded(rowNode, entry.expanded)
+    setRowAriaLevel(rowNode, entry.depth + 1)
+    setRowAriaSet(rowNode, entry.posInSet, entry.setSize)
+
+    setGroupLabel(parts, entry.label)
+    setGroupCount(parts, String(entry.count), !showGroupCount)
+
+    const first = columns[0]
+    const last = columns[columns.length - 1]
+    if (first && last) {
+      setGroupHeaderBox(parts, first.offset, last.offset + last.width - first.offset)
+    }
+
+    let used = 0
+    for (const resolved of columns) {
+      if (resolved.column.aggregate === undefined) continue
+      const node = ensureAggregate(rowNode, parts, used)
+      used += 1
+      setHidden(node, false)
+      setAggregateBox(node, resolved.offset, resolved.width)
+      setAggregateAlign(node, resolved.align)
+      // `column.format` no se aplica: su firma pide una fila y un índice, y un
+      // agregado no pertenece a ninguna fila en particular.
+      setAggregateText(node, resolved.key, formatCellValue(entry.aggregates[resolved.key]))
+    }
+    for (let slot = used; slot < parts.aggregates.length; slot += 1) {
+      const node = parts.aggregates[slot]
+      if (node) setHidden(node, true)
     }
   }
 
@@ -692,6 +952,11 @@ export function useRowPool<TRow extends Record<string, unknown>>(
 
     const rowNode = rows[slotFor(rowIndex, poolSize)]
     if (!rowNode || rowNode.__dtRowIndex !== rowIndex || rowNode.hidden) return null
+    // Una cabecera de grupo no tiene celdas visibles: las suyas están escondidas
+    // y no representan ninguna columna. Responder `null` acá es lo que mantiene a
+    // los grupos fuera de la edición y de la selección de celdas sin que ninguno
+    // de esos dos módulos tenga que saber que los grupos existen.
+    if (rowNode.__dtRowKind !== ROW_KIND_DATA) return null
 
     for (const cellNode of rowNode.__dtCells) {
       if (cellNode.__dtColumnKey === columnKey && !cellNode.hidden) return cellNode
@@ -718,6 +983,10 @@ export function useRowPool<TRow extends Record<string, unknown>>(
     if (!cellElement) return null
 
     for (const rowNode of rows) {
+      // Una cabecera de grupo conserva sus celdas escondidas; ninguna puede ser
+      // el blanco de un evento, pero descartarla acá vuelve explícito que los
+      // grupos no participan de la edición ni de la selección de celdas.
+      if (rowNode.__dtRowKind !== ROW_KIND_DATA) continue
       for (const cellNode of rowNode.__dtCells) {
         if (cellNode === cellElement) return { row: rowNode, cell: cellNode }
       }
@@ -746,12 +1015,24 @@ export function useRowPool<TRow extends Record<string, unknown>>(
     handler({ rowIndex: hit.row.__dtRowIndex, columnKey: hit.cell.__dtColumnKey })
   }
 
+  /**
+   * Click sobre una fila.
+   *
+   * Sobre una cabecera de grupo el click PLIEGA, no selecciona: es el gesto que
+   * todo el mundo espera de una fila con un chevrón, y no compite con nada porque
+   * una cabecera no tiene celdas que seleccionar. El chevrón no necesita su propio
+   * listener; alcanza con saber qué tipo de fila recibió el evento.
+   */
   function handleClick(event: MouseEvent): void {
-    const handler = callbacks.onRowClick
-    if (!handler) return
     const rowNode = resolveEventRow(event.target)
     if (!rowNode || rowNode.__dtRowIndex === UNPAINTED_ROW_INDEX) return
-    handler(rowNode.__dtRowIndex)
+
+    if (rowNode.__dtRowKind === ROW_KIND_GROUP) {
+      if (rowNode.__dtGroupId !== '') callbacks.onGroupToggle?.(rowNode.__dtGroupId)
+      return
+    }
+
+    callbacks.onRowClick?.(rowNode.__dtRowIndex)
   }
 
   /**
