@@ -34,6 +34,11 @@ selección, agrupación, renderers, temas, persistencia, rendimiento, limitacion
   filas descendientes y no sobre los agregados de sus hijos.
 - **Ocho renderers de celda incluidos** —text, number, badge, select, progress, avatar, checkbox,
   tags—, más un protocolo documentado y un registro para los propios.
+- **Un slot `#editor` para el componente del consumidor**, que es la vía para meter un `<USelect>` o
+  cualquier control de un design system dentro de una columna. Se monta sobre la celda en edición
+  —**una instancia a la vez**, no una por celda— y `commit()` / `cancel()` recorren la misma tubería
+  de edición de siempre. El porqué, con la medición de las tres estrategias posibles, está
+  [acá](./src/components/ui/datatable/README.md#componentes-de-terceros-dentro-de-una-celda).
 - **Columnas redimensionables, ocultables y reordenables**, con persistencia del layout que reconcilia
   el estado guardado contra las columnas que existen hoy.
 - **Tematizable con custom properties `--dt-*`**, en claro / oscuro / automático, con un preset
@@ -64,6 +69,10 @@ La demo abre con **100 filas**, para que se lea como un ejemplo de uso. Desde ah
 - Doble clic —o `Enter`, o directamente empezar a escribir— para editar. Las filas marcadas como
   **Bloqueado** quedan vetadas desde `beforeEdit`, y la bitácora muestra el ciclo entero a medida que
   ocurre.
+- Editar la columna **Estado**: el desplegable que aparece es un componente Vue de la demo montado
+  desde el slot `#editor`, no un control de la librería. Mirar el contador de nodos mientras se abre y
+  se cierra: sube unos pocos nodos y vuelve a bajar, con 100 filas y con 50.000, porque hay una sola
+  instancia viva a la vez.
 - Elegir una agrupación en el selector **Agrupar**: por estado, por prioridad, o los dos niveles a la
   vez. Las cabeceras muestran el total de presupuesto, el promedio de progreso y el conteo del grupo,
   y los botones **Expandir todo** y **Colapsar todo** actúan sobre el árbol completo.

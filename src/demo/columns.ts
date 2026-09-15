@@ -5,8 +5,9 @@ import type { ProjectRow } from './data'
 /**
  * Definición de columnas de la demo.
  *
- * Cubre los ocho renderers incluidos y las dos formas de resolver el editor:
- * inferido a partir del tipo del valor y declarado de forma explícita.
+ * Cubre los ocho renderers incluidos y las tres formas de resolver el editor:
+ * inferido a partir del tipo del valor, declarado de forma explícita, y delegado
+ * al slot `#editor` con `editor: 'slot'`.
  *
  * ## Los formateadores viven en el módulo, no dentro de `format`
  *
@@ -106,9 +107,14 @@ export const projectColumns: readonly DataTableColumn<ProjectRow>[] = [
     width: 130,
     resizable: true,
     editable: true,
-    // Renderer `select`: píldora con chevron. El editor se infiere como `select`
-    // porque la columna declara `options`.
+    // Renderer `select`: píldora con chevron. El editor, en cambio, lo pone el
+    // consumidor desde el slot `#editor` de la tabla: `DemoStatusPicker.vue`
+    // ocupa el lugar que en una aplicación real ocuparía el desplegable de un
+    // design system. Es la única vía por la que entra un componente Vue, y se
+    // monta sobre la celda en edición —una instancia a la vez— en lugar de una
+    // por celda visible.
     renderer: 'select',
+    editor: 'slot',
     options: STATUS_OPTIONS,
     // `count` es el `COUNT(columna)` de SQL: cuenta las filas descendientes cuyo
     // valor está presente, no las filas del grupo. Con este dataset las dos

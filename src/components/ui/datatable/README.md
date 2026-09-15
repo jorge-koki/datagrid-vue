@@ -272,6 +272,18 @@ tomar posesión del estado.
 | `update:groupBy`          | `string[]`                          | Cambiaron las claves de agrupación (por la UI, por la carga de la persistencia o por `resetLayout`). |
 | `update:expandedGroups`   | `string[]`                          | Cambió el estado de expansión. Lleva la lista COMPLETA de expandidos, no el grupo que cambió.        |
 
+## Slots
+
+Hay uno solo, y es opcional.
+
+| Slot      | Props                       | Cuándo se renderiza                                                                                                                     |
+| --------- | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `#editor` | `CellEditorSlotProps<TRow>` | Sobre la celda en edición, y únicamente si esa columna declara `editor: 'slot'`. Se monta al abrir el editor y se desmonta al cerrarlo. |
+
+Es la única vía por la que entra un componente Vue del consumidor, y entra con una regla: **uno
+montado a la vez**, no uno por celda. Está desarrollado, con la medición que lo justifica, en
+[Componentes de terceros dentro de una celda](#componentes-de-terceros-dentro-de-una-celda).
+
 ### El ciclo de edición
 
 ```
@@ -281,17 +293,24 @@ doble clic / Enter / F2 / clic en una casilla
    beforeEdit  ──── event.cancel() ────► no pasa nada más. Ni editor, ni afterEdit.
         │
         ▼
-   se abre el editor (o se aplica directamente el valor de la casilla)
+   se abre el editor (el incluido, el del slot #editor, o se aplica
+   directamente el valor de la casilla)
         │
         ├── Enter / blur / cambio del select / la fila sale de la ventana ──► commit
-        └── Escape ──────────────────────────────────────────────────────► se descarta
+        ├── commit(valor) desde el slot #editor ─────────────────────────► commit
+        └── Escape / cancel() desde el slot #editor ─────────────────────► se descarta
+        │
+        ▼
+   afterEdit    (SIEMPRE, y primero; `canceled: true` cuando se descartó)
         │
         ▼
    editCommit   (solo si newValue difiere de oldValue)
-        │
-        ▼
-   afterEdit    (siempre; `canceled: true` cuando se descartó con Escape)
 ```
+
+> **`afterEdit` se emite ANTES que `editCommit`,** y no al revés. Los dos salen de la misma llamada
+> síncrona, así que para un listener normal el orden es indistinguible; importa cuando uno de los dos
+> handlers lee estado que el otro escribe. El que cierra el ciclo es `afterEdit` y el que pide
+> escribir es `editCommit`, pero `editCommit` llega segundo.
 
 **Cómo cancelar.** Hay que llamar a `event.cancel()` de forma síncrona dentro del listener de
 `beforeEdit`. Es seguro llamarla más de una vez, y `event.canceled` lo refleja. Este es el punto de
@@ -326,7 +345,7 @@ la parte que toca la edición.
 
 | Entrada                                            | Efecto                                                                          |
 | -------------------------------------------------- | ------------------------------------------------------------------------------- |
-| Doble clic en una celda                            | Abre el editor                                                                  |
+| Doble clic en una celda                            | Abre el editor (el incluido, o el del slot `#editor` si la columna lo declara)  |
 | `Enter` o `F2` sobre la celda activa               | Abre el editor; en una columna de casillas, alterna el valor                    |
 | Escribir un carácter imprimible en la celda activa | Abre el editor sembrado con ese carácter (no en `select` ni en `date`)          |
 | `Enter` dentro del editor                          | Commitea y baja la selección una fila                                           |
@@ -643,7 +662,7 @@ interface DataTableColumn<TRow> {
   renderer?: string | CellRenderer<TRow>
   hideable?: boolean
   defaultVisible?: boolean
-  editor?: 'text' | 'number' | 'select' | 'checkbox' | 'date'
+  editor?: 'text' | 'number' | 'select' | 'checkbox' | 'date' | 'slot'
   options?: readonly CellOption[]
   min?: number
   max?: number
@@ -653,27 +672,27 @@ interface DataTableColumn<TRow> {
 }
 ```
 
-| Campo                   | Por defecto                                    | Notas                                                                                                                                          |
-| ----------------------- | ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `key`                   | —                                              | Id único, y también la clave de datos por defecto (`row[key]`).                                                                                |
-| `label`                 | `key`                                          | Texto del header.                                                                                                                              |
-| `width`                 | `defaultColumnWidth` (150)                     | Siempre acotado a `[max(32, minWidth), min(4000, maxWidth)]`.                                                                                  |
-| `minWidth` / `maxWidth` | `32` / `4000`                                  | Se aplican al resolver el ancho y durante el redimensionado.                                                                                   |
-| `resizable`             | `false`                                        | Muestra un handle de arrastre en el borde del header.                                                                                          |
-| `align`                 | el `defaultAlign` del renderer, si no `'left'` | Un `align` explícito siempre gana. Se aplica como clase, no como estilo inline.                                                                |
-| `editable`              | `false`                                        | Tiene que ser exactamente `true` para que la celda se pueda editar.                                                                            |
-| `format`                | —                                              | Valor crudo → el string que se escribe en la celda. **Debe ser puro y barato.** No se aplica a los agregados: para eso está `formatAggregate`. |
-| `formatAggregate`       | —                                              | Valor agregado → el string que se escribe en la cabecera de grupo. Ver [Formato de los agregados](#formato-de-los-agregados).                  |
-| `cellClass`             | —                                              | Clase CSS extra sobre el elemento de celda. También está en el camino caliente.                                                                |
-| `accessor`              | `row[key]`                                     | Lee el valor desde la fila. Devuelve `CellValue`: no puede devolver un objeto ni un array.                                                     |
-| `renderer`              | `'text'`                                       | Nombre de un renderer registrado, o una implementación. Un nombre desconocido cae en `'text'` en lugar de lanzar.                              |
-| `hideable`              | `true`                                         | `false` deja la columna fuera de `DataTableColumnToggle`.                                                                                      |
-| `defaultVisible`        | `true`                                         | Visibilidad inicial. La persistencia y el v-model tienen prioridad sobre esto.                                                                 |
-| `editor`                | inferido (ver más abajo)                       | El control que se abre al editar.                                                                                                              |
-| `options`               | —                                              | Alimenta los renderers `badge` / `select` / `tags`, **el** editor `select` y la etiqueta de las cabeceras de grupo. Una sola fuente de verdad. |
-| `min`/`max`/`step`      | —                                              | Se trasladan a los atributos del input del editor `number`.                                                                                    |
-| `groupable`             | `true`                                         | `false` hace que una clave suya dentro de `groupBy` se descarte. No oculta la columna. Ver [Agrupación](#agrupación).                          |
-| `aggregate`             | —                                              | Agregación que esta columna muestra en las cabeceras de grupo: una incluida o una función propia.                                              |
+| Campo                   | Por defecto                                    | Notas                                                                                                                                                |
+| ----------------------- | ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `key`                   | —                                              | Id único, y también la clave de datos por defecto (`row[key]`).                                                                                      |
+| `label`                 | `key`                                          | Texto del header.                                                                                                                                    |
+| `width`                 | `defaultColumnWidth` (150)                     | Siempre acotado a `[max(32, minWidth), min(4000, maxWidth)]`.                                                                                        |
+| `minWidth` / `maxWidth` | `32` / `4000`                                  | Se aplican al resolver el ancho y durante el redimensionado.                                                                                         |
+| `resizable`             | `false`                                        | Muestra un handle de arrastre en el borde del header.                                                                                                |
+| `align`                 | el `defaultAlign` del renderer, si no `'left'` | Un `align` explícito siempre gana. Se aplica como clase, no como estilo inline.                                                                      |
+| `editable`              | `false`                                        | Tiene que ser exactamente `true` para que la celda se pueda editar.                                                                                  |
+| `format`                | —                                              | Valor crudo → el string que se escribe en la celda. **Debe ser puro y barato.** No se aplica a los agregados: para eso está `formatAggregate`.       |
+| `formatAggregate`       | —                                              | Valor agregado → el string que se escribe en la cabecera de grupo. Ver [Formato de los agregados](#formato-de-los-agregados).                        |
+| `cellClass`             | —                                              | Clase CSS extra sobre el elemento de celda. También está en el camino caliente.                                                                      |
+| `accessor`              | `row[key]`                                     | Lee el valor desde la fila. Devuelve `CellValue`: no puede devolver un objeto ni un array.                                                           |
+| `renderer`              | `'text'`                                       | Nombre de un renderer registrado, o una implementación. Un nombre desconocido cae en `'text'` en lugar de lanzar.                                    |
+| `hideable`              | `true`                                         | `false` deja la columna fuera de `DataTableColumnToggle`.                                                                                            |
+| `defaultVisible`        | `true`                                         | Visibilidad inicial. La persistencia y el v-model tienen prioridad sobre esto.                                                                       |
+| `editor`                | inferido (ver más abajo)                       | El control que se abre al editar. `'slot'` lo delega al slot `#editor`. Ver [Componentes de terceros](#componentes-de-terceros-dentro-de-una-celda). |
+| `options`               | —                                              | Alimenta los renderers `badge` / `select` / `tags`, **el** editor `select` y la etiqueta de las cabeceras de grupo. Una sola fuente de verdad.       |
+| `min`/`max`/`step`      | —                                              | Se trasladan a los atributos del input del editor `number`.                                                                                          |
+| `groupable`             | `true`                                         | `false` hace que una clave suya dentro de `groupBy` se descarte. No oculta la columna. Ver [Agrupación](#agrupación).                                |
+| `aggregate`             | —                                              | Agregación que esta columna muestra en las cabeceras de grupo: una incluida o una función propia.                                                    |
 
 ### `renderer` y `editor` son dos ejes independientes
 
@@ -706,6 +725,10 @@ orden:
 El tipo del valor le gana a `options` a propósito: una columna booleana con dos opciones sigue siendo
 una casilla y no un desplegable de dos ítems. Y `options` le gana al fallback de texto porque una
 lista declarada es una intención explícita de acotar los valores posibles.
+
+`'slot'` es el único valor que **nunca** sale de la inferencia: no hay ninguna forma de un dato que
+signifique "el control lo pone el consumidor", así que declararlo es la única manera de pedirlo. Ver
+[Componentes de terceros dentro de una celda](#componentes-de-terceros-dentro-de-una-celda).
 
 El editor `checkbox` no tiene control flotante: la casilla vive dentro de la celda. Hacerle clic es
 una _intención_: el pool revierte el estado visual de inmediato y manda el cambio por la misma
@@ -937,6 +960,445 @@ Lo que recibe `update`:
 
 También se puede componer sobre los incluidos: todos se exportan como instancias (`badgeRenderer`,
 `avatarRenderer`, …) junto con `createTextRenderer()` y `resolveRenderer()`.
+
+---
+
+## Componentes de terceros dentro de una celda
+
+La pregunta llega tarde o temprano, casi siempre con el mismo ejemplo: _"uso NuxtUI y quiero un
+`<USelect>` o un `<UButton>` dentro de una columna, ¿se puede?"_. Se puede, por dos caminos, y
+ninguno de los dos es montar un componente por celda.
+
+Antes de los caminos van los números, porque esta decisión no debería tomarse por confianza en una
+recomendación ajena.
+
+### Los tres caminos, medidos
+
+Se midieron tres estrategias para poner un control interactivo en una columna, bajo el **mismo**
+scroll:
+
+| Estrategia                      | Qué hace                                                                                                                                               |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **A — renderer nativo**         | El pool construye un `<button>` dentro de cada nodo de celda **una vez**, y por frame solo muta lo que cambió. Cero instancias de Vue.                 |
+| **B — un componente por celda** | Una instancia de Vue por celda visible, montada y desmontada a medida que las filas se reciclan. Es lo que hacen las celdas de componente de RevoGrid. |
+| **C — un pool de componentes**  | Una instancia por **slot del pool**, montada una sola vez; al reciclar solo cambian sus props. Es el caso FUERTE de B, no su versión de paja.          |
+
+**El banco.** 50.000 filas, altura de fila 40px, viewport de 800px, pool de 29 nodos, cuatro columnas
+—tres de texto más la que está bajo prueba— y **exactamente 150 pasos de 40px, uno por
+`requestAnimationFrame`**, de modo que entra una fila por frame y se recicla una celda de acción por
+frame, idéntico en las tres. Chrome 153 en `--headless=new` con la rotación de frames verificada a
+60Hz (mediana de 16,6 ms entre frames, sin throttling), build de **producción** de Vue, página
+aislada con COOP/COEP para que `performance.now()` no quedara limitado a 100 µs —resolución medida:
+5 µs—. Nueve repeticiones por estrategia, intercaladas; se reporta la mediana. Se verificó además que
+las tres producen el mismo HTML y la misma geometría de botón, para que la comparación sea entre
+costos y no entre resultados distintos.
+
+| Métrica — 150 frames de scroll                      |     A — nativo | B — uno por celda |       C — pool | B/A           | C/A           |
+| --------------------------------------------------- | -------------: | ----------------: | -------------: | ------------- | ------------- |
+| Tiempo de scripting total                           |       10,53 ms |          31,08 ms |       11,53 ms | **2,95×**     | **1,09×**     |
+| Por frame (mediana)                                 |          70 µs |            207 µs |          77 µs | 2,95×         | 1,09×         |
+| Sobre el presupuesto de 16,7 ms                     |         0,42 % |            1,24 % |         0,46 % | —             | —             |
+| p95 por frame                                       |       0,105 ms |          0,365 ms |       0,105 ms | 3,48×         | 1,00×         |
+| Peor frame                                          |       0,180 ms |          0,740 ms |       0,205 ms | 4,11×         | 1,14×         |
+| **Frames por encima de 16,7 ms**                    |          **0** |             **0** |          **0** | —             | —             |
+| **Long tasks (`PerformanceObserver`)**              |          **0** |             **0** |          **0** | —             | —             |
+| Instancias de componente montadas durante el scroll |          **0** |           **150** |          **0** | ∞             | —             |
+| Instancias desmontadas durante el scroll            |              0 |               145 |              0 | ∞             | —             |
+| `document.createElement` durante el scroll          |              0 |               150 |              0 | ∞             | —             |
+| Listeners registrados durante el scroll             |              0 |               150 |              0 | ∞             | —             |
+| Nodos del DOM, delta (`Memory.getDOMCounters`)      |            552 |               724 |            552 | 1,31×         | 1,00×         |
+| `ScriptDuration` (CDP `Performance.getMetrics`)     |       13,07 ms |          33,80 ms |       14,25 ms | 2,59×         | 1,09×         |
+| `RecalcStyleDuration` / `LayoutDuration`            | 13,1 / 18,1 ms |    14,3 / 19,0 ms | 13,3 / 17,7 ms | 1,09× / 1,05× | 1,01× / 0,98× |
+| **Heap asignado en la corrida**                     |     **131 KB** |        **941 KB** |     **359 KB** | **7,19×**     | 2,75×         |
+| Heap retenido tras un GC mayor forzado              |          11 KB |             94 KB |          46 KB | 8,38×         | 4,08×         |
+| Costo de arranque, por única vez                    |        0,67 ms |           0,56 ms |    **4,85 ms** | 0,84×         | 7,24×         |
+
+**El peor frame posible**, medido aparte: saltos de 500 filas, donde las 28 celdas visibles se
+reciclan de una sola vez.
+
+| Frame de reemplazo total (28 celdas a la vez) | A — nativo | B — uno por celda | C — pool |
+| --------------------------------------------- | ---------: | ----------------: | -------: |
+| Mediana                                       |   0,215 ms |          0,795 ms | 0,195 ms |
+| Máximo                                        |   0,270 ms |          1,030 ms | 0,335 ms |
+| Montajes en ese frame                         |          0 |            **28** |        0 |
+
+### Lo que dicen estos números, sin maquillar
+
+**1. Ninguna de las tres perdió un solo frame.** Cero long tasks y cero frames por encima de 16,7 ms
+en las tres estrategias, en todas las repeticiones. La frase "meter componentes Vue en las celdas te
+tira el FPS al piso" **no se sostiene a esta escala**, y sostenerla igual sería vender esta
+arquitectura con un argumento que la medición no respalda. B cuesta 137 µs más por frame que A: el
+0,8 % del presupuesto de un frame. Para agotar 16,7 ms con este componente harían falta unos 590
+ciclos de montaje y desmontaje en un mismo frame; un paso de scroll produce uno.
+
+**2. C es indistinguible de A, y esa es la conclusión más importante de todas.** Un pool de
+instancias bien construido —una por slot, montada una vez, reciclada escribiendo en un objeto de
+props reactivo— cuesta **+6,7 µs por frame** sobre mutar el DOM a mano, por debajo del ruido entre
+corridas: la prueba de Welch da t = 0,52 y p ≈ 0,6 para C contra A, y p < 0,0001 para B contra A. En
+el frame de reemplazo total, la mediana de C fue incluso más baja que la de A, lo que es ruido y no
+una victoria, pero dice cuán chica es la diferencia. **Lo caro de B nunca fue "Vue": fue el churn de
+montar y desmontar.** Sacado el churn, el costo de Vue prácticamente desaparece del camino caliente.
+Lo que C sí paga es el arranque: 4,85 ms para montar 29 instancias, 7,2 veces lo que tarda A, una
+sola vez y amortizado a cero en cualquier sesión de scroll real.
+
+**3. Donde B sí pierde de verdad es en basura, no en tiempo de frame.** 941 KB asignados en una
+corrida contra los 131 KB de A (7,2×), 94 KB retenidos después de un GC mayor forzado contra 11 KB
+(8,4×), más 150 registros de listener y 150 `createElement` que A y C no hacen —unos 6,3 KB por ciclo
+de montaje—. Eso se cobra como una **pausa del recolector** en una sesión larga de scroll, no como un
+pintado lento, y un banco de 150 frames es demasiado corto para atraparla. Ese es el argumento
+honesto contra B, y es distinto del que se suele hacer.
+
+**4. Estilo y layout son idénticos en las tres.** `RecalcStyle` dentro del 9 %, `Layout` dentro del
+7 %, exactamente 150 recálculos de layout en cada una. Las tres divergen solo en JavaScript.
+
+**Las salvedades importan tanto como los números.** El componente del banco es trivial: un botón, dos
+props, un emit, sin slots, sin `computed` y sin store inyectado. Los 137 µs de B son un **piso**. Una
+celda de acción realista —un menú desplegable, un chequeo de permisos, un ícono, un tooltip, i18n—
+puede pesar entre tres y diez veces más por montaje, y **B paga ese peso por fila entrante mientras C
+lo paga una vez al arrancar**: la relación B/A escala con el peso del componente y la relación C/A
+prácticamente no. Lo mismo multiplica la cantidad de columnas interactivas, y acá se midió una. Todo
+esto es además con el build de **producción** de Vue: en modo desarrollo B se ve bastante peor, y ese
+número no se puede citar como un número de producción. Por último, la dispersión entre corridas es
+grande frente a la diferencia entre A y C —A osciló entre 9,80 y 15,52 ms sobre un escritorio Windows
+ocupado—, así que cualquier afirmación por debajo de unos 13 µs por frame no es resoluble con este
+banco. B contra A queda muy afuera de ese margen; C contra A queda adentro.
+
+### Camino 1 — un renderer nativo
+
+Es el camino para lo que la celda tiene que **mostrar siempre**: un botón de acción, un estado, un
+indicador. Un renderer es DOM plano, sin Vue de por medio, y respeta un contrato de dos tiempos:
+
+> **`create` corre UNA vez por nodo de celda; `update` corre en cada repintado y solo puede mutar lo
+> que `create` construyó.** Dentro de `update` no se crean nodos, no se lee layout y no se escribe
+> nada que no haya cambiado.
+
+No es un consejo: es la regla de la que depende la columna A de la tabla de arriba. Crear nodos en
+`update` genera basura que el recolector cobra más tarde como un frame perdido; leer layout
+(`offsetWidth`, `getBoundingClientRect`, `getComputedStyle`) fuerza un reflow síncrono en mitad del
+pintado; escribir de más invalida estilos para nada. Las tres cosas tienen la misma raíz: `update`
+corre por celda visible y por frame.
+
+Un botón con el aspecto de un design system —sus clases, sin su componente—:
+
+```ts
+import type { CellRenderContext, CellRenderer, CellRendererHandle } from 'datagrid-vue'
+
+/**
+ * Las clases del design system se escriben UNA vez, en `create`.
+ *
+ * No se puede montar `<UButton>`, pero sí se pueden reusar sus clases y quedarse
+ * con el mismo aspecto. La clase `inv-action` no es cosmética: es el anzuelo que
+ * el listener delegado del consumidor busca más abajo.
+ */
+const BUTTON_CLASS =
+  'inv-action inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ' +
+  'text-white bg-primary-500 hover:bg-primary-600 disabled:opacity-50'
+
+/** Estado por celda, indexado por el handle. Nunca por índice de fila: los nodos se reciclan. */
+type ActionState = { button: HTMLButtonElement; label: string; disabled: boolean }
+const states = new WeakMap<CellRendererHandle, ActionState>()
+
+export const actionRenderer: CellRenderer<Invoice> = {
+  type: 'action',
+  // Es una caja y no texto suelto: la celda la centra con flex.
+  layout: 'box',
+
+  create(cell: HTMLElement): CellRendererHandle {
+    const button = document.createElement('button')
+    button.type = 'button'
+    button.className = BUTTON_CLASS
+    cell.appendChild(button)
+
+    const handle: CellRendererHandle = { root: cell }
+    // Sin listener propio: el click viaja por delegación, ver más abajo.
+    states.set(handle, { button, label: '', disabled: false })
+    return handle
+  },
+
+  update(handle: CellRendererHandle, ctx: CellRenderContext<Invoice>): void {
+    const state = states.get(handle)
+    if (!state) return
+
+    const label = ctx.row.status === 'paid' ? 'Ver recibo' : 'Cobrar'
+    // La regla entera, en dos líneas: comparar contra lo último escrito y salir.
+    if (state.label !== label) {
+      state.label = label
+      state.button.textContent = label
+    }
+
+    const disabled = ctx.row.locked
+    if (state.disabled !== disabled) {
+      state.disabled = disabled
+      state.button.disabled = disabled
+    }
+  },
+
+  destroy(handle: CellRendererHandle): void {
+    states.delete(handle)
+  },
+}
+```
+
+**Cómo vuelve el click al consumidor.** Con **un solo listener** para toda la tabla, colgado del
+contenedor que la envuelve. La fila pintada ya lleva su identidad en `data-row-key`, así que el
+handler no necesita que el renderer escriba nada extra por frame:
+
+```vue
+<script setup lang="ts">
+import { shallowRef, useTemplateRef } from 'vue'
+import { DataTable } from 'datagrid-vue'
+import { actionRenderer } from './actionRenderer'
+
+const rows = shallowRef<readonly Invoice[]>([])
+const host = useTemplateRef<HTMLElement>('host')
+
+const columns: readonly DataTableColumn<Invoice>[] = [
+  { key: 'customer', label: 'Cliente', width: 220 },
+  // Sin `editable`: es un botón, no una celda que se edite. Un doble clic acá no
+  // abre ningún editor.
+  { key: 'id', label: '', width: 120, renderer: actionRenderer, align: 'center' },
+]
+
+/**
+ * UN listener para toda la tabla, sin importar cuántas filas haya.
+ *
+ * Es la misma delegación que usa el pool por dentro: se sube por el DOM desde el
+ * blanco del evento en lugar de registrar un handler por botón. Un listener por
+ * celda visible sería trabajo de más sobre nodos que además se reciclan.
+ */
+function onHostClick(event: MouseEvent): void {
+  const target = event.target
+  if (!(target instanceof Element)) return
+  if (!target.closest('.inv-action')) return
+
+  const rowElement = target.closest('[data-row-key]')
+  if (!(rowElement instanceof HTMLElement)) return
+
+  const key = rowElement.dataset.rowKey
+  if (key !== undefined) charge(key)
+}
+</script>
+
+<template>
+  <div ref="host" style="height: 60vh" @click="onHostClick">
+    <DataTable :rows="rows" :columns="columns" row-key="id" />
+  </div>
+</template>
+```
+
+`data-row-key` sale de la prop `rowKey`, así que lo que llega al handler es la identidad del dominio y
+no una posición del viewport. Si hace falta el objeto de fila completo y la clave no alcanza,
+conviene un `Map` por clave construido en un `computed` sobre `rows`: se rehace una vez por cambio de
+datos, nunca por frame. Y si la columna no importa —cualquier click en la fila sirve— está el evento
+`rowClick`, que ya entrega la fila y su índice sin escribir un solo listener.
+
+**Dos alternativas al listener propio, por si el renderer necesita el evento adentro.** Registrar un
+`addEventListener` dentro de `create` tampoco es una catástrofe: `create` corre una vez por nodo de
+celda del pool, o sea unas pocas decenas de registros para cualquier tamaño de dataset, y no por
+frame. Pero la delegación cuesta exactamente cero y no hay que acordarse de desregistrar nada en
+`destroy`, así que es la que conviene por defecto.
+
+### Camino 2 — el slot `#editor`
+
+Es el camino para lo que solo hace falta **mientras se edita**: el desplegable de un design system,
+un selector de fecha con calendario, un buscador con autocompletado. Acá sí entra un componente Vue
+del consumidor, y entra con una regla: **uno montado a la vez, sobre la celda en edición**, no uno
+por celda.
+
+Es exactamente la disciplina que ya usaban los editores incluidos —un `<input>` reutilizado que se
+reposiciona sobre la celda abierta— extendida a un componente ajeno. Con 50.000 filas cargadas, el
+componente del consumidor existe como mucho una vez en toda la página.
+
+Se pide declarando `editor: 'slot'` en la columna y llenando el slot:
+
+```vue
+<script setup lang="ts">
+import { shallowRef } from 'vue'
+import { DataTable } from 'datagrid-vue'
+import type { CellOption, CellValue, DataTableColumn, EditCommitEvent } from 'datagrid-vue'
+import 'datagrid-vue/style.css'
+
+type Invoice = { id: number; customer: string; status: 'draft' | 'sent' | 'paid' }
+
+const STATUSES: readonly CellOption[] = [
+  { value: 'draft', label: 'Borrador' },
+  { value: 'sent', label: 'Enviada' },
+  { value: 'paid', label: 'Pagada' },
+]
+
+const rows = shallowRef<readonly Invoice[]>([])
+
+const columns: readonly DataTableColumn<Invoice>[] = [
+  { key: 'customer', label: 'Cliente', width: 220, editable: true },
+  {
+    key: 'status',
+    label: 'Estado',
+    width: 160,
+    editable: true,
+    // `renderer` y `editor` siguen siendo ejes independientes: la celda se VE
+    // como una píldora y se EDITA con el desplegable del design system.
+    renderer: 'badge',
+    editor: 'slot',
+    options: STATUSES,
+  },
+]
+
+// La tabla es controlada: la escritura sigue siendo de este handler, igual que
+// con cualquier editor incluido.
+function onEditCommit(event: EditCommitEvent<Invoice>): void {
+  const next = rows.value.slice()
+  next[event.rowIndex] = { ...event.row, [event.columnKey]: event.newValue }
+  rows.value = next
+}
+</script>
+
+<template>
+  <div style="height: 60vh">
+    <DataTable :rows="rows" :columns="columns" row-key="id" @edit-commit="onEditCommit">
+      <!--
+        El slot es UNO para toda la tabla. Con más de una columna de slot, el
+        consumidor despacha por `column.key`, que es para lo que viaja la
+        definición de columna completa.
+      -->
+      <template #editor="{ column, value, commit, cancel }">
+        <USelect
+          v-if="column.key === 'status'"
+          :model-value="value"
+          :items="column.options"
+          value-key="value"
+          label-key="label"
+          open
+          class="w-full"
+          @update:model-value="(next: CellValue) => commit(next)"
+          @update:open="
+            (open: boolean) => {
+              if (!open) cancel()
+            }
+          "
+        />
+      </template>
+    </DataTable>
+  </div>
+</template>
+```
+
+> **NuxtUI no es una dependencia de esta librería.** `<USelect>` aparece acá porque es el ejemplo con
+> el que llega la pregunta; el slot no sabe ni le importa de dónde sale el componente. Los nombres
+> exactos de sus props cambian entre versiones de cualquier design system: lo que no cambia es que el
+> control avisa con `commit(valor)` y se retira con `cancel()`. En `src/demo/DemoStatusPicker.vue` de
+> este repositorio hay el mismo ejemplo resuelto con un componente escrito a mano y sin ninguna
+> dependencia.
+
+**Lo que recibe el slot**
+
+| Prop               | Tipo                     | Notas                                                                                                                           |
+| ------------------ | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
+| `row`              | `TRow`                   | La fila que se está editando. No debe mutarse: la tabla es controlada.                                                          |
+| `rowIndex`         | `number`                 | Índice dentro de la prop `rows`, igual que en todos los eventos. Con grupos activos **no** es la posición vertical de la celda. |
+| `column`           | `DataTableColumn<TRow>`  | La definición completa, con sus `options`. Es lo que permite despachar por `column.key`.                                        |
+| `columnKey`        | `string`                 | Alias de conveniencia de `column.key`.                                                                                          |
+| `value`            | `CellValue`              | El valor con el que se abrió el editor, ya leído por el `accessor` de la columna.                                               |
+| `commit(newValue)` | `(v: CellValue) => void` | Cierra confirmando. Emite `afterEdit` y, solo si el valor cambió de verdad, `editCommit`.                                       |
+| `cancel()`         | `() => void`             | Cierra descartando. Emite `afterEdit` con `canceled: true` y ningún `editCommit`.                                               |
+
+**Qué abre y qué cierra el editor de slot**
+
+| Entrada                                         | Efecto                                                                                                        |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| Doble clic, `Enter`, `F2`, escribir un carácter | Abre, después de pasar por el veto de `beforeEdit`. La semilla del carácter se ignora, igual que en `select`. |
+| `commit(valor)` desde el slot                   | Cierra confirmando.                                                                                           |
+| `cancel()` desde el slot                        | Cierra descartando.                                                                                           |
+| `Escape` dentro del contenido del slot          | Igual que `cancel()`. Lo maneja la caja del editor, así que funciona sin que el componente haga nada.         |
+| La fila sale de la ventana virtual              | Cierra **confirmando el valor original** (ver más abajo).                                                     |
+| Un clic sobre otra celda                        | Cierra igual que el punto anterior.                                                                           |
+| Abrir el editor en otra celda                   | Ídem.                                                                                                         |
+| **Perder el foco**                              | **Nada.** Es la única asimetría con los editores incluidos, y es deliberada.                                  |
+
+**Por qué el `blur` no cierra.** Un desplegable de un design system abre su lista en un portal colgado
+del `body`, así que el foco sale de la caja del editor en mitad de la interacción. Confirmar ahí
+cerraría el editor justo cuando el usuario despliega las opciones. El precio de esa decisión es que
+apuntar a otra celda —y no perder el foco— es lo que cierra la sesión.
+
+**Qué significa "confirmar el valor original".** La tabla no sabe qué tiene adentro el control del
+consumidor: no hay ningún `control.value` que leer. Cuando el cierre no viene de `commit()`, se emite
+`afterEdit` con `newValue === oldValue` y, por la regla de siempre, ningún `editCommit`. La sesión se
+cierra limpia y no se escribe nada.
+
+**Lo demás que conviene saber antes de usarlo**
+
+- **Hace falta `editable: true` igual que en cualquier otra columna.** `editor: 'slot'` dice CÓMO se
+  edita, no SI se edita.
+- **Sin el slot declarado, la columna no abre nada.** Ni el slot ni un editor incluido de reemplazo:
+  quien pidió su propio control lo pidió justamente porque el incluido no servía para esa columna. Y
+  una tabla que no declara `#editor` no renderiza ni siquiera la caja que lo contendría, así que
+  produce exactamente el mismo DOM que antes de que esta función existiera.
+- **El valor viaja sin coacción.** El editor incluido recibe un string de un control del DOM y tiene
+  que devolverlo al tipo original; acá el consumidor ya tiene el valor tipado y tocarlo sería
+  corromperlo.
+- **`CellValue` no puede expresar una lista ni un objeto.** Un editor de selección múltiple sigue sin
+  poder commitear su array por esta vía, igual que con los editores incluidos: lo que se puede es
+  leer la forma original desde `row[columnKey]` y commitear una representación primitiva.
+- **El contenido del slot vive en la capa del editor, nunca dentro de `.dt-canvas`.** El canvas es
+  territorio del pool, que recicla sus nodos por slot de viewport y no puede convivir con un árbol que
+  administre Vue. Por eso el slot no rompe el reciclado.
+- **El foco entra y vuelve.** Al abrir, el primer elemento enfocable del contenido recibe el foco; si
+  el componente ya se lo tomó por su cuenta, no se le disputa. Al cerrar, el foco vuelve al viewport,
+  que es donde escucha el manejador de teclado de la grilla.
+- **Se puede estilar.** La caja es `.dt-editor-slot`: posición, tamaño exacto de la celda y un fondo
+  que la tapa. No trae borde ni tipografía propia, porque el aspecto es del componente del consumidor.
+
+### Cuándo un componente por celda SÍ es la decisión correcta
+
+La respuesta no siempre es "no". Los casos donde conviene pagar el costo, con el costo a la vista:
+
+- **La celda tiene que ser interactiva sin entrar en modo edición.** Varios controles vivos a la vez
+  en la misma fila: una botonera con menús, un widget de puntuación con estado de hover, un
+  mini-gráfico con tooltip. Un editor por vez no cubre eso, y un renderer nativo lo cubre a costa de
+  reimplementar a mano el manejo de foco, teclado y accesibilidad.
+- **La grilla es chica.** Unos cientos de filas que entran sin presión de virtualización. Ahí una
+  tabla con `v-for` y componentes de verdad es más simple, más mantenible y suficientemente rápida.
+  Usar esta librería para eso es traer una solución a un problema que no se tiene.
+- **La velocidad del equipo pesa más que el presupuesto de frame.** Los componentes de un design
+  system traen resueltos la accesibilidad, el i18n, el tema y los tests. Reimplementar un combobox
+  como renderer son semanas y el resultado es peor. Los números de arriba dicen que esa elección
+  cuesta 137 µs por frame con un componente liviano, no un frame perdido.
+- **El contenido por celda es genuinamente complejo y con estado propio**: un editor anidado, un
+  campo de texto enriquecido, un árbol plegable dentro de la celda.
+
+**Lo que cuesta, dicho de frente.** Con un componente liviano, B midió 2,95× el tiempo de scripting
+de A y aun así no perdió un frame. Lo que escala mal no es el tiempo por frame sino **el peso del
+componente multiplicado por la cantidad de columnas interactivas**, y sobre todo la basura: 7,2 veces
+más memoria asignada por corrida, que en una sesión larga se cobra como una pausa del recolector. Si
+el caso cae en esta lista, la recomendación no es "no lo hagas": es **hacerlo con un pool** (la
+estrategia C), que en esta medición resultó indistinguible del DOM a mano y conserva todas las
+ventajas de trabajar con componentes.
+
+### Por qué esta librería no monta componentes por celda
+
+No por el tiempo de frame. La medición es clara: a esta escala, ninguna de las tres estrategias
+pierde un frame, y un pool de componentes bien hecho empata con el DOM a mano. Las razones son otras
+tres, y conviene decirlas en este orden:
+
+1. **El presupuesto que se defiende no es el del banco, es el del peor caso real.** Los 137 µs de B
+   son con un botón de dos props. Ese número es un piso y escala con el peso del componente y con la
+   cantidad de columnas interactivas; el de C prácticamente no. Una librería no puede acotar el peso
+   del componente que le van a pasar, así que la única garantía que puede dar es la que no depende de
+   él.
+2. **La basura es el costo que no se ve hasta que es tarde.** B asigna 7,2 veces más memoria por
+   corrida y retiene 8,4 veces más después de un GC mayor. Ese costo aparece como una pausa del
+   recolector en la sesión número cuarenta del día, no en el banco de 150 frames, y por eso es
+   exactamente el tipo de regresión que la suite de este repositorio existe para prevenir: **romper el
+   caché de pintado no lanza ninguna excepción, la tabla se sigue viendo bien y solo scrollea peor.**
+3. **Un pool de componentes es, en esencia, este componente otra vez.** C funciona porque no monta ni
+   desmonta durante el scroll, recicla por slot y solo escribe lo que cambió: las mismas tres reglas
+   que sostienen el pool de nodos. Construir un segundo pool —de instancias de Vue esta vez— adentro
+   del primero duplicaría toda esa maquinaria, con el reciclado, la invalidación y el ciclo de vida
+   que ya hay que sostener una vez. La alternativa que se eligió es abrir exactamente una puerta —el
+   slot `#editor`, un componente montado a la vez— y dejar el resto en el protocolo de renderers.
+
+La medición completa está arriba, con sus salvedades. Si el caso de uso no se parece al banco
+—componentes pesados, muchas columnas interactivas, sesiones largas— los números propios van a ser
+distintos, y conviene medirlos antes de elegir.
 
 ---
 
@@ -1794,6 +2256,7 @@ fija estos invariantes:
 | Los índices ARIA se escriben **por fila**, no por celda                         | Misma información para el lector de pantalla, quince veces menos escrituras     |
 | La estructura accesible del header cuesta **cero** escrituras por frame         | Los roles son estáticos; asociar por `columnheader` evita un atributo por celda |
 | Un slot que pasa de fila de datos a cabecera de grupo **recicla** su nodo       | Plegar un grupo mueve de tipo a varios slots a la vez, en mitad del scroll      |
+| El slot `#editor` no mueve el presupuesto, **ni con el editor abierto**         | Es la única puerta por la que entra un componente Vue: no puede costar un frame |
 
 ### Estas aserciones son estructurales
 
@@ -1822,6 +2285,7 @@ explicar qué se compró a cambio.
 | `renderers.test.ts`           | Valores inesperados en cada renderer incluido                                                                                                                                                                                                                                                  |
 | `cell-layout.test.ts`         | Modo de maquetado: qué renderers lo declaran, que la clase se escriba solo al cambiar de renderer, que las tres alineaciones produzcan el mismo estado en los dos modos, y —leyendo el `.css`— que la celda de texto conserve su recorte con puntos suspensivos                                |
 | `grouping.test.ts`            | Aplanado, agregados anidados, expansión controlada, `formatAggregate`, `emptyGroupLabel`, y que `editCommit` reporta el índice ORIGINAL                                                                                                                                                        |
+| `slot-editor.test.ts`         | El slot `#editor`: dónde abre y dónde no, el veto, `commit()` y `cancel()` sobre la tubería de siempre, el índice ORIGINAL con un grupo plegado, el cierre por scroll y por puntero, el foco de ida y de vuelta, y que el presupuesto por frame no se mueve ni con el editor abierto           |
 
 ---
 
@@ -1842,18 +2306,19 @@ Dicho sin vueltas. Nada de esto está implementado:
 | **Editor de selección múltiple**                  | El renderer `tags` muestra listas; no hay ningún editor que edite una.                                                                                                                                                                                                                                           |
 | **SSR del cuerpo**                                | El header y el armazón renderizan bien; el cuerpo se pinta al montar, solo del lado del cliente.                                                                                                                                                                                                                 |
 
-### Componentes Vue por celda — deliberadamente no soportado
+### Un componente Vue por celda — deliberadamente no soportado
 
-No se puede poner un componente Vue dentro de una celda del cuerpo, y eso es la arquitectura entera,
-no un descuido. Una celda respaldada por un vnode significa que Vue vuelve a ser dueño del camino
-caliente del scroll: montar y desmontar instancias de componente a medida que las filas se reciclan,
-correr el scheduler dentro del presupuesto del frame, y pagar el diff de vnodes por unas 450 celdas
-por frame. Es exactamente el costo que este componente existe para evitar.
+No se puede montar un componente Vue **por celda del cuerpo**, y eso es la arquitectura entera, no un
+descuido. Una celda respaldada por un vnode significa que Vue vuelve a ser dueño del camino caliente
+del scroll: montar y desmontar instancias a medida que las filas se reciclan, correr el scheduler
+dentro del presupuesto del frame, y pagar el diff de vnodes por unas 450 celdas por frame.
 
-El reemplazo es el protocolo de renderers: `create` una vez, `update` por frame, mutando DOM plano.
-Cubre el mismo terreno —badges, anillos, avatares, inputs— a una fracción del costo, y está exportado
-y documentado para que nadie quede bloqueado. El header **sí** lo renderiza Vue, porque son un puñado
-de nodos que se vuelven a diferenciar solo cuando cambia la configuración de columnas.
+Lo que **sí** se puede está documentado, medido y tiene su propia sección:
+[Componentes de terceros dentro de una celda](#componentes-de-terceros-dentro-de-una-celda). Son dos
+caminos: un renderer nativo para lo que la celda tiene que mostrar siempre, y el slot `#editor` —una
+sola instancia montada sobre la celda en edición— para lo que solo hace falta mientras se edita. El
+header también lo renderiza Vue, porque son un puñado de nodos que se vuelven a diferenciar solo
+cuando cambia la configuración de columnas.
 
 ---
 
@@ -1890,15 +2355,15 @@ Publicar a npm no necesita ningún paso extra: `npm publish` corre `prepare`, qu
 
 ## Referencia: qué exporta el paquete
 
-| Export                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | Tipo                                                             |
-| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| `DataTable` (también el export por defecto), `DataTableColumnToggle`                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Componentes                                                      |
-| `COLOR_TOKENS`, `ColorTokenName`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | Mapa de la paleta de estados y el tipo de su clave               |
-| `registerRenderer`, `resolveRenderer`, `createTextRenderer`, `TEXT_RENDERER_TYPE`                                                                                                                                                                                                                                                                                                                                                                                                                                                   | Registro de renderers                                            |
-| `textRenderer`, `numberRenderer`, `badgeRenderer`, `selectRenderer`, `progressRenderer`, `avatarRenderer`, `checkboxRenderer`, `tagsRenderer`                                                                                                                                                                                                                                                                                                                                                                                       | Instancias de los renderers incluidos, para componer sobre ellas |
-| `createLocalStorageAdapter`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | El adapter de almacenamiento por defecto                         |
-| `DataTableProps`, `DataTableColumn`, `DataTableInstance`, `DataTableTheme`, `CellValue`, `CellAlign`, `CellLayout`, `CellOption`, `CellEditorType`, `CellPosition`, `CellRenderer`, `CellRenderContext`, `CellRendererHandle`, `AnyCellRenderer`, `CellRendererFactory`, `SelectionMode`, `CellSelectEvent`, `BeforeEditEvent`, `AfterEditEvent`, `EditCommitEvent`, `ColumnResizeEvent`, `ColumnVisibilityState`, `ColumnWidthState`, `DataTablePersistOptions`, `DataTableStorageAdapter`, `PersistedTableState`, `VirtualWindow` | Tipos                                                            |
-| `GroupByState`, `GroupRow`, `DataRow`, `FlatRow`, `GroupToggleEvent`, `BuiltInAggregation`, `AggregationFn`, `ColumnAggregation`                                                                                                                                                                                                                                                                                                                                                                                                    | Tipos de la agrupación                                           |
+| Export                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | Tipo                                                             |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| `DataTable` (también el export por defecto), `DataTableColumnToggle`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | Componentes                                                      |
+| `COLOR_TOKENS`, `ColorTokenName`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | Mapa de la paleta de estados y el tipo de su clave               |
+| `registerRenderer`, `resolveRenderer`, `createTextRenderer`, `TEXT_RENDERER_TYPE`                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | Registro de renderers                                            |
+| `textRenderer`, `numberRenderer`, `badgeRenderer`, `selectRenderer`, `progressRenderer`, `avatarRenderer`, `checkboxRenderer`, `tagsRenderer`                                                                                                                                                                                                                                                                                                                                                                                                              | Instancias de los renderers incluidos, para componer sobre ellas |
+| `createLocalStorageAdapter`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | El adapter de almacenamiento por defecto                         |
+| `DataTableProps`, `DataTableColumn`, `DataTableInstance`, `DataTableTheme`, `CellValue`, `CellAlign`, `CellLayout`, `CellOption`, `CellEditorType`, `CellEditorSlotProps`, `CellPosition`, `CellRenderer`, `CellRenderContext`, `CellRendererHandle`, `AnyCellRenderer`, `CellRendererFactory`, `SelectionMode`, `CellSelectEvent`, `BeforeEditEvent`, `AfterEditEvent`, `EditCommitEvent`, `ColumnResizeEvent`, `ColumnVisibilityState`, `ColumnWidthState`, `DataTablePersistOptions`, `DataTableStorageAdapter`, `PersistedTableState`, `VirtualWindow` | Tipos                                                            |
+| `GroupByState`, `GroupRow`, `DataRow`, `FlatRow`, `GroupToggleEvent`, `BuiltInAggregation`, `AggregationFn`, `ColumnAggregation`                                                                                                                                                                                                                                                                                                                                                                                                                           | Tipos de la agrupación                                           |
 
 Los composables y el pool de nodos **no** se exportan. Son detalles de implementación, y exportarlos
 los convertiría en API que después habría que sostener para siempre.

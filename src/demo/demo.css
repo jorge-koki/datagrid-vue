@@ -359,3 +359,53 @@ body {
   font-size: 0.75rem;
   font-variant-numeric: tabular-nums;
 }
+
+/* ------------------------------------------------- Editor por slot */
+
+/*
+ * Desplegable propio montado desde el slot `#editor` de la tabla.
+ *
+ * La caja `.dt-editor-slot` que provee el componente ya está posicionada sobre
+ * la celda y mide exactamente lo mismo que ella. La lista se dibuja hacia abajo
+ * desbordándola a propósito: es lo que hace un desplegable, y es también la
+ * prueba visible de que el editor NO vive dentro de la celda, sino en una capa
+ * propia por encima del canvas.
+ */
+.demo-picker {
+  position: absolute;
+  top: 0;
+  left: 0;
+  min-width: 100%;
+  padding: 0.25rem;
+  border: 2px solid var(--dt-primary);
+  border-radius: var(--dt-radius);
+  outline: none;
+  background: var(--dt-bg);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 18%);
+}
+
+.demo-picker-option {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: var(--dt-radius);
+  cursor: pointer;
+  white-space: nowrap;
+  font-size: 0.8125rem;
+}
+
+.demo-picker-option--highlighted {
+  background: color-mix(in srgb, var(--dt-primary) 18%, transparent);
+}
+
+.demo-picker-option[aria-selected='true'] .demo-picker-label {
+  font-weight: 700;
+}
+
+.demo-picker-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  flex: none;
+  border-radius: 999px;
+}

@@ -607,6 +607,26 @@
   padding-right: 0.25rem;
 }
 
+/*
+ * Caja del editor por slot.
+ *
+ * Deliberadamente sin borde ni tipografía propia: el control lo pone el
+ * consumidor y el aspecto es suyo. Lo único que aporta esta caja es la posición
+ * sobre la celda, el tamaño exacto de la celda y un fondo que la tape, para que
+ * el valor de abajo no se transparente a través de un control con espacios
+ * vacíos. Se puede redefinir desde el CSS del consumidor sin tocar la librería.
+ */
+.dt-editor-slot {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 2;
+  box-sizing: border-box;
+  outline: none;
+  background: var(--dt-bg);
+  will-change: transform;
+}
+
 /* ------------------------------------------------------------------- Vacío */
 
 .dt-empty {

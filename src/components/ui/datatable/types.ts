@@ -120,7 +120,13 @@ export interface DataTableColumn<TRow> {
   hideable?: boolean
   /** Visibilidad inicial. La persistencia y el v-model tienen prioridad sobre esto. */
   defaultVisible?: boolean
-  /** Tipo de editor que se abre al editar la celda. Por defecto se infiere del valor. */
+  /**
+   * Tipo de editor que se abre al editar la celda. Por defecto se infiere del valor.
+   *
+   * `'slot'` delega el control al slot `#editor` del componente. Si la tabla no
+   * declara ese slot, la celda simplemente no abre nada: no hay dónde montar el
+   * control, y abrir un editor incluido en su lugar sería peor que no abrir.
+   */
   editor?: CellEditorType
   /** Opciones para los renderers y editores de tipo `select`, `badge` y `tags`. */
   options?: readonly CellOption[]
@@ -154,8 +160,68 @@ export interface DataTableColumn<TRow> {
  * decisiones separadas: un badge puede ser de solo lectura y una celda de texto
  * plano puede abrir un desplegable. Acoplarlos obligaría a inventar un renderer
  * por cada combinación.
+ *
+ * `'slot'` es el único que NO se infiere nunca: hay que declararlo. Significa
+ * "el control lo pone el consumidor desde el slot `#editor`", y es la vía por la
+ * que entra un componente de un design system —un `<USelect>`, un date picker—
+ * sin que la tabla monte un componente por celda. Ver
+ * {@link CellEditorSlotProps}.
  */
-export type CellEditorType = 'text' | 'number' | 'select' | 'checkbox' | 'date'
+export type CellEditorType = 'text' | 'number' | 'select' | 'checkbox' | 'date' | 'slot'
+
+/**
+ * Lo que recibe el slot `#editor` mientras hay una celda abierta con
+ * `editor: 'slot'`.
+ *
+ * ## Una instancia por SESIÓN de edición, no una por celda
+ *
+ * El contenido del slot se monta cuando el editor se abre y se desmonta cuando
+ * se cierra, y solo puede haber un editor abierto a la vez: el componente del
+ * consumidor existe como mucho una vez en toda la tabla, sin importar cuántas
+ * filas haya. Es la misma disciplina del editor incluido —un `<input>`
+ * reutilizado que se reposiciona sobre la celda en edición— extendida a un
+ * componente ajeno.
+ *
+ * ## El índice es el del DATASET
+ *
+ * `rowIndex` indexa la prop `rows`, igual que en todos los eventos y a
+ * diferencia de {@link CellPosition.rowIndex}. Con grupos activos eso importa:
+ * la posición vertical de la celda editada no sirve para escribir en el array
+ * del consumidor.
+ *
+ * @typeParam TRow - Forma de una fila individual dentro de `rows`.
+ */
+export interface CellEditorSlotProps<TRow> {
+  /** La fila que se está editando. No debe mutarse. */
+  row: TRow
+  /** Índice de `row` dentro de la prop `rows`. */
+  rowIndex: number
+  /** La definición de columna que se está editando. */
+  column: DataTableColumn<TRow>
+  /** Alias de conveniencia de `column.key`. */
+  columnKey: string
+  /** Valor con el que se abrió el editor, leído por el accessor de la columna. */
+  value: CellValue
+  /**
+   * Cierra el editor confirmando `newValue`.
+   *
+   * Recorre exactamente la misma tubería que el editor incluido: emite
+   * `afterEdit` y, solo si el valor cambió de verdad, `editCommit`. El veto de
+   * `beforeEdit` ya corrió al abrir, así que no se vuelve a emitir.
+   *
+   * El valor se entrega TAL CUAL: no hay coacción de tipos, a diferencia del
+   * editor incluido, que recibe un string de un control del DOM y tiene que
+   * devolverlo al tipo original. Acá el consumidor ya tiene el valor tipado.
+   */
+  commit(newValue: CellValue): void
+  /**
+   * Cierra el editor descartando la edición.
+   *
+   * Emite `afterEdit` con `canceled: true` y ningún `editCommit`, igual que
+   * Escape sobre un editor incluido.
+   */
+  cancel(): void
+}
 
 /**
  * Una opción de un conjunto cerrado de valores.

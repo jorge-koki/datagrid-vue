@@ -15,6 +15,7 @@
 import { mount } from '@vue/test-utils'
 import type { VueWrapper } from '@vue/test-utils'
 import { nextTick } from 'vue'
+import type { VNode } from 'vue'
 import DataTable from '../DataTable.vue'
 import { useRowPool } from '../composables/useRowPool'
 import type { RowPool, RowPoolCallbacks, RowPoolPaintState } from '../composables/useRowPool'
@@ -22,6 +23,7 @@ import type { ResolvedColumn } from '../composables/useColumnLayout'
 import type {
   AfterEditEvent,
   BeforeEditEvent,
+  CellEditorSlotProps,
   CellPosition,
   ColumnResizeEvent,
   DataTableColumn,
@@ -277,6 +279,14 @@ export interface TableHarness {
   doubleClickCell(rowIndex: number, columnKey: string): Promise<void>
   /** Control de edición visible, o `null`. */
   editor(): HTMLInputElement | HTMLSelectElement | null
+  /**
+   * Caja del editor por slot mientras está abierta, o `null`.
+   *
+   * Devuelve `null` tanto cuando la tabla no declara el slot —el nodo ni siquiera
+   * se renderiza— como cuando está oculto por no haber ninguna celda de slot en
+   * edición. Las dos cosas significan lo mismo para quien la consulta.
+   */
+  slotEditor(): HTMLElement | null
   unmount(): void
 }
 
@@ -362,10 +372,23 @@ type Simplify<T> = { [K in keyof T]: T[K] }
 /** Props que acepta {@link mountTable}: las del componente más sus listeners. */
 export type TableProps = Simplify<DataTableProps<GridRow> & TableListeners>
 
+/**
+ * Slots que acepta {@link mountTable}.
+ *
+ * Se declara como función de render y no como plantilla en string porque el
+ * entorno de tests resuelve `vue` a su build sin compilador: una plantilla en
+ * string no se compilaría en tiempo de ejecución.
+ */
+export interface TableSlots {
+  editor?: (props: CellEditorSlotProps<GridRow>) => VNode
+}
+
 /** Opciones de {@link mountTable}. */
 export interface MountTableOptions {
   props: TableProps
   viewport?: ViewportSize
+  /** Slots del componente. Ausente monta la tabla sin ningún slot declarado. */
+  slots?: TableSlots
 }
 
 /**
@@ -381,6 +404,7 @@ export async function mountTable(options: MountTableOptions): Promise<TableHarne
   const wrapper = mount(DataTable, {
     attachTo: host,
     props: options.props,
+    slots: options.slots,
   })
 
   const grid = wrapper.find('.dt-root').element
@@ -460,6 +484,12 @@ export async function mountTable(options: MountTableOptions): Promise<TableHarne
         }
       }
       return null
+    },
+
+    slotEditor(): HTMLElement | null {
+      const node = wrapper.element.querySelector('.dt-editor-slot')
+      if (!(node instanceof HTMLElement) || node.hidden) return null
+      return node
     },
 
     unmount(): void {

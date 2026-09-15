@@ -25,6 +25,7 @@ export type {
   BeforeEditEvent,
   BuiltInAggregation,
   CellAlign,
+  CellEditorSlotProps,
   CellEditorType,
   CellLayout,
   CellOption,

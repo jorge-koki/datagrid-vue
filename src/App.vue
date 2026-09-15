@@ -26,6 +26,7 @@ import type { GroupingPresetId } from './demo/grouping'
 import { useDemoLog } from './demo/log'
 import DemoEventLog from './demo/DemoEventLog.vue'
 import DemoStats from './demo/DemoStats.vue'
+import DemoStatusPicker from './demo/DemoStatusPicker.vue'
 import './demo/demo.css'
 
 /**
@@ -323,6 +324,15 @@ function onAfterEdit(event: AfterEditEvent<ProjectRow>): void {
       <kbd>Espacio</kbd> la pliegan, <kbd>→</kbd> la abre y <kbd>←</kbd> la cierra.
     </p>
 
+    <p class="demo-note">
+      La columna <strong>Estado</strong> se edita con un componente Vue propio, montado desde el
+      slot <code>#editor</code>: el desplegable no es del componente, lo pone esta demo. Se monta al
+      abrir el editor y se desmonta al cerrarlo, así que existe
+      <strong>una instancia a la vez</strong>
+      en toda la página, con 100 filas o con 50.000. El contador de nodos de acá abajo no se mueve
+      al abrirlo.
+    </p>
+
     <p v-if="grouped" class="demo-note">
       Con agrupación activa, el contador de filas en el DOM y la posición de la celda activa cuentan
       entradas de la <strong>vista aplanada</strong>: cada cabecera de grupo ocupa una fila propia y
@@ -353,7 +363,32 @@ function onAfterEdit(event: AfterEditEvent<ProjectRow>): void {
         @edit-commit="onEditCommit"
         @after-edit="onAfterEdit"
         @group-toggle="onGroupToggle"
-      />
+      >
+        <!--
+          Editor por slot. Se renderiza SOLO sobre la celda en edición y solo
+          cuando esa celda pertenece a una columna con `editor: 'slot'`, así que
+          hay como mucho UNA instancia de `DemoStatusPicker` en toda la página,
+          con 50.000 filas cargadas o con 100. El contador de nodos del panel de
+          estadísticas no se mueve al abrirlo.
+
+          El `v-if` por clave de columna es el patrón que corresponde con más de
+          una columna de slot: el slot es uno solo para toda la tabla y el
+          consumidor decide qué control montar en cada una.
+
+          `commit` y `cancel` son la tubería de siempre: `commit` publica
+          `afterEdit` y, si el valor cambió, `editCommit`; `cancel` publica solo
+          `afterEdit` con `canceled: true`. La bitácora de abajo los muestra en
+          vivo.
+        -->
+        <template #editor="{ column, value, commit }">
+          <DemoStatusPicker
+            v-if="column.key === 'status'"
+            :value="value"
+            :options="column.options ?? []"
+            @commit="commit"
+          />
+        </template>
+      </DataTable>
     </div>
 
     <section class="demo-panels">

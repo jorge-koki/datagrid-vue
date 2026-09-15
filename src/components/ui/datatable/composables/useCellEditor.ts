@@ -38,6 +38,16 @@ type EditorControl = HTMLInputElement | HTMLSelectElement
 export interface UseCellEditorOptions<TRow> {
   /** Contenedor donde se montan los controles de edición. */
   host: Readonly<ShallowRef<HTMLElement | null>>
+  /**
+   * Caja que envuelve al contenido del slot `#editor`, si la tabla lo declara.
+   *
+   * Este módulo no la crea ni la llena: la renderiza Vue y su contenido lo pone
+   * el consumidor. Acá solo se la POSICIONA sobre la celda en edición, con la
+   * misma geometría y el mismo caché que los controles incluidos, y se mira si
+   * el foco quedó adentro al cerrar. Sin esta referencia, una columna con
+   * `editor: 'slot'` no abre nada.
+   */
+  slotHost?: Readonly<ShallowRef<HTMLElement | null>>
   /** Devuelve la fila en ese índice, o `undefined` si está fuera de rango. */
   getRow: (rowIndex: number) => TRow | undefined
   /** Devuelve la definición de columna, o `undefined` si la clave es desconocida. */
@@ -91,6 +101,26 @@ export interface UseCellEditorReturn {
   commitValue: (position: CellPosition, newValue: CellValue) => boolean
   /** Confirma la edición en curso. No hace nada si no hay ninguna. */
   commit: () => void
+  /**
+   * Confirma la sesión abierta con el valor que entrega el slot `#editor`.
+   *
+   * Es la vía del editor de slot y la única que recibe el valor ya tipado desde
+   * afuera. Reusa el mismo publicador que el editor incluido —`editCommit` solo
+   * ante un cambio real, después `afterEdit`—, así que no existe un segundo
+   * camino de edición. No vuelve a emitir `beforeEdit`: ese veto ya corrió al
+   * abrir.
+   */
+  commitSlotValue: (newValue: CellValue) => void
+  /**
+   * Cierra el editor de slot si la celda apuntada no es la que está abierta.
+   *
+   * Los controles incluidos no lo necesitan: confirman solos al perder el foco.
+   * El de slot no puede hacerlo, porque el contenido del consumidor puede abrir
+   * un popover teleportado al `body` que se lleva el foco sin que la edición
+   * haya terminado. Cerrar por `blur` ahí significaría cerrar el editor justo
+   * cuando el usuario despliega la lista.
+   */
+  commitIfElsewhere: (position: CellPosition) => void
   /** Descarta la edición en curso sin escribir. */
   cancelEdit: () => void
   /** Reubica el editor sobre su celda. Se llama una vez por frame. */
@@ -112,6 +142,10 @@ export interface UseCellEditorReturn {
  * 4. `Date` -> `date`.
  * 5. Hay `options` -> `select`.
  * 6. Si no -> `text`.
+ *
+ * `'slot'` solo puede salir del paso 1: no hay ninguna forma de un valor que
+ * signifique "el control lo pone el consumidor", así que declararlo es la única
+ * manera de pedirlo.
  *
  * Los tipos del valor se consultan ANTES que `options` porque el tipo del dato
  * es una señal más fuerte que la existencia de una lista: una columna booleana
@@ -155,6 +189,23 @@ export function inferEditorType<TRow>(
  * anclaje visual. Ahí sí se cierra, y se cierra **confirmando**, con la misma
  * semántica que un blur.
  *
+ * ## El editor de slot es la misma idea, un nivel más afuera
+ *
+ * Con `editor: 'slot'` el control lo pone el consumidor desde el slot `#editor`
+ * del componente, y este módulo se queda con lo que ya hacía: correr el veto,
+ * posicionar la caja sobre la celda, cerrarla cuando la fila sale de la ventana
+ * y publicar el resultado. El contenido se monta al abrir y se desmonta al
+ * cerrar, así que existe como mucho UNA instancia del componente del consumidor
+ * en toda la tabla.
+ *
+ * La única asimetría con los controles incluidos es el `blur`, y es deliberada:
+ * un desplegable de un design system suele abrir su lista en un portal colgado
+ * del `body`, con lo que el foco sale de la caja del editor en mitad de la
+ * interacción. Confirmar ahí cerraría el editor justo cuando el usuario despliega
+ * las opciones. Por eso el editor de slot cierra por `commit()`, por `cancel()`,
+ * porque la fila salió de la ventana, o porque el puntero apuntó otra celda
+ * ({@link UseCellEditorReturn.commitIfElsewhere}), pero nunca por perder el foco.
+ *
  * ## La tabla es controlada
  *
  * Nada de este módulo escribe sobre `rows`. Se emite `editCommit` con el valor
@@ -172,6 +223,13 @@ export function useCellEditor<TRow extends Record<string, unknown>>(
 
   /** Control actualmente visible, o `null`. */
   let activeControl: EditorControl | null = null
+  /**
+   * Caja del slot mientras el editor abierto es de tipo `'slot'`, o `null`.
+   *
+   * Es excluyente con {@link activeControl}: una sesión de edición tiene un
+   * control incluido o tiene el slot, nunca los dos.
+   */
+  let activeSlot: HTMLElement | null = null
   /** Tipo del control activo. */
   let activeType: CellEditorType | null = null
   /** Valor al abrir el editor. Se congela para poder reportarlo como `oldValue`. */
@@ -209,8 +267,21 @@ export function useCellEditor<TRow extends Record<string, unknown>>(
     return inferEditorType(context.column, context.value)
   }
 
-  /** Construye el control de un tipo. `checkbox` no usa overlay. */
+  /**
+   * Nodo que este módulo posiciona sobre la celda en edición.
+   *
+   * Es el control incluido o, con el editor de slot, la caja que envuelve al
+   * contenido del consumidor. Separarlo de {@link activeControl} es lo que
+   * permite que la geometría —y su caché— sea exactamente el mismo código para
+   * los dos casos.
+   */
+  function positionedElement(): HTMLElement | null {
+    return activeControl ?? activeSlot
+  }
+
+  /** Construye el control de un tipo. `checkbox` y `slot` no usan overlay propio. */
   function createControl(type: CellEditorType): EditorControl | null {
+    if (type === 'slot') return null
     if (type === 'select') {
       const select = document.createElement('select')
       select.className = 'dt-editor dt-editor--select'
@@ -338,8 +409,23 @@ export function useCellEditor<TRow extends Record<string, unknown>>(
     // El renderer manda su intención por `commitValue`.
     if (type === 'checkbox') return false
 
-    const control = getControl(type)
-    if (!control) return false
+    // Las dos ramas resuelven el mismo requisito —tener dónde dibujar el editor—
+    // contra fuentes distintas: el control incluido se construye acá, y la caja
+    // del slot la renderiza Vue. Se resuelve ANTES de `runBeforeEdit` para no
+    // emitir un veto sobre una edición que después no va a abrir.
+    let control: EditorControl | null = null
+    let slotHost: HTMLElement | null = null
+    if (type === 'slot') {
+      slotHost = options.slotHost?.value ?? null
+      // Una columna con `editor: 'slot'` en una tabla que no declara el slot
+      // `#editor` no abre nada. Caer en un editor de texto sería peor: el
+      // consumidor pidió su propio control justamente porque el incluido no
+      // sirve para esa columna.
+      if (!slotHost) return false
+    } else {
+      control = getControl(type)
+      if (!control) return false
+    }
 
     if (!runBeforeEdit(position, context.row, context.column, context.value)) return false
 
@@ -347,7 +433,18 @@ export function useCellEditor<TRow extends Record<string, unknown>>(
     editing.value = { rowIndex: position.rowIndex, columnKey: position.columnKey }
     appliedGeometry = null
     activeControl = control
+    activeSlot = slotHost
     activeType = type
+
+    // El contenido del slot lo monta Vue al ver cambiar `editing`, así que acá no
+    // hay ningún valor que sembrar ni ningún nodo que mostrar: solo se deja la
+    // geometría aplicada para que la caja ya esté sobre la celda correcta cuando
+    // el patch la haga visible. El foco lo toma el componente después del patch,
+    // que es el único momento en que su contenido existe.
+    if (!control) {
+      applyGeometry(position)
+      return true
+    }
 
     if (control instanceof HTMLSelectElement) {
       populateSelect(control, context.column.options ?? [])
@@ -483,6 +580,34 @@ export function useCellEditor<TRow extends Record<string, unknown>>(
     publishResult(position, context.row, context.column, oldValue, newValue)
   }
 
+  function commitSlotValue(newValue: CellValue): void {
+    const position = editing.value
+    // La guarda por tipo no es defensiva de más: el slot vive en el árbol de Vue
+    // y su `commit` es una closure que el consumidor puede invocar tarde, después
+    // de que la sesión se cerrara por scroll o por un clic en otra celda. Sin
+    // esto, ese llamado publicaría una edición sobre una celda que ya no está
+    // abierta.
+    if (!position || closing || activeType !== 'slot') return
+
+    const context = resolveContext(position)
+
+    // Igual que en `commit`: el valor original se captura antes de que `close()`
+    // lo descarte.
+    const oldValue = originalValue
+    close()
+
+    if (!context) return
+
+    publishResult(position, context.row, context.column, oldValue, newValue)
+  }
+
+  function commitIfElsewhere(position: CellPosition): void {
+    const current = editing.value
+    if (!current || activeType !== 'slot') return
+    if (current.rowIndex === position.rowIndex && current.columnKey === position.columnKey) return
+    commit()
+  }
+
   function cancelEdit(): void {
     const position = editing.value
     if (!position || closing) return
@@ -554,6 +679,7 @@ export function useCellEditor<TRow extends Record<string, unknown>>(
   function close(): void {
     closing = true
     const control = activeControl
+    const slot = activeSlot
     // Se recuerda si el control tenía el foco para poder devolverlo al final,
     // con el cierre ya terminado y la guarda de reentrada abajo. Devolverlo
     // antes reentraría en este mismo camino con el estado a medio limpiar.
@@ -566,8 +692,22 @@ export function useCellEditor<TRow extends Record<string, unknown>>(
       control.hidden = true
       control.value = ''
     }
+    // El editor de slot no se oculta desde acá: su visibilidad la escribe Vue a
+    // partir de `editing`, y dos dueños para el mismo atributo terminan
+    // pisándose. Lo único que le corresponde a este cierre es el foco, porque el
+    // contenido está por desmontarse y soltarlo lo mandaría al `body` —fuera de
+    // la tabla— dejando la grilla muda. Se mira quién lo tiene ANTES de bajar
+    // `editing`, que es lo que dispara el desmontaje.
+    if (slot) {
+      const focused = slot.ownerDocument.activeElement
+      if (focused instanceof HTMLElement && slot.contains(focused)) {
+        hadFocus = true
+        focused.blur()
+      }
+    }
     editing.value = null
     activeControl = null
+    activeSlot = null
     activeType = null
     originalValue = undefined
     appliedGeometry = null
@@ -576,8 +716,11 @@ export function useCellEditor<TRow extends Record<string, unknown>>(
   }
 
   function applyGeometry(position: CellPosition): void {
-    const control = activeControl
-    if (!control) return
+    // El control incluido o la caja del slot, según cuál esté abierto: la
+    // geometría se resuelve igual para los dos, y por eso este es el único lugar
+    // del módulo que escribe posición.
+    const element = positionedElement()
+    if (!element) return
 
     const geometry = options.getCellGeometry(position)
     if (!geometry) return
@@ -594,9 +737,9 @@ export function useCellEditor<TRow extends Record<string, unknown>>(
     }
 
     appliedGeometry = geometry
-    control.style.transform = `translate3d(${geometry.x}px, ${geometry.y}px, 0)`
-    control.style.width = `${geometry.width}px`
-    control.style.height = `${geometry.height}px`
+    element.style.transform = `translate3d(${geometry.x}px, ${geometry.y}px, 0)`
+    element.style.width = `${geometry.width}px`
+    element.style.height = `${geometry.height}px`
   }
 
   function syncPosition(): void {
@@ -672,6 +815,7 @@ export function useCellEditor<TRow extends Record<string, unknown>>(
     }
     controls.clear()
     activeControl = null
+    activeSlot = null
     activeType = null
     selectOptions = null
     editing.value = null
@@ -685,6 +829,8 @@ export function useCellEditor<TRow extends Record<string, unknown>>(
     beginEdit,
     commitValue,
     commit,
+    commitSlotValue,
+    commitIfElsewhere,
     cancelEdit,
     syncPosition,
     resolveEditorType,

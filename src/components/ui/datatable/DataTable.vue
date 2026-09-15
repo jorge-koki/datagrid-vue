@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, shallowRef, watch } from 'vue'
 import type {
   AfterEditEvent,
   BeforeEditEvent,
+  CellEditorSlotProps,
   CellPosition,
   CellSelectEvent,
   CellValue,
@@ -118,6 +119,24 @@ const emit = defineEmits<{
   'update:expandedGroups': [string[]]
 }>()
 
+/**
+ * El único slot del componente, y la única vía por la que entra un componente
+ * Vue ajeno.
+ *
+ * Se renderiza SOLO sobre la celda que está en edición, dentro del host del
+ * editor y nunca dentro de `.dt-canvas`, que es territorio del pool. Una celda
+ * abierta a la vez significa una instancia montada a la vez, sin importar
+ * cuántas filas tenga la tabla: es la misma disciplina del `<input>` reutilizado
+ * que ya usaban los editores incluidos.
+ *
+ * Es opcional, y cuando no se declara el componente ni siquiera renderiza la
+ * caja que lo contendría: una tabla que no lo usa produce exactamente el mismo
+ * DOM que antes de que este slot existiera.
+ */
+defineSlots<{
+  editor?: (props: CellEditorSlotProps<TRow>) => unknown
+}>()
+
 /* --------------------------------------------- Estado de layout de columnas */
 
 /**
@@ -187,6 +206,7 @@ const viewportEl = shallowRef<HTMLElement | null>(null)
 const headerInnerEl = shallowRef<HTMLElement | null>(null)
 const canvasEl = shallowRef<HTMLElement | null>(null)
 const editorHostEl = shallowRef<HTMLElement | null>(null)
+const slotEditorHostEl = shallowRef<HTMLElement | null>(null)
 
 /* -------------------------------------------------------------- Métricas base */
 
@@ -362,6 +382,11 @@ const pool = useRowPool<TRow>({
     // Un clic simple SELECCIONA. No abre el editor: eso lo hacen el doble clic,
     // Enter y F2.
     if (props.selectionMode === 'none') return
+    // Solo alcanza al editor de slot, que no confirma por `blur`: apuntar otra
+    // celda es lo que lo cierra, con la misma semántica de planilla que ya
+    // aplicaba `beginEdit`. Los controles incluidos no pasan por acá; los
+    // confirma el `blur` que dispara el foco de la línea siguiente.
+    editor.commitIfElsewhere(position)
     // El foco va PRIMERO: si había un editor abierto sobre otra celda, moverlo
     // dispara su `blur` y lo confirma antes de que la selección se mueva.
     focusViewport(position)
@@ -846,6 +871,7 @@ function getCellGeometry(position: CellPosition): CellGeometry | null {
 
 const editor = useCellEditor<TRow>({
   host: editorHostEl,
+  slotHost: slotEditorHostEl,
   // El editor trabaja en coordenadas VISIBLES, igual que el pool: es lo que le
   // permite ubicar su control con una multiplicación. La traducción al índice
   // del dataset ocurre al emitir, y solo ahí.
@@ -869,6 +895,108 @@ const editor = useCellEditor<TRow>({
     viewportEl.value?.focus()
   },
 })
+
+/* -------------------------------------------------------- Editor por slot */
+
+/**
+ * Lo que recibe el slot `#editor`, o `null` cuando no hay ninguna celda de slot
+ * abierta.
+ *
+ * Es un `computed` y no un estado propio para que no exista una segunda fuente
+ * de verdad sobre qué se está editando: deriva de `editor.editing`, que es la
+ * misma que consume el pintado. Durante el scroll ninguna de sus dependencias se
+ * mueve, así que no se recalcula y el slot no se vuelve a renderizar: el camino
+ * caliente no paga absolutamente nada por esta función.
+ *
+ * Se consulta `column.editor` en crudo en lugar de inferir el tipo porque
+ * `'slot'` nunca se infiere: declararlo es la única forma de pedirlo.
+ */
+const editorSlotProps = computed<CellEditorSlotProps<TRow> | null>(() => {
+  const position = editor.editing.value
+  if (position === null) return null
+
+  const column = getColumnDefinition(position.columnKey)
+  if (!column || column.editor !== 'slot') return null
+
+  const row = grouping.rowAt(position.rowIndex)
+  if (row === undefined) return null
+
+  return {
+    row,
+    // El índice que ve el consumidor es SIEMPRE el de su propio array, igual que
+    // en todos los eventos: la posición dentro de la vista aplanada no le sirve
+    // para escribir, y confundirlas le tocaría otra fila.
+    rowIndex: grouping.toSourceIndex(position.rowIndex),
+    column,
+    columnKey: position.columnKey,
+    value: readCellValue(column, row),
+    commit: (newValue: CellValue) => editor.commitSlotValue(newValue),
+    cancel: () => editor.cancelEdit(),
+  }
+})
+
+/**
+ * Qué se considera enfocable dentro del contenido del slot.
+ *
+ * Se excluye `tabindex="-1"` a propósito: es la marca de "enfocable por código,
+ * no por Tab", y la caja del editor la lleva ella misma como último recurso.
+ */
+const FOCUSABLE_SELECTOR =
+  'input:not([disabled]), select:not([disabled]), textarea:not([disabled]), ' +
+  'button:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])'
+
+/**
+ * Lleva el foco al control que puso el consumidor, una vez que existe.
+ *
+ * Corre en un watcher `post` porque el contenido del slot lo monta Vue al ver
+ * cambiar `editing`: en el momento en que `beginEdit` retorna todavía no hay
+ * ningún nodo que enfocar. Es la diferencia con los controles incluidos, que
+ * este módulo crea él mismo y puede enfocar en el acto.
+ *
+ * Si el componente del consumidor ya tomó el foco por su cuenta —un `autofocus`,
+ * un `onMounted` propio— no se le disputa: quien mejor sabe qué parte de un
+ * control compuesto debe recibir el foco es quien lo escribió.
+ */
+function focusSlotEditor(): void {
+  const host = slotEditorHostEl.value
+  if (!host) return
+
+  const focused = host.ownerDocument.activeElement
+  if (focused instanceof HTMLElement && host.contains(focused)) return
+
+  const focusable = host.querySelector<HTMLElement>(FOCUSABLE_SELECTOR)
+  // Sin nada enfocable adentro, el foco se queda en la caja, que lleva
+  // `tabindex="-1"` para eso: sin foco ahí, Escape no llegaría a ningún lado.
+  ;(focusable ?? host).focus({ preventScroll: true })
+}
+
+watch(
+  editorSlotProps,
+  (current) => {
+    if (current === null) return
+    focusSlotEditor()
+  },
+  { flush: 'post' },
+)
+
+/**
+ * Teclas dentro del editor de slot.
+ *
+ * Escape descarta, igual que en un editor incluido. El resto se detiene acá y no
+ * llega al viewport: el editor comparte el contenedor que scrollea, y dejar
+ * burbujear las flechas o la barra espaciadora lo desplazaría mientras el
+ * usuario opera el control. `stopPropagation` no le quita nada al control del
+ * consumidor, que es el `target` y ya vio el evento.
+ */
+function onSlotEditorKeyDown(event: KeyboardEvent): void {
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    event.stopPropagation()
+    editor.cancelEdit()
+    return
+  }
+  event.stopPropagation()
+}
 
 /* ------------------------------------------------------------------ Pintado */
 
@@ -1262,6 +1390,31 @@ function headerAlignClass(column: ResolvedColumn<TRow>): string | undefined {
         acompañan al scroll sin reposicionarse.
       -->
       <div ref="editorHostEl" class="dt-editor-host" />
+      <!--
+        Caja del editor por slot. Solo existe si la tabla declara `#editor`: sin
+        el slot, este nodo no se renderiza y el DOM queda exactamente como antes
+        de que la función existiera.
+
+        Vive acá y NO dentro de `.dt-canvas` por la misma razón que el host de los
+        editores incluidos: el canvas es territorio del pool, que recicla sus
+        nodos por slot de viewport y no puede convivir con un árbol que administre
+        Vue. Acá adentro el contenido acompaña al scroll sin reposicionarse,
+        porque el viewport es el elemento que se desplaza.
+
+        `hidden` lo escribe Vue a partir de `editorSlotProps`; la posición y el
+        tamaño los escribe `useCellEditor` en cada frame con editor abierto. Son
+        dos dueños para dos cosas distintas, nunca para la misma.
+      -->
+      <div
+        v-if="$slots.editor"
+        ref="slotEditorHostEl"
+        class="dt-editor-slot"
+        tabindex="-1"
+        :hidden="editorSlotProps === null"
+        @keydown="onSlotEditorKeyDown"
+      >
+        <slot v-if="editorSlotProps" name="editor" v-bind="editorSlotProps" />
+      </div>
     </div>
 
     <div v-if="rows.length === 0" class="dt-empty">{{ emptyText }}</div>
