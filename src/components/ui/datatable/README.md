@@ -204,33 +204,34 @@ function onEditCommit(event: EditCommitEvent<Invoice>): void {
 
 `rows`, `columns` y `rowKey` son obligatorias. Todo lo demás tiene valor por defecto.
 
-| Prop                    | Tipo                                                             | Por defecto                   | Descripción                                                                                                                                                                    |
-| ----------------------- | ---------------------------------------------------------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `rows`                  | `readonly TRow[]`                                                | —                             | El dataset completo. Nunca se corta, ni se copia, ni se vuelve reactivo en profundidad. La tabla solo indexa dentro de la ventana visible.                                     |
-| `columns`               | `readonly DataTableColumn<TRow>[]`                               | —                             | Definiciones de columna, en orden de declaración. Ver [Columnas](#columnas).                                                                                                   |
-| `rowKey`                | `keyof TRow \| ((row: TRow, index: number) => string \| number)` | —                             | Identidad de una fila. Se estampa como `data-row-key` para que el DOM siga siendo inspeccionable y testeable. Nunca afecta al reciclado: el pool recicla por slot de viewport. |
-| `rowHeight`             | `number`                                                         | `40` / `30` con `dense`       | Altura de fila en px. Es un número y no un valor CSS porque el virtualizador divide por él en cada frame. Se replica en `--dt-row-height`.                                     |
-| `headerHeight`          | `number`                                                         | `44` / `34` con `dense`       | Altura del header en px. Se replica en `--dt-header-height`.                                                                                                                   |
-| `dense`                 | `boolean`                                                        | `false`                       | Preset compacto: filas más bajas, tipografía menor, padding más ajustado.                                                                                                      |
-| `overscan`              | `number`                                                         | `4`                           | Filas y columnas extra pintadas fuera de la ventana visible. Más alto cuesta tiempo de pintado y oculta bordes en blanco durante el scroll rápido.                             |
-| `defaultColumnWidth`    | `number`                                                         | `150`                         | Ancho en px para las columnas que no declaran el suyo.                                                                                                                         |
-| `virtualizeColumns`     | `boolean`                                                        | `true`                        | Pinta solo las columnas visibles en horizontal. Conviene apagarlo en tablas angostas donde la fila entera entra: ahí el cálculo de ventana es overhead puro.                   |
-| `theme`                 | `'light' \| 'dark' \| 'auto'`                                    | `'auto'`                      | Esquema de color. Ver [Temas](#temas).                                                                                                                                         |
-| `emptyText`             | `string`                                                         | `'No data'`                   | Mensaje que se muestra cuando `rows` está vacío.                                                                                                                               |
-| `stripe`                | `boolean`                                                        | `false`                       | Fondo alternado en las filas impares.                                                                                                                                          |
-| `bordered`              | `boolean`                                                        | `false`                       | Dibuja separadores de celda.                                                                                                                                                   |
-| `columnVisibility`      | `Readonly<Record<string, boolean>>`                              | _no controlado_               | `v-model:column-visibility`. Una clave ausente se resuelve con `column.defaultVisible ?? true`.                                                                                |
-| `columnOrder`           | `readonly string[]`                                              | _no controlado_               | `v-model:column-order`. Se reconcilia contra las columnas actuales antes de aplicarse.                                                                                         |
-| `columnWidths`          | `Readonly<Record<string, number>>`                               | _no controlado_               | `v-model:column-widths`. Pisa a `column.width` y siempre se acota por `minWidth` / `maxWidth`.                                                                                 |
-| `tableId`               | `string`                                                         | —                             | Identificador único de esta tabla dentro de la aplicación. Obligatorio para persistir: es lo que separa el layout de una tabla del de otra.                                    |
-| `persist`               | `boolean \| DataTablePersistOptions`                             | `false`                       | Persiste el layout entre sesiones. `true` significa `localStorage` con los valores por defecto. Ver [Persistencia](#visibilidad-orden-y-persistencia-de-columnas).             |
-| `selectionMode`         | `'none' \| 'cell' \| 'row'`                                      | `'cell'`                      | Qué seleccionan el clic y el teclado. Ver [Selección](#selección-y-navegación-con-el-teclado).                                                                                 |
-| `activeCell`            | `CellPosition \| null`                                           | _no controlado_               | `v-model:active-cell`. La celda seleccionada. `null` significa "controlado y sin selección".                                                                                   |
-| `groupBy`               | `readonly string[]`                                              | _no controlado_ (lista vacía) | `v-model:group-by`. Claves de columna por las que agrupar, en orden de anidamiento. Ver [Agrupación](#agrupación).                                                             |
-| `expandedGroups`        | `readonly string[]`                                              | _no controlado_               | `v-model:expanded-groups`. `groupId` de los grupos expandidos. Una lista vacía significa "controlado y todo colapsado".                                                        |
-| `groupsDefaultExpanded` | `boolean`                                                        | `true`                        | Estado inicial de un grupo del que todavía no se sabe nada. Deja de intervenir cuando `expandedGroups` está controlado.                                                        |
-| `showGroupCount`        | `boolean`                                                        | `true`                        | Si la cabecera de grupo muestra la insignia con cuántas filas contiene.                                                                                                        |
-| `emptyGroupLabel`       | `string`                                                         | `'(empty)'`                   | Etiqueta del grupo que junta los valores ausentes. Ver [Agrupación](#groupid-una-identidad-por-camino).                                                                        |
+| Prop                    | Tipo                                                             | Por defecto                   | Descripción                                                                                                                                                                                       |
+| ----------------------- | ---------------------------------------------------------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `rows`                  | `readonly TRow[]`                                                | —                             | El dataset completo. Nunca se corta, ni se copia, ni se vuelve reactivo en profundidad. La tabla solo indexa dentro de la ventana visible.                                                        |
+| `columns`               | `readonly DataTableColumn<TRow>[]`                               | —                             | Definiciones de columna, en orden de declaración. Ver [Columnas](#columnas).                                                                                                                      |
+| `rowKey`                | `keyof TRow \| ((row: TRow, index: number) => string \| number)` | —                             | Identidad de una fila. Se estampa como `data-row-key` para que el DOM siga siendo inspeccionable y testeable. Nunca afecta al reciclado: el pool recicla por slot de viewport.                    |
+| `rowHeight`             | `number`                                                         | `40` / `30` con `dense`       | Altura de fila en px. Es un número y no un valor CSS porque el virtualizador divide por él en cada frame. Se replica en `--dt-row-height`.                                                        |
+| `headerHeight`          | `number`                                                         | `44` / `34` con `dense`       | Altura del header en px. Se replica en `--dt-header-height`.                                                                                                                                      |
+| `dense`                 | `boolean`                                                        | `false`                       | Preset compacto: filas más bajas, tipografía menor, padding más ajustado.                                                                                                                         |
+| `overscan`              | `number`                                                         | `4`                           | Filas y columnas extra pintadas fuera de la ventana visible. Más alto cuesta tiempo de pintado y oculta bordes en blanco durante el scroll rápido.                                                |
+| `defaultColumnWidth`    | `number`                                                         | `150`                         | Ancho en px para las columnas que no declaran el suyo.                                                                                                                                            |
+| `virtualizeColumns`     | `boolean`                                                        | `true`                        | Pinta solo las columnas visibles en horizontal. Conviene apagarlo en tablas angostas donde la fila entera entra: ahí el cálculo de ventana es overhead puro.                                      |
+| `theme`                 | `'light' \| 'dark' \| 'auto'`                                    | `'auto'`                      | Esquema de color. Ver [Temas](#temas).                                                                                                                                                            |
+| `emptyText`             | `string`                                                         | `'No data'`                   | Mensaje que se muestra cuando `rows` está vacío.                                                                                                                                                  |
+| `stripe`                | `boolean`                                                        | `false`                       | Fondo alternado en las filas impares.                                                                                                                                                             |
+| `bordered`              | `boolean`                                                        | `false`                       | Dibuja separadores de celda.                                                                                                                                                                      |
+| `columnVisibility`      | `Readonly<Record<string, boolean>>`                              | _no controlado_               | `v-model:column-visibility`. Una clave ausente se resuelve con `column.defaultVisible ?? true`.                                                                                                   |
+| `columnOrder`           | `readonly string[]`                                              | _no controlado_               | `v-model:column-order`. Se reconcilia contra las columnas actuales antes de aplicarse.                                                                                                            |
+| `columnWidths`          | `Readonly<Record<string, number>>`                               | _no controlado_               | `v-model:column-widths`. Pisa a `column.width` y siempre se acota por `minWidth` / `maxWidth`.                                                                                                    |
+| `tableId`               | `string`                                                         | —                             | Identificador único de esta tabla dentro de la aplicación. Obligatorio para persistir: es lo que separa el layout de una tabla del de otra.                                                       |
+| `persist`               | `boolean \| DataTablePersistOptions`                             | `false`                       | Persiste el layout entre sesiones. `true` significa `localStorage` con los valores por defecto. Ver [Persistencia](#visibilidad-orden-y-persistencia-de-columnas).                                |
+| `selectionMode`         | `'none' \| 'cell' \| 'row'`                                      | `'cell'`                      | Qué seleccionan el clic y el teclado. Ver [Selección](#selección-y-navegación-con-el-teclado).                                                                                                    |
+| `activeCell`            | `CellPosition \| null`                                           | _no controlado_               | `v-model:active-cell`. La celda seleccionada. `null` significa "controlado y sin selección".                                                                                                      |
+| `focusRing`             | `boolean`                                                        | `false`                       | Dibuja un anillo alrededor del viewport cuando la tabla tiene el foco por teclado. En `true` aparece solo mientras no hay celda activa. Ver [El anillo de foco](#el-anillo-de-foco-del-viewport). |
+| `groupBy`               | `readonly string[]`                                              | _no controlado_ (lista vacía) | `v-model:group-by`. Claves de columna por las que agrupar, en orden de anidamiento. Ver [Agrupación](#agrupación).                                                                                |
+| `expandedGroups`        | `readonly string[]`                                              | _no controlado_               | `v-model:expanded-groups`. `groupId` de los grupos expandidos. Una lista vacía significa "controlado y todo colapsado".                                                                           |
+| `groupsDefaultExpanded` | `boolean`                                                        | `true`                        | Estado inicial de un grupo del que todavía no se sabe nada. Deja de intervenir cuando `expandedGroups` está controlado.                                                                           |
+| `showGroupCount`        | `boolean`                                                        | `true`                        | Si la cabecera de grupo muestra la insignia con cuántas filas contiene.                                                                                                                           |
+| `emptyGroupLabel`       | `string`                                                         | `'(empty)'`                   | Etiqueta del grupo que junta los valores ausentes. Ver [Agrupación](#groupid-una-identidad-por-camino).                                                                                           |
 
 ### Controlado y no controlado
 
@@ -366,6 +367,49 @@ posición activa sobrevive a cualquier repintado.
 `'none'` no es un early return dentro de un manejador: el objeto de listeners viene vacío y Vue no
 registra nada. El `selectCell()` expuesto sigue escribiendo el estado si se lo llama, así que una
 selección por código sigue siendo posible; lo que desaparece son las vías de entrada del usuario.
+
+### El anillo de foco del viewport
+
+`.dt-viewport` es el **único** elemento enfocable de la tabla: es la caja que scrollea y es donde
+escucha el manejador de teclado. Un clic sobre una celda le lleva el foco de forma explícita, porque
+las celdas no son enfocables.
+
+Que el viewport tenga el foco y que ese foco se **dibuje** son dos cosas distintas, y la segunda la
+decide `focusRing`:
+
+| Valor             | Qué se ve                                                                                                           |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `false` (defecto) | Ningún anillo alrededor del viewport, nunca. La única marca de posición es la celda activa.                         |
+| `true`            | Anillo de 2px en `--dt-primary` cuando la tabla tiene el foco **por teclado**, y solo mientras no hay celda activa. |
+
+**Por qué el valor por defecto es `false`.** Con una celda marcada, el anillo del viewport es una
+segunda señal para la misma posición: la celda lleva su propio anillo y la tabla entera queda además
+encerrada en un borde de color. Es el mismo problema que tenía la tabla cuando las celdas llevaban
+`tabindex="-1"` y el navegador pintaba un anillo de `:focus-visible` sobre una celda distinta de la
+activa, solo que un nivel más arriba.
+
+**Por qué en `true` el anillo igual desaparece al seleccionar.** Por lo mismo. `focusRing: true`
+resuelve el caso en que no hay nada seleccionado; en cuanto lo hay, la celda activa ya dice dónde
+está parado el usuario y el anillo vuelve a sobrar.
+
+> **El costo de accesibilidad del valor por defecto, dicho de frente.** Con `focusRing: false` y sin
+> celda activa —el estado en el que arranca la tabla—, quien llega con `Tab` no recibe ninguna señal
+> visual de que el foco entró en la grilla. Recién la primera flecha marca una celda y aparece una
+> referencia. Si los usuarios de la aplicación navegan sobre todo por teclado, **`focusRing: true` es
+> la opción accesible** y alcanza con encenderla:
+>
+> ```vue
+> <DataTable focus-ring :rows="rows" :columns="columns" row-key="id" />
+> ```
+>
+> La otra forma de cubrirlo, sin anillo, es entrar con una celda ya seleccionada:
+> `v-model:active-cell` con una posición inicial, o `selectCell()` sobre el template ref.
+
+**No cuesta nada por frame.** El anillo se decide enteramente desde CSS, con dos atributos que Vue
+escribe sobre `.dt-root`: `data-focus-ring` replica la prop y `data-active-cell` dice si hay una
+celda marcada. Este segundo solo cambia al pasar de "sin selección" a "con selección" y de vuelta
+—recorrer la tabla entera con las flechas no lo mueve, porque sigue habiendo selección—, así que el
+camino caliente del scroll no lo toca nunca.
 
 ### Teclas
 
@@ -519,6 +563,12 @@ manejador escucha ahí y la posición activa sigue siendo estado del componente,
 Un clic sobre una celda lleva el foco al viewport de forma explícita —salvo con `selectionMode` en
 `'none'`, donde la tabla no le quita el foco a nadie—, y cerrar el editor se lo devuelve, para que la
 tecla siguiente a un Escape siga llegando.
+
+**Ese anillo de foco está apagado por defecto, y eso tiene un costo.** Sin celda activa y con
+`focusRing: false`, entrar con `Tab` no produce ninguna señal visual. El valor por defecto evita que
+cada selección encierre la tabla entera en un borde de color, que es lo que pasaba con el anillo
+incondicional; la contrapartida está descrita, con las dos formas de cubrirla, en
+[El anillo de foco del viewport](#el-anillo-de-foco-del-viewport).
 
 > **Lo único que queda afuera del contrato.** El mensaje de `emptyText` se renderiza como un `div`
 > dentro de `.dt-root`, o sea dentro de la grilla, y no es una fila. Solo aparece con `rows` vacío,
@@ -1411,12 +1461,23 @@ o un `headerHeight` explícitos siguen ganando.
 La selección no introduce ningún token nuevo: se dibuja enteramente con `--dt-primary` y
 `--dt-bg-accented`, así que re-estilar el acento re-estila la selección.
 
-| Enganche                         | Qué hace                                                                                                                                                   |
-| -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `.dt-cell--active`               | La celda activa. `box-shadow: inset 0 0 0 2px var(--dt-primary)` más `z-index: 1`.                                                                         |
-| `.dt-row--active`                | La fila que contiene la celda activa. Fondo `--dt-bg-accented`, en **los dos** modos, `'cell'` y `'row'`. También aplica a una cabecera de grupo.          |
-| `.dt-header-cell--active`        | El header de la columna activa. Fondo acentuado más un subrayado de 2px en `--dt-primary`.                                                                 |
-| `[data-selection]` en `.dt-root` | Replica `selectionMode` (`none` / `cell` / `row`). La hoja de estilos lo usa para mover el anillo: en modo `'row'` lo recibe la fila y la celda lo pierde. |
+| Enganche                           | Qué hace                                                                                                                                                   |
+| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.dt-cell--active`                 | La celda activa. `box-shadow: inset 0 0 0 2px var(--dt-primary)` más `z-index: 1`.                                                                         |
+| `.dt-row--active`                  | La fila que contiene la celda activa. Fondo `--dt-bg-accented`, en **los dos** modos, `'cell'` y `'row'`. También aplica a una cabecera de grupo.          |
+| `.dt-header-cell--active`          | El header de la columna activa. Fondo acentuado más un subrayado de 2px en `--dt-primary`.                                                                 |
+| `[data-selection]` en `.dt-root`   | Replica `selectionMode` (`none` / `cell` / `row`). La hoja de estilos lo usa para mover el anillo: en modo `'row'` lo recibe la fila y la celda lo pierde. |
+| `[data-focus-ring]` en `.dt-root`  | Replica `focusRing` (`'true'` / `'false'`). Es la primera de las dos condiciones del anillo del viewport.                                                  |
+| `[data-active-cell]` en `.dt-root` | `'true'` mientras hay una celda activa. Es la segunda condición: con una celda marcada, el anillo del viewport se suprime.                                 |
+
+El anillo del viewport sale de una sola regla, y las dos condiciones son literales del selector:
+
+```css
+.dt-root[data-focus-ring='true'][data-active-cell='false'] .dt-viewport:focus-visible {
+  outline: 2px solid var(--dt-primary);
+  outline-offset: -2px;
+}
+```
 
 El anillo es un `box-shadow: inset`, y no un `border` ni un `outline`. La elección sostiene algo:
 
@@ -1709,16 +1770,16 @@ explicar qué se compró a cambio.
 
 ### El resto de la suite
 
-| Archivo                       | Qué cubre                                                                                                                                                                             |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `useVirtualWindow.test.ts`    | Matemática de la ventana: 100k filas, scroll negativo, overscroll, overscan                                                                                                           |
-| `useColumnLayout.test.ts`     | Offsets acumulados, acotado de anchos, orden, y la búsqueda binaria por fuerza bruta                                                                                                  |
-| `reconcile.test.ts`           | Estado guardado contra columnas que cambiaron; payloads corruptos                                                                                                                     |
-| `useTablePersistence.test.ts` | Orden carga/guardado, debounce, volcado al desmontar, degradación en SSR y modo privado                                                                                               |
-| `useCellEditor.test.ts`       | Veto de `beforeEdit`, coacción de tipos, y que `rows` nunca se muta                                                                                                                   |
-| `selection.test.ts`           | Teclado completo, auto-scroll en píxeles exactos, columnas ocultas, y la estructura accesible: roles, `aria-rowindex` del encabezado y `aria-colindex` alineado entre header y cuerpo |
-| `renderers.test.ts`           | Valores inesperados en cada renderer incluido                                                                                                                                         |
-| `grouping.test.ts`            | Aplanado, agregados anidados, expansión controlada, `formatAggregate`, `emptyGroupLabel`, y que `editCommit` reporta el índice ORIGINAL                                               |
+| Archivo                       | Qué cubre                                                                                                                                                                                                                                                                                      |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `useVirtualWindow.test.ts`    | Matemática de la ventana: 100k filas, scroll negativo, overscroll, overscan                                                                                                                                                                                                                    |
+| `useColumnLayout.test.ts`     | Offsets acumulados, acotado de anchos, orden, y la búsqueda binaria por fuerza bruta                                                                                                                                                                                                           |
+| `reconcile.test.ts`           | Estado guardado contra columnas que cambiaron; payloads corruptos                                                                                                                                                                                                                              |
+| `useTablePersistence.test.ts` | Orden carga/guardado, debounce, volcado al desmontar, degradación en SSR y modo privado                                                                                                                                                                                                        |
+| `useCellEditor.test.ts`       | Veto de `beforeEdit`, coacción de tipos, y que `rows` nunca se muta                                                                                                                                                                                                                            |
+| `selection.test.ts`           | Teclado completo, auto-scroll en píxeles exactos, columnas ocultas, el anillo único —una sola celda marcada, y el anillo del viewport opcional y suprimido con celda activa— y la estructura accesible: roles, `aria-rowindex` del encabezado y `aria-colindex` alineado entre header y cuerpo |
+| `renderers.test.ts`           | Valores inesperados en cada renderer incluido                                                                                                                                                                                                                                                  |
+| `grouping.test.ts`            | Aplanado, agregados anidados, expansión controlada, `formatAggregate`, `emptyGroupLabel`, y que `editCommit` reporta el índice ORIGINAL                                                                                                                                                        |
 
 ---
 

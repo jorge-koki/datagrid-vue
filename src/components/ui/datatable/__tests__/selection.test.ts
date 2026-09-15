@@ -342,6 +342,165 @@ describe('selection ring — exactly one cell is ever painted', () => {
   })
 })
 
+/**
+ * El anillo de foco del viewport: opcional, apagado por defecto y suprimido
+ * cuando ya hay una celda marcada.
+ *
+ * ## Qué se rompió y qué protege este bloque
+ *
+ * Sacarle el `tabindex` a las celdas obligó a enfocar el viewport de forma
+ * explícita en cada clic, y eso volvió alcanzable una regla que hasta entonces no
+ * se disparaba nunca: `.dt-viewport:focus-visible`. Antes el clic enfocaba la
+ * celda y el viewport no recibía el foco, así que su anillo no existía en la
+ * práctica; después, cada selección pasó a encerrar la tabla ENTERA en un borde
+ * del color de acento mientras la celda activa llevaba el suyo. Dos señales para
+ * una sola posición: el mismo error que se acababa de arreglar un nivel más
+ * abajo.
+ *
+ * ## Por qué estos tests miran atributos y no estilo calculado
+ *
+ * El entorno de test no resuelve la cascada ni `:focus-visible`, que además
+ * depende de una heurística del navegador sobre la modalidad de entrada. Lo que
+ * sí se puede verificar —y lo que es el contrato real— es el ESTADO desde el que
+ * la hoja de estilos decide: las dos condiciones que la regla exige sobre
+ * `.dt-root`. Por eso los tests preguntan por el selector completo y no por cada
+ * atributo suelto: encender uno y olvidar el otro pasaría una aserción por
+ * atributo y fallaría acá, que es donde importa.
+ */
+describe('focus ring — opt-in, and never a second ring', () => {
+  /**
+   * Estado exacto desde el que la hoja de estilos dibuja el anillo del viewport.
+   *
+   * Es el prefijo literal de la regla en `styles/datatable.css`. Se duplica a
+   * propósito: si alguien cambia la condición, este test tiene que enterarse.
+   */
+  const RING_STATE = "[data-focus-ring='true'][data-active-cell='false']"
+
+  /** `true` si `.dt-root` está en el estado que produce el anillo. */
+  function paintsRing(harness: TableHarness): boolean {
+    return harness.grid.matches(RING_STATE)
+  }
+
+  it('does not paint a ring by default', async () => {
+    const harness = await mountGrid()
+
+    // El valor por defecto es el que pidió el usuario: sin anillo alrededor de
+    // la tabla, nunca.
+    expect(harness.grid.getAttribute('data-focus-ring')).toBe('false')
+    expect(paintsRing(harness)).toBe(false)
+    harness.unmount()
+  })
+
+  it('keeps the ring off by default even after selecting a cell', async () => {
+    const harness = await mountGrid()
+
+    await harness.clickCell(2, 'name')
+
+    // Este es el síntoma que reportó el usuario: seleccionar pintaba de verde
+    // toda la tabla, además de la celda.
+    expect(paintsRing(harness)).toBe(false)
+    harness.unmount()
+  })
+
+  it('exposes the ring state when focusRing is on and nothing is selected', async () => {
+    const harness = await mountGrid({ focusRing: true })
+
+    expect(harness.grid.getAttribute('data-focus-ring')).toBe('true')
+    expect(harness.grid.getAttribute('data-active-cell')).toBe('false')
+    expect(paintsRing(harness)).toBe(true)
+    harness.unmount()
+  })
+
+  it('suppresses the ring as soon as a cell is active, even with focusRing on', async () => {
+    const harness = await mountGrid({ focusRing: true })
+    expect(paintsRing(harness)).toBe(true)
+
+    await harness.clickCell(2, 'name')
+
+    // La celda marcada ya dice dónde está parado el usuario. Encerrar además la
+    // tabla entera sería exactamente el bug que se arregló un nivel más abajo,
+    // reintroducido un nivel más arriba.
+    expect(harness.grid.getAttribute('data-active-cell')).toBe('true')
+    expect(paintsRing(harness)).toBe(false)
+    harness.unmount()
+  })
+
+  it('keeps the ring suppressed while the selection moves with the keyboard', async () => {
+    const harness = await mountGrid({ focusRing: true })
+    await harness.clickCell(2, 'name')
+
+    await harness.press('ArrowDown')
+    await harness.press('ArrowRight')
+
+    // Mover la selección no cambia si HAY selección: el atributo se queda quieto
+    // y el anillo sigue apagado.
+    expect(harness.grid.getAttribute('data-active-cell')).toBe('true')
+    expect(paintsRing(harness)).toBe(false)
+    harness.unmount()
+  })
+
+  it('flips when the prop is toggled at runtime', async () => {
+    const harness = await mountGrid()
+    expect(paintsRing(harness)).toBe(false)
+
+    await harness.wrapper.setProps({ focusRing: true })
+    await harness.flush()
+    expect(harness.grid.getAttribute('data-focus-ring')).toBe('true')
+    expect(paintsRing(harness)).toBe(true)
+
+    await harness.wrapper.setProps({ focusRing: false })
+    await harness.flush()
+    expect(harness.grid.getAttribute('data-focus-ring')).toBe('false')
+    expect(paintsRing(harness)).toBe(false)
+    harness.unmount()
+  })
+
+  it('comes back when the selection is cleared', async () => {
+    const harness = await mountGrid({ focusRing: true, activeCell: null })
+    expect(paintsRing(harness)).toBe(true)
+
+    await harness.wrapper.setProps({ activeCell: { rowIndex: 2, columnKey: 'name' } })
+    await harness.flush()
+    expect(paintsRing(harness)).toBe(false)
+
+    // Vaciar la selección devuelve al usuario de teclado su única referencia: sin
+    // celda marcada y sin anillo no quedaría ninguna señal de dónde está el foco.
+    await harness.wrapper.setProps({ activeCell: null })
+    await harness.flush()
+    expect(paintsRing(harness)).toBe(true)
+    harness.unmount()
+  })
+
+  it('still moves the focus to the viewport on click, in BOTH modes', async () => {
+    // El anillo es cosmético; el foco es funcional. Apagar el dibujo no puede
+    // apagar el mecanismo, porque el manejador de teclado vive en el viewport y
+    // solo ve las teclas mientras el foco esté ahí adentro.
+    for (const focusRing of [false, true]) {
+      const harness = await mountGrid({ focusRing })
+
+      await harness.clickCell(2, 'name')
+      expect(document.activeElement).toBe(harness.viewport)
+
+      await harness.press('ArrowDown')
+      expect(lastActiveCell(harness.wrapper)).toEqual({ rowIndex: 3, columnKey: 'name' })
+
+      harness.unmount()
+    }
+  })
+
+  it('does not add a second ring: the active cell keeps carrying exactly one', async () => {
+    const harness = await mountGrid({ focusRing: true })
+    await harness.clickCell(2, 'name')
+
+    await harness.press('ArrowDown')
+
+    const painted = [...harness.grid.querySelectorAll('.dt-cell--active')]
+    expect(painted).toHaveLength(1)
+    expect(painted[0]).toBe(harness.cell(3, 'name'))
+    harness.unmount()
+  })
+})
+
 describe('keyboard — arrows clamp at the edges instead of wrapping', () => {
   it('ArrowDown moves one row down', async () => {
     const harness = await mountGrid()

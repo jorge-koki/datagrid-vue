@@ -23,7 +23,10 @@ selección, agrupación, renderers, temas, persistencia, rendimiento, limitacion
 - **Pool de nodos DOM reciclados.** Los nodos se reutilizan por slot de viewport y se escriben solo
   donde un valor cambió de verdad. Repintar con entradas idénticas produce cero escrituras en el DOM.
 - **Selección por celda y por fila** con navegación completa de teclado: flechas, `Tab`, `Home` /
-  `End`, `Ctrl`+`Home` / `End`, `PageUp` / `PageDown`, y auto-scroll mínimo.
+  `End`, `Ctrl`+`Home` / `End`, `PageUp` / `PageDown`, y auto-scroll mínimo. La marca es una sola: la
+  celda activa. El anillo de foco alrededor de la tabla es opcional (`focusRing`, por defecto
+  apagado) y se suprime solo cuando ya hay una celda marcada, para que nunca haya dos señales
+  apuntando a la misma posición.
 - **Edición en línea** con un ciclo cancelable `beforeEdit` → `editCommit` → `afterEdit`. La grilla es
   controlada: nunca muta las filas del consumidor.
 - **Agrupación multinivel con agregados.** Cabeceras plegables, cinco agregaciones incluidas
@@ -38,7 +41,10 @@ selección, agrupación, renderers, temas, persistencia, rendimiento, limitacion
 - **Estructura ARIA de grilla completa** —`treegrid` cuando hay agrupación activa—, con la fila de
   encabezado adentro de la grilla y sus `columnheader`, más índices de fila y de columna sobre los
   nodos reciclados. Cada valor se anuncia con el nombre de su columna, sin una sola escritura extra
-  por frame.
+  por frame. Con `focusRing` apagado —el valor por defecto— entrar con `Tab` y todavía sin celda
+  activa no deja señal visual del foco: para usuarios que navegan sobre todo por teclado,
+  `focus-ring` es la opción accesible y está
+  [documentada acá](./src/components/ui/datatable/README.md#el-anillo-de-foco-del-viewport).
 - **Sin dependencias de runtime** más allá de `vue`, que queda como peer dependency y nunca se
   empaqueta.
 

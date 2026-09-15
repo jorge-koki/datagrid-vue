@@ -552,6 +552,23 @@ export interface DataTableProps<TRow> {
    */
   activeCell?: CellPosition | null
   /**
+   * Dibuja un anillo de foco alrededor del viewport cuando la tabla recibe el
+   * foco por teclado.
+   *
+   * Por defecto `false`: con una celda activa marcada, el anillo del viewport es
+   * redundante y encierra toda la tabla en un borde de color.
+   *
+   * En `true` el anillo aparece solo mientras NO hay celda activa. Marcar la
+   * celda y encerrar además la tabla entera serían dos señales para una sola
+   * posición, que es el mismo problema que resolvió quitarle el `tabindex` a las
+   * celdas, un nivel más arriba.
+   *
+   * Conviene encenderlo cuando los usuarios navegan sobre todo con el teclado:
+   * con el valor por defecto y sin celda activa, quien llega a la tabla con Tab
+   * no recibe ninguna señal de dónde quedó el foco.
+   */
+  focusRing?: boolean
+  /**
    * Claves de columna por las que agrupar. `v-model:group-by`.
    *
    * Con la lista vacía —el valor por defecto— la tabla no paga absolutamente

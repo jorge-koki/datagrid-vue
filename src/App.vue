@@ -57,6 +57,16 @@ const theme = shallowRef<DataTableTheme>('auto')
 const dense = shallowRef(false)
 
 /**
+ * Anillo de foco del viewport, apagado igual que en el componente.
+ *
+ * Se expone como control porque la diferencia es puramente visual y solo se
+ * entiende viéndola: encendido y sin nada seleccionado, entrar con Tab dibuja el
+ * anillo alrededor de la tabla; en cuanto se selecciona una celda, el anillo
+ * desaparece y la marca queda únicamente en la celda.
+ */
+const focusRing = shallowRef(false)
+
+/**
  * Visibilidad de columnas, controlada por el padre.
  *
  * Es lo que permite que `DataTableColumnToggle` y la tabla compartan el mismo
@@ -288,6 +298,11 @@ function onAfterEdit(event: AfterEditEvent<ProjectRow>): void {
         <span>Compacta</span>
       </label>
 
+      <label class="demo-field demo-field--inline">
+        <input v-model="focusRing" type="checkbox" />
+        <span>Anillo de foco</span>
+      </label>
+
       <DataTableColumnToggle
         v-model="columnVisibility"
         :columns="projectColumns"
@@ -327,6 +342,7 @@ function onAfterEdit(event: AfterEditEvent<ProjectRow>): void {
         :theme="theme"
         :dense="dense"
         :selection-mode="selectionMode"
+        :focus-ring="focusRing"
         table-id="demo-projects"
         persist
         stripe

@@ -83,6 +83,11 @@ const props = withDefaults(defineProps<DataTableProps<TRow>>(), {
   stripe: false,
   bordered: false,
   selectionMode: 'cell',
+  // Apagado por defecto: con una celda marcada, el anillo del viewport es una
+  // segunda señal para la misma posición y encierra toda la tabla en un borde de
+  // color. El costo de accesibilidad de este default está documentado en el
+  // README, junto con el caso en el que conviene encenderlo.
+  focusRing: false,
   // `columnVisibility`, `columnOrder`, `columnWidths`, `activeCell`, `groupBy` y
   // `expandedGroups` quedan deliberadamente sin default: `undefined` es lo que
   // distingue el modo no controlado del controlado, y darles un default borraría
@@ -1132,6 +1137,22 @@ const canvasStyle = computed(() => ({
  */
 const gridRole = computed(() => (grouping.active.value ? 'treegrid' : 'grid'))
 
+/**
+ * Si existe una celda activa, expuesto como atributo para la hoja de estilos.
+ *
+ * Es lo que suprime el anillo de foco del viewport cuando `focusRing` está
+ * encendido: con la celda ya marcada, encerrar además la tabla entera serían dos
+ * señales para una sola posición.
+ *
+ * Va como atributo escrito por Vue sobre `.dt-root` y NO como una escritura del
+ * pool, y la diferencia es el presupuesto por frame. La condición solo cambia al
+ * pasar de "sin selección" a "con selección" y de vuelta; mover la selección de
+ * una celda a otra no la mueve. Vue parchea un atributo únicamente cuando su
+ * valor cambia, así que recorrer la tabla entera con las flechas no escribe nada
+ * acá, y el scroll —que no toca la selección— tampoco.
+ */
+const hasActiveCell = computed(() => (activeCell.value !== null ? 'true' : 'false'))
+
 function headerAlignClass(column: ResolvedColumn<TRow>): string | undefined {
   if (column.align === 'center') return 'dt-header-cell--center'
   if (column.align === 'right') return 'dt-header-cell--right'
@@ -1155,6 +1176,8 @@ function headerAlignClass(column: ResolvedColumn<TRow>): string | undefined {
     :data-theme="theme"
     :data-bordered="bordered ? 'true' : 'false'"
     :data-selection="selectionMode"
+    :data-focus-ring="focusRing ? 'true' : 'false'"
+    :data-active-cell="hasActiveCell"
   >
     <div class="dt-header" role="rowgroup">
       <!--
@@ -1208,6 +1231,11 @@ function headerAlignClass(column: ResolvedColumn<TRow>): string | undefined {
       anillo de foco de la caja que el usuario está desplazando. En modo `none`
       el manejador es `undefined`, y entonces Vue directamente no registra el
       listener.
+
+      RECIBIR el foco y PINTARLO son dos cosas distintas: el foco vive siempre
+      acá, porque es lo que hace que las teclas lleguen, y si además se dibuja un
+      anillo lo deciden `focusRing` y `data-active-cell` desde la hoja de
+      estilos.
     -->
     <div
       ref="viewportEl"
