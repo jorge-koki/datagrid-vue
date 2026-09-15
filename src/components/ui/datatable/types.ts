@@ -72,6 +72,20 @@ export interface DataTableColumn<TRow> {
    */
   format?: (value: CellValue, row: TRow, rowIndex: number) => string
   /**
+   * Da formato al valor agregado que se muestra en la cabecera de un grupo.
+   *
+   * Se declara aparte de `format` porque una cabecera de grupo no pertenece a
+   * ninguna fila, así que la firma de `format` no se puede aplicar aquí.
+   *
+   * Solo interviene sobre los agregados. Si falta, la cifra se escribe con la
+   * representación por defecto del valor, igual que antes de que esta opción
+   * existiera. Corre en el camino de pintado de la cabecera —una vez por columna
+   * agregada y por grupo visible—, así que debe ser barata y pura: construir un
+   * `Intl.NumberFormat` adentro es el mismo error que cometerlo dentro de
+   * `format`.
+   */
+  formatAggregate?: (value: CellValue, column: DataTableColumn<TRow>) => string
+  /**
    * Clase CSS extra aplicada al elemento de celda. Corre en el camino caliente:
    * debe mantenerse barata.
    */
@@ -566,6 +580,18 @@ export interface DataTableProps<TRow> {
   groupsDefaultExpanded?: boolean
   /** Si la cabecera de grupo muestra cuántas filas contiene. Por defecto `true`. */
   showGroupCount?: boolean
+  /**
+   * Etiqueta del grupo que junta los valores ausentes. Por defecto `'(empty)'`.
+   *
+   * La usan tanto el bucket de `null` como el de `undefined`, que siguen siendo
+   * grupos distintos: comparten la etiqueta porque para el usuario los dos son
+   * "vacío". También se aplica cuando el valor existe pero su representación de
+   * texto queda vacía.
+   *
+   * Es una prop y no una constante del módulo porque el texto es de cara al
+   * usuario, y una aplicación que no está en inglés necesita poder traducirlo.
+   */
+  emptyGroupLabel?: string
 }
 
 /**

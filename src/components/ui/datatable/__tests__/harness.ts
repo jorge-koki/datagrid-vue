@@ -251,6 +251,14 @@ export interface ViewportSize {
 /** Tabla montada, con los accesos que necesitan los tests de interacción. */
 export interface TableHarness {
   wrapper: VueWrapper
+  /**
+   * Elemento que lleva el rol de grilla.
+   *
+   * Es `.dt-root`, o sea la raíz del componente, porque es el único nodo que
+   * contiene a la vez la fila de encabezado y el cuerpo. No es el viewport: ese
+   * scrollea y recibe el teclado, pero queda por debajo de la grilla.
+   */
+  grid: HTMLElement
   viewport: HTMLElement
   canvas: HTMLElement
   /** Ejecuta los frames pendientes y espera a que Vue vacíe su cola. */
@@ -375,10 +383,15 @@ export async function mountTable(options: MountTableOptions): Promise<TableHarne
     props: options.props,
   })
 
+  const grid = wrapper.find('.dt-root').element
   const viewport = wrapper.find('.dt-viewport').element
   const canvas = wrapper.find('.dt-canvas').element
-  if (!(viewport instanceof HTMLElement) || !(canvas instanceof HTMLElement)) {
-    throw new Error('[harness] la tabla montada no expuso viewport o canvas')
+  if (
+    !(grid instanceof HTMLElement) ||
+    !(viewport instanceof HTMLElement) ||
+    !(canvas instanceof HTMLElement)
+  ) {
+    throw new Error('[harness] la tabla montada no expuso raíz, viewport o canvas')
   }
 
   forceClientSize(viewport, size)
@@ -393,6 +406,7 @@ export async function mountTable(options: MountTableOptions): Promise<TableHarne
 
   const harness: TableHarness = {
     wrapper,
+    grid,
     viewport,
     canvas,
 

@@ -762,18 +762,190 @@ describe('selectionMode', () => {
   })
 })
 
-describe('grid accessibility wiring', () => {
+/**
+ * Estructura accesible de la grilla.
+ *
+ * ## Qué se rompió antes y qué protege este bloque
+ *
+ * El rol de grilla vivía en `.dt-viewport`, el contenedor que scrollea, y el
+ * header se dibuja ARRIBA de él. La fila de encabezado quedaba entonces fuera de
+ * la grilla, pero la aritmética de índices la contaba igual: `aria-rowcount` era
+ * entradas + 1 y `aria-rowindex` era posición + 2. O sea que la tecnología
+ * asistiva recibía una grilla con una fila 1 que no podía encontrar, y la primera
+ * fila de datos se anunciaba como "fila 2" sin que existiera una fila 1.
+ *
+ * Como efecto colateral, los nombres de las columnas no se asociaban con ninguna
+ * celda: sin `columnheader` dentro de la misma grilla no hay de dónde sacar la
+ * asociación, y el usuario escuchaba valores pelados.
+ *
+ * El rol está ahora en `.dt-root`, que es el único nodo que contiene a la vez el
+ * header y el cuerpo. Los dos números que ya se escribían pasan a ser CIERTOS, y
+ * ninguno de los dos cambió de valor: lo que cambió es que ahora describen algo
+ * que existe.
+ */
+describe('grid accessibility structure', () => {
+  /** Nodos de fila del cuerpo que están efectivamente pintados. */
+  function paintedRows(harness: TableHarness): HTMLElement[] {
+    return [...harness.canvas.querySelectorAll('.dt-row')].filter(
+      (node): node is HTMLElement => node instanceof HTMLElement && !node.hidden,
+    )
+  }
+
+  it('puts the grid role on the element that CONTAINS the header', async () => {
+    const harness = await mountGrid()
+
+    const headerRow = harness.grid.querySelector('.dt-header-inner')
+    expect(headerRow).not.toBeNull()
+    expect(harness.grid.getAttribute('role')).toBe('grid')
+    // Lo que estaba mal no era el rol sino dónde estaba: la fila de encabezado
+    // tiene que caer DENTRO del elemento que dice ser la grilla.
+    expect(headerRow && harness.grid.contains(headerRow)).toBe(true)
+    // Y el cuerpo sigue adentro de la misma grilla, claro.
+    expect(harness.grid.contains(harness.canvas)).toBe(true)
+    harness.unmount()
+  })
+
+  it('leaves the scrolling viewport without a role of its own', async () => {
+    const harness = await mountGrid()
+
+    // El viewport scrollea y recibe el teclado, pero ya no es la grilla. Dejarle
+    // el rol encima duplicaría la grilla y volvería a dejar el header afuera.
+    expect(harness.viewport.hasAttribute('role')).toBe(false)
+    expect(harness.viewport.hasAttribute('aria-rowcount')).toBe(false)
+    expect(harness.viewport.hasAttribute('aria-colcount')).toBe(false)
+    harness.unmount()
+  })
+
+  it('declares a rowgroup / row / columnheader structure over the header', async () => {
+    const harness = await mountGrid()
+
+    expect(harness.grid.querySelector('.dt-header')?.getAttribute('role')).toBe('rowgroup')
+    expect(harness.grid.querySelector('.dt-header-inner')?.getAttribute('role')).toBe('row')
+
+    const headerCells = [...harness.grid.querySelectorAll('.dt-header-cell')]
+    expect(headerCells).toHaveLength(COLUMN_KEYS.length)
+    for (const cell of headerCells) {
+      expect(cell.getAttribute('role')).toBe('columnheader')
+    }
+    harness.unmount()
+  })
+
+  it('declares a rowgroup over the body, with rows and gridcells inside', async () => {
+    const harness = await mountGrid()
+
+    // El rowgroup va en el canvas y no en el viewport: el canvas contiene
+    // exactamente las filas, mientras que el viewport contiene además el host
+    // del editor, que no es una fila de nada.
+    expect(harness.canvas.getAttribute('role')).toBe('rowgroup')
+
+    const row = paintedRows(harness)[0]
+    expect(row?.getAttribute('role')).toBe('row')
+    expect(row?.querySelector('.dt-cell')?.getAttribute('role')).toBe('gridcell')
+    harness.unmount()
+  })
+
+  it('gives the header row aria-rowindex 1, which is what makes the rest true', async () => {
+    const harness = await mountGrid()
+
+    expect(harness.grid.querySelector('.dt-header-inner')?.getAttribute('aria-rowindex')).toBe('1')
+    harness.unmount()
+  })
+
+  it('makes the first data row announce itself as row 2, with a row 1 that exists', async () => {
+    const harness = await mountGrid()
+
+    const first = harness.canvas.querySelector('.dt-row[data-row-key="0"]')
+    expect(first?.getAttribute('aria-rowindex')).toBe('2')
+    harness.unmount()
+  })
+
   it('announces the row count including the header row', async () => {
     const harness = await mountGrid({}, 25)
 
-    expect(harness.viewport.getAttribute('aria-rowcount')).toBe('26')
+    expect(harness.grid.getAttribute('aria-rowcount')).toBe('26')
+    harness.unmount()
+  })
+
+  it('announces a row count that matches what the grid actually contains', async () => {
+    const harness = await mountGrid({}, 25)
+    await harness.scrollTo({ top: (25 - VISIBLE_ROWS) * ROW_HEIGHT })
+
+    // La última fila del dataset tiene que anunciar exactamente `aria-rowcount`:
+    // ni uno más —que sería una fila fuera de la grilla— ni uno menos, que
+    // dejaría la última fila sin anunciar.
+    const indexes = paintedRows(harness).map((node) =>
+      Number(node.getAttribute('aria-rowindex') ?? '0'),
+    )
+    expect(Math.max(...indexes)).toBe(26)
+    expect(harness.grid.getAttribute('aria-rowcount')).toBe('26')
     harness.unmount()
   })
 
   it('announces the visible column count', async () => {
     const harness = await mountGrid({ columnVisibility: { extra: false } })
 
-    expect(harness.viewport.getAttribute('aria-colcount')).toBe(String(COLUMN_KEYS.length - 1))
+    expect(harness.grid.getAttribute('aria-colcount')).toBe(String(COLUMN_KEYS.length - 1))
+    harness.unmount()
+  })
+
+  it('lines up aria-colindex between header and body, with hidden and reordered columns', async () => {
+    const harness = await mountTable({
+      viewport: VIEWPORT,
+      props: {
+        rows: [{ id: 0, a: 'A', b: 'B', c: 'C', d: 'D' }],
+        columns: [
+          { key: 'a', width: COLUMN_WIDTH },
+          { key: 'b', width: COLUMN_WIDTH },
+          { key: 'c', width: COLUMN_WIDTH },
+          { key: 'd', width: COLUMN_WIDTH },
+        ],
+        rowKey: 'id',
+        rowHeight: ROW_HEIGHT,
+        columnVisibility: { b: false },
+        columnOrder: ['d', 'c', 'a', 'b'],
+      },
+    })
+
+    // Los índices son 1..N sobre las columnas VISIBLES y en el orden vigente:
+    // una columna oculta no ocupa lugar en la grilla accesible, así que no deja
+    // un hueco en la numeración.
+    const header = [...harness.grid.querySelectorAll('.dt-header-cell')].map((node) => ({
+      label: node.querySelector('.dt-header-label')?.textContent,
+      colindex: node.getAttribute('aria-colindex'),
+    }))
+    expect(header).toEqual([
+      { label: 'd', colindex: '1' },
+      { label: 'c', colindex: '2' },
+      { label: 'a', colindex: '3' },
+    ])
+
+    // El cuerpo tiene que anunciar el MISMO índice para la misma columna. Las
+    // celdas se identifican por su valor, que es distinto en cada columna, y no
+    // por su `aria-colindex`: resolverlas con la convención que se está
+    // verificando haría que el test no pudiera fallar.
+    const body = [...harness.canvas.querySelectorAll('.dt-cell')]
+      .filter((node): node is HTMLElement => node instanceof HTMLElement && !node.hidden)
+      .map((node) => ({ text: node.textContent, colindex: node.getAttribute('aria-colindex') }))
+      .sort((left, right) => Number(left.colindex) - Number(right.colindex))
+    expect(body).toEqual([
+      { text: 'D', colindex: '1' },
+      { text: 'C', colindex: '2' },
+      { text: 'A', colindex: '3' },
+    ])
+
+    harness.unmount()
+  })
+
+  it('keeps the keyboard and the tab stop on the viewport after the role moved', async () => {
+    const harness = await mountGrid()
+
+    expect(harness.viewport.getAttribute('tabindex')).toBe('0')
+
+    // El manejador sigue viviendo en el viewport, que es la caja que scrollea:
+    // mover el rol no movió ni el foco ni el teclado.
+    await harness.press('ArrowDown')
+
+    expect(lastActiveCell(harness.wrapper)).toEqual({ rowIndex: 0, columnKey: 'id' })
     harness.unmount()
   })
 })

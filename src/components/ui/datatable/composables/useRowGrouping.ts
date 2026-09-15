@@ -4,6 +4,7 @@ import type { CellValue, DataRow, DataTableColumn, FlatRow, GroupByState, GroupR
 import {
   accumulate,
   createAccumulator,
+  EMPTY_GROUP_LABEL,
   finishAggregate,
   groupSegment,
   groupValueLabel,
@@ -75,6 +76,14 @@ export interface UseRowGroupingOptions<TRow extends Record<string, unknown>> {
   expandedGroups: MaybeRefOrGetter<readonly string[] | undefined>
   /** Estado de un grupo del que todavía no se sabe nada. */
   defaultExpanded: MaybeRefOrGetter<boolean>
+  /**
+   * Etiqueta de los valores ausentes. Si falta, se usa {@link EMPTY_GROUP_LABEL}.
+   *
+   * Entra al árbol y no al pintado porque la etiqueta se resuelve una sola vez
+   * por grupo, al construirlo: escribirla por frame sería recalcular un texto
+   * que no depende del scroll.
+   */
+  emptyGroupLabel?: MaybeRefOrGetter<string | undefined>
   /** Se invoca con la lista COMPLETA de expandidos después de cada cambio. */
   onExpandedChange?: (expanded: string[]) => void
   /** Se invoca con el grupo puntual que cambió y su estado resultante. */
@@ -253,6 +262,7 @@ export function useRowGrouping<TRow extends Record<string, unknown>>(
 
     const rows = toValue(options.rows)
     const columns = toValue(options.columns)
+    const emptyLabel = toValue(options.emptyGroupLabel) ?? EMPTY_GROUP_LABEL
 
     const columnByKey = new Map<string, DataTableColumn<TRow>>()
     for (const column of columns) columnByKey.set(column.key, column)
@@ -291,7 +301,7 @@ export function useRowGrouping<TRow extends Record<string, unknown>>(
             id,
             columnKey,
             value,
-            label: groupValueLabel(column, value),
+            label: groupValueLabel(column, value, emptyLabel),
             depth: level,
             count: 0,
             children: isLeaf ? null : [],
@@ -425,14 +435,22 @@ export function useRowGrouping<TRow extends Record<string, unknown>>(
     tree.value = buildTree()
   }
 
-  // El árbol se reconstruye solo ante un cambio de datos, de agrupación o de
-  // columnas. `flush: 'sync'` porque el virtualizador lee la cantidad de filas en
-  // el mismo tick en que el consumidor cambia `groupBy`: diferirlo dejaría un
-  // frame calculando su ventana contra un total que ya no existe.
-  watch([() => toValue(options.rows), () => toValue(options.columns), effectiveGroupBy], rebuild, {
-    flush: 'sync',
-    immediate: true,
-  })
+  // El árbol se reconstruye solo ante un cambio de datos, de agrupación, de
+  // columnas o de la etiqueta de los vacíos —que forma parte del árbol porque la
+  // etiqueta se resuelve al construirlo—. `flush: 'sync'` porque el virtualizador
+  // lee la cantidad de filas en el mismo tick en que el consumidor cambia
+  // `groupBy`: diferirlo dejaría un frame calculando su ventana contra un total
+  // que ya no existe.
+  watch(
+    [
+      () => toValue(options.rows),
+      () => toValue(options.columns),
+      effectiveGroupBy,
+      () => toValue(options.emptyGroupLabel),
+    ],
+    rebuild,
+    { flush: 'sync', immediate: true },
+  )
 
   // El aplanado depende del árbol y de la expansión, y de nada más. Scrollear no
   // toca ninguno de los dos, así que este watcher no se ejecuta ni una vez por

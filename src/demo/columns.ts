@@ -16,20 +16,35 @@ import type { ProjectRow } from './data'
  * rápidas de perder el presupuesto de 16ms. Construidos una vez a nivel de
  * módulo, `format` queda en una sola llamada barata.
  *
- * ## Los agregados no pasan por `format`
+ * ## Los agregados tienen su propio formateador
  *
  * Tres columnas declaran `aggregate`, así que las cabeceras de grupo muestran
- * cifras reales. Lo que NO muestran es el formato de la columna: la firma de
- * `format` pide una fila y un índice, y una cabecera de grupo no representa a
- * ninguna fila en particular. Por eso el total de presupuesto aparece como un
- * número pelado y el promedio de progreso con todos sus decimales. Es la
- * limitación conocida, y la demo la deja a la vista en lugar de disimularla.
+ * cifras reales. El formato de esas cifras no sale de `format` —su firma pide
+ * una fila y un índice, y una cabecera de grupo no pertenece a ninguna fila—
+ * sino de `formatAggregate`, que recibe el valor y la columna. Es lo que
+ * convierte el `1234.5` pelado del total en moneda y el
+ * `47.31818181818182` del promedio en un porcentaje legible.
+ *
+ * Vale la misma regla que para `format`: los formateadores viven en el módulo.
  */
 
 const currencyFormatter = new Intl.NumberFormat('en-US', {
   style: 'currency',
   currency: 'USD',
   maximumFractionDigits: 0,
+})
+
+/**
+ * Porcentaje del promedio de progreso.
+ *
+ * `style: 'percent'` multiplica por 100, y el valor de la columna ya viene en la
+ * escala 0-100, así que se divide antes de formatear. Un decimal alcanza: el
+ * promedio de un grupo no es una medición exacta y arrastrar quince dígitos solo
+ * agrega ruido.
+ */
+const percentFormatter = new Intl.NumberFormat('en-US', {
+  style: 'percent',
+  maximumFractionDigits: 1,
 })
 
 const dateFormatter = new Intl.DateTimeFormat('en-GB', {
@@ -130,6 +145,10 @@ export const projectColumns: readonly DataTableColumn<ProjectRow>[] = [
     // subgrupos: las dos cuentas dan números distintos en cuanto los subgrupos
     // tienen tamaños distintos.
     aggregate: 'avg',
+    // Un promedio de enteros casi nunca es entero: sin esto la cabecera mostraría
+    // `47.31818181818182`.
+    formatAggregate: (value: CellValue): string =>
+      typeof value === 'number' ? percentFormatter.format(value / 100) : '',
   },
   {
     key: 'budget',
@@ -143,9 +162,11 @@ export const projectColumns: readonly DataTableColumn<ProjectRow>[] = [
     // `cellClass` también corre en el camino caliente: una comparación y nada más.
     cellClass: (value: CellValue): string | undefined =>
       typeof value === 'number' && value >= HIGH_BUDGET ? 'demo-cell-high-budget' : undefined,
-    // El total del grupo. La cabecera lo muestra SIN el formato de moneda de
-    // arriba, porque los agregados no pasan por `column.format`.
+    // El total del grupo, en la misma moneda que las celdas. El formateador es
+    // el mismo; lo que cambia es la firma, porque acá no hay fila que pasar.
     aggregate: 'sum',
+    formatAggregate: (value: CellValue): string =>
+      typeof value === 'number' ? currencyFormatter.format(value) : '',
   },
   {
     key: 'tags',

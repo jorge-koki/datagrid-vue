@@ -35,8 +35,10 @@ selección, agrupación, renderers, temas, persistencia, rendimiento, limitacion
   el estado guardado contra las columnas que existen hoy.
 - **Tematizable con custom properties `--dt-*`**, en claro / oscuro / automático, con un preset
   `dense`. Adopta los tokens de NuxtUI v3 cuando la aplicación anfitriona los define.
-- **Roles ARIA de grilla** —`treegrid` cuando hay agrupación activa— e índices de fila y de columna
-  sobre los nodos reciclados.
+- **Estructura ARIA de grilla completa** —`treegrid` cuando hay agrupación activa—, con la fila de
+  encabezado adentro de la grilla y sus `columnheader`, más índices de fila y de columna sobre los
+  nodos reciclados. Cada valor se anuncia con el nombre de su columna, sin una sola escritura extra
+  por frame.
 - **Sin dependencias de runtime** más allá de `vue`, que queda como peer dependency y nunca se
   empaqueta.
 

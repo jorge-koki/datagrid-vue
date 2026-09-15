@@ -797,8 +797,19 @@ export function useRowPool<TRow extends Record<string, unknown>>(
       setAggregateBox(node, resolved.offset, resolved.width)
       setAggregateAlign(node, resolved.align)
       // `column.format` no se aplica: su firma pide una fila y un índice, y un
-      // agregado no pertenece a ninguna fila en particular.
-      setAggregateText(node, resolved.key, formatCellValue(entry.aggregates[resolved.key]))
+      // agregado no pertenece a ninguna fila en particular. Para eso está
+      // `formatAggregate`, cuya firma solo pide el valor y la columna. Sin ella
+      // se escribe la representación por defecto, que es lo que se escribía
+      // antes de que existiera.
+      const aggregateValue = entry.aggregates[resolved.key]
+      const formatAggregate = resolved.column.formatAggregate
+      setAggregateText(
+        node,
+        resolved.key,
+        formatAggregate
+          ? formatAggregate(aggregateValue, resolved.column)
+          : formatCellValue(aggregateValue),
+      )
     }
     for (let slot = used; slot < parts.aggregates.length; slot += 1) {
       const node = parts.aggregates[slot]

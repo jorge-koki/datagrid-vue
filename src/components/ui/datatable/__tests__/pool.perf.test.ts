@@ -15,16 +15,18 @@
  * vuelva a verde apaga exactamente la alarma que hace falta escuchar.
  */
 
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { countMatching, measureDomWrites } from './dom-recorder'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { countMatching, measureDomWrites, recordDomWrites } from './dom-recorder'
+import type { DomWriteMeasurement } from './dom-recorder'
 import {
   createPoolFixture,
   DEMO_OPTIONS,
   FIXTURE_ROW_HEIGHT,
   makeRows,
+  mountTable,
   resolveColumns,
 } from './harness'
-import type { DemoRow } from './harness'
+import type { DemoRow, GridRow, TableHarness } from './harness'
 import type { AnyCellRenderer } from '../internal/renderers'
 import {
   avatarRenderer,
@@ -1093,5 +1095,127 @@ describe('ARIA — index writes stay per row during vertical scroll', () => {
     expect(countMatching(measured.entries, 'aria-colindex'), measured.report).toBe(0)
     expect(measured.counts.textContent, measured.report).toBe(6)
     fixture.destroy()
+  })
+})
+
+/**
+ * El costo por frame de la ESTRUCTURA accesible, medido sobre la tabla montada.
+ *
+ * ## Qué protege este bloque
+ *
+ * El header pasó a vivir dentro del elemento con `role="grid"` y a declarar su
+ * propia estructura: `rowgroup` sobre el contenedor, `row` sobre la caja que se
+ * desplaza en espejo, `columnheader` más `aria-colindex` sobre cada celda de
+ * encabezado. Esa es la corrección que hace que `aria-rowcount` y `aria-rowindex`
+ * digan la verdad, y es también la que asocia cada valor con el nombre de su
+ * columna sin escribir un solo atributo por celda del cuerpo.
+ *
+ * La alternativa era un `aria-describedby` por celda, apuntando al id del
+ * encabezado de su columna. Es una escritura de atributo POR CELDA cada vez que
+ * un slot cambia de columna, o sea diez escrituras más por paso de scroll
+ * horizontal sobre una ventana de diez filas, y una más por celda entrante en
+ * cada paso vertical. Un `columnheader` correcto dentro de la misma grilla le da
+ * al lector de pantalla la misma asociación por `aria-colindex`, que ya se
+ * escribía.
+ *
+ * Por eso lo que se mide acá no es el header en sí sino su costo: **cero**. Los
+ * atributos de estructura son estáticos y Vue los escribe una vez; el header solo
+ * se vuelve a diferenciar cuando cambia la configuración de columnas, que no
+ * ocurre durante el scroll.
+ *
+ * La medición se toma sobre `.dt-root` —la grilla entera, header incluido— y no
+ * sobre el canvas, que es lo que miden los bloques de más arriba. Es la única
+ * forma de que una escritura del header pueda aparecer en el número.
+ */
+describe('ARIA structure — the header inside the grid costs nothing per frame', () => {
+  /** Tres columnas de texto: el mismo presupuesto que mide el pool desnudo. */
+  const GRID_COLUMNS: readonly DataTableColumn<GridRow>[] = [
+    { key: 'id', width: 120 },
+    { key: 'name', width: 120 },
+    { key: 'amount', width: 120 },
+  ]
+
+  function gridRows(count: number): GridRow[] {
+    const rows: GridRow[] = []
+    for (let index = 0; index < count; index += 1) {
+      rows.push({ id: index, name: `Row ${index}`, amount: index * 100 })
+    }
+    return rows
+  }
+
+  let harness: TableHarness
+  let measured: DomWriteMeasurement
+
+  beforeEach(async () => {
+    harness = await mountTable({
+      viewport: { width: 600, height: 400 },
+      props: {
+        rows: gridRows(200),
+        columns: GRID_COLUMNS,
+        rowKey: 'id',
+        rowHeight: FIXTURE_ROW_HEIGHT,
+      },
+    })
+
+    // Se arranca lejos del tope a propósito. Pegado al borde superior la ventana
+    // CRECE en lugar de correrse —el `start` está acotado en 0— y el número
+    // mediría el crecimiento del pool en vez del costo de un paso.
+    await harness.scrollTo({ top: 10 * FIXTURE_ROW_HEIGHT })
+    await harness.flush()
+
+    // La grabadora se abre a mano porque el paso de scroll del andamiaje es
+    // asíncrono: incluye los `nextTick` de Vue, así que un repintado del header
+    // provocado por el scheduler también quedaría contado.
+    const recorder = recordDomWrites(harness.grid)
+    try {
+      await harness.scrollTo({ top: 11 * FIXTURE_ROW_HEIGHT })
+    } finally {
+      recorder.stop()
+    }
+    measured = {
+      counts: recorder.counts(),
+      entries: [...recorder.entries()],
+      report: recorder.report(),
+    }
+  })
+
+  afterEach(() => {
+    harness.unmount()
+  })
+
+  it('writes nothing at all inside the header subtree', () => {
+    // Ni el `rowgroup`, ni el `row`, ni un `columnheader`, ni un `aria-colindex`
+    // de encabezado, ni el `transform` del espejo horizontal: el scroll vertical
+    // no mueve `scrollLeft`, así que el header queda entero fuera del frame.
+    expect(countMatching(measured.entries, 'dt-header'), measured.report).toBe(0)
+  })
+
+  it('never rewrites a role: the structure is static, not per-frame state', () => {
+    expect(countMatching(measured.entries, 'role'), measured.report).toBe(0)
+  })
+
+  it('never rewrites aria-colindex, in the header or in the body', () => {
+    expect(countMatching(measured.entries, 'aria-colindex'), measured.report).toBe(0)
+  })
+
+  it('costs exactly the entering row, the same budget as the bare pool', () => {
+    // El mismo `ENTERING_ROW_WRITES` que mide el pool sin Vue: 1 `transform`, 2
+    // atributos de identidad (`data-row-key` y `aria-rowindex`) y 3 textos. Que
+    // el número medido sobre la grilla ENTERA coincida con el del pool desnudo es
+    // la prueba de que la estructura accesible no sumó ni una escritura.
+    expect(measured.counts.total, measured.report).toBe(ENTERING_ROW_WRITES)
+    expect(measured.counts.textContent, measured.report).toBe(3)
+    expect(measured.counts.style, measured.report).toBe(1)
+    expect(measured.counts.attribute, measured.report).toBe(2)
+    expect(measured.counts.createNode, measured.report).toBe(0)
+  })
+
+  it('announces the header row once and never touches it again', () => {
+    // `aria-rowindex="1"` es un literal estático del template: Vue lo escribe al
+    // montar y nunca más. La única escritura del frame es la de la fila de datos
+    // que entró. Si apareciera una segunda, sería una regresión a un header que
+    // se rediferencia por frame.
+    expect(countMatching(measured.entries, 'aria-rowindex'), measured.report).toBe(1)
+    expect(harness.grid.querySelector('.dt-header-inner')?.getAttribute('aria-rowindex')).toBe('1')
   })
 })

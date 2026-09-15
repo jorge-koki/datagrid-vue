@@ -31,7 +31,14 @@ import { findOption } from './renderers/shared'
  * No forma parte de la API pública.
  */
 
-/** Etiqueta del grupo que junta los valores ausentes. */
+/**
+ * Etiqueta por defecto del grupo que junta los valores ausentes.
+ *
+ * Es el default de la prop `emptyGroupLabel`, no un literal incrustado: el texto
+ * es de cara al usuario y una aplicación que no está en inglés tiene que poder
+ * traducirlo. Se conserva como constante para que una tabla que no pasa la prop
+ * escriba exactamente la misma etiqueta de siempre.
+ */
 export const EMPTY_GROUP_LABEL = '(empty)'
 
 /** Separador entre niveles dentro de un {@link GroupRow.groupId}. */
@@ -103,17 +110,23 @@ export function groupIdColumnPath(groupId: string): string[] {
  * repetir en un `format` sería duplicarla.
  *
  * `column.format` NO se aplica: su firma exige una fila y un índice, y una
- * cabecera de grupo no representa a ninguna fila en particular.
+ * cabecera de grupo no representa a ninguna fila en particular. Para dar formato
+ * a las CIFRAS de la cabecera está `column.formatAggregate`, que es otra cosa:
+ * esta función resuelve el nombre del grupo, no sus agregados.
+ *
+ * @param emptyLabel - Texto de los valores ausentes. Se recibe como parámetro y
+ * no se lee de la constante para que la prop `emptyGroupLabel` pueda traducirlo.
  */
 export function groupValueLabel<TRow>(
   column: DataTableColumn<TRow> | undefined,
   value: CellValue,
+  emptyLabel: string = EMPTY_GROUP_LABEL,
 ): string {
-  if (value === null || value === undefined) return EMPTY_GROUP_LABEL
+  if (value === null || value === undefined) return emptyLabel
   const option = findOption(column?.options, value)
   if (option) return option.label
   const text = formatCellValue(value)
-  return text === '' ? EMPTY_GROUP_LABEL : text
+  return text === '' ? emptyLabel : text
 }
 
 /** Una columna que declara agregación, ya resuelta para el camino de agregado. */

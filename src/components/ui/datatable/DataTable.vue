@@ -35,6 +35,7 @@ import {
   DENSE_HEADER_HEIGHT,
   DENSE_ROW_HEIGHT,
 } from './internal/constants'
+import { EMPTY_GROUP_LABEL } from './internal/aggregations'
 import { readCellValue } from './internal/values'
 import './styles/datatable.css'
 
@@ -91,6 +92,9 @@ const props = withDefaults(defineProps<DataTableProps<TRow>>(), {
   persist: false,
   groupsDefaultExpanded: true,
   showGroupCount: true,
+  // El default es la misma constante que usaba el literal incrustado, así que
+  // una tabla que no pasa la prop escribe exactamente la etiqueta de siempre.
+  emptyGroupLabel: EMPTY_GROUP_LABEL,
 })
 
 const emit = defineEmits<{
@@ -237,6 +241,7 @@ const grouping = useRowGrouping<TRow>({
   groupBy,
   expandedGroups: () => props.expandedGroups,
   defaultExpanded: () => props.groupsDefaultExpanded,
+  emptyGroupLabel: () => props.emptyGroupLabel,
   onExpandedChange: (expanded) => emit('update:expandedGroups', expanded),
   onToggle: (groupId, expanded) => emit('groupToggle', { groupId, expanded }),
 })
@@ -1061,6 +1066,18 @@ const canvasStyle = computed(() => ({
  * anidadas en niveles. `treegrid` es lo que hace que un lector de pantalla
  * anuncie `aria-expanded` y `aria-level`, que con `grid` simplemente ignoraría.
  * Sin grupos vuelve a ser una grilla plana, que es exactamente lo que es.
+ *
+ * ## Por qué el rol vive en `.dt-root` y no en el viewport
+ *
+ * Porque la grilla tiene que CONTENER a su fila de encabezado. El header se
+ * dibuja arriba del contenedor que scrollea, así que mientras el rol estaba en
+ * `.dt-viewport` la fila de encabezado quedaba afuera, y la aritmética de
+ * índices —`aria-rowcount` = entradas + 1, `aria-rowindex` = posición + 2—
+ * anunciaba una fila 1 que la tecnología asistiva no podía encontrar. Con el rol
+ * en la raíz, esa fila existe de verdad y los dos números pasan a ser correctos.
+ *
+ * ARIA no exige que la grilla sea el contenedor con scroll, y moverlo no cuesta
+ * ni una escritura por frame: es un atributo estructural que se escribe una vez.
  */
 const gridRole = computed(() => (grouping.active.value ? 'treegrid' : 'grid'))
 
@@ -1072,25 +1089,45 @@ function headerAlignClass(column: ResolvedColumn<TRow>): string | undefined {
 </script>
 
 <template>
+  <!--
+    La raíz ES la grilla accesible: es el único elemento que contiene a la vez la
+    fila de encabezado y el cuerpo. Por eso `aria-rowcount` cuenta esa fila de
+    más, y por eso cada fila de datos anuncia su posición corrida en uno.
+  -->
   <div
     class="dt-root"
     :style="rootStyle"
+    :role="gridRole"
+    :aria-rowcount="visibleRowCount + 1"
+    :aria-colcount="resolvedColumns.length"
     :data-dense="dense ? 'true' : 'false'"
     :data-theme="theme"
     :data-bordered="bordered ? 'true' : 'false'"
     :data-selection="selectionMode"
   >
-    <div class="dt-header">
+    <div class="dt-header" role="rowgroup">
       <!--
         Las celdas de header las renderiza Vue: son pocas y cambian solo cuando
         cambia la configuración de columnas. El scroll horizontal no las vuelve a
         diferenciar, se resuelve con un único transform sobre este contenedor.
+
+        Este mismo nodo es la FILA de encabezado de la grilla. No hace falta uno
+        aparte: ya existía, ya envuelve a todas las celdas de header y ya es el
+        que se desplaza en espejo.
       -->
-      <div ref="headerInnerEl" class="dt-header-inner" :style="{ width: `${totalWidth}px` }">
+      <div
+        ref="headerInnerEl"
+        class="dt-header-inner"
+        role="row"
+        aria-rowindex="1"
+        :style="{ width: `${totalWidth}px` }"
+      >
         <div
           v-for="column in resolvedColumns"
           :key="column.key"
           class="dt-header-cell"
+          role="columnheader"
+          :aria-colindex="column.index + 1"
           :class="[
             headerAlignClass(column),
             { 'dt-header-cell--active': column.key === activeCell?.columnKey },
@@ -1114,21 +1151,26 @@ function headerAlignClass(column: ResolvedColumn<TRow>): string | undefined {
     </div>
 
     <!--
-      El viewport es la grilla accesible y el que recibe el teclado. En modo
-      `none` el manejador es `undefined`, y entonces Vue directamente no
-      registra el listener.
+      El viewport scrollea y recibe el teclado, pero ya no es la grilla: es un
+      contenedor sin rol propio entre la grilla y su cuerpo. El foco se queda
+      acá porque es el elemento que scrollea, y moverlo a la raíz separaría el
+      anillo de foco de la caja que el usuario está desplazando. En modo `none`
+      el manejador es `undefined`, y entonces Vue directamente no registra el
+      listener.
     -->
     <div
       ref="viewportEl"
       class="dt-viewport"
-      :role="gridRole"
       :tabindex="selectionMode === 'none' ? -1 : 0"
-      :aria-rowcount="visibleRowCount + 1"
-      :aria-colcount="resolvedColumns.length"
       v-on="viewportListeners"
     >
-      <!-- El canvas solo dimensiona la barra de scroll. Sus hijos los inyecta useRowPool. -->
-      <div ref="canvasEl" class="dt-canvas" :style="canvasStyle" />
+      <!--
+        El canvas solo dimensiona la barra de scroll. Sus hijos los inyecta
+        useRowPool, y son exactamente las filas del cuerpo: por eso el
+        `rowgroup` va acá y no en el viewport, que además contiene al host del
+        editor.
+      -->
+      <div ref="canvasEl" class="dt-canvas" role="rowgroup" :style="canvasStyle" />
       <!--
         Host de los controles de edición. Vue lo renderiza una vez y nunca toca
         sus hijos: useCellEditor monta ahí un control por tipo, de forma

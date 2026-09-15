@@ -30,6 +30,7 @@ import type { GridRow, TableHarness, TableProps } from './harness'
 import type { DemoRow } from './harness'
 import { measureDomWrites } from './dom-recorder'
 import type {
+  CellValue,
   DataTableColumn,
   DataTableStorageAdapter,
   FlatRow,
@@ -116,6 +117,8 @@ interface GroupingFixture {
   groupBy: ShallowRef<readonly string[]>
   expandedGroups: ShallowRef<readonly string[] | undefined>
   defaultExpanded: ShallowRef<boolean>
+  /** Etiqueta del bucket de valores ausentes. `undefined` usa el default. */
+  emptyGroupLabel: ShallowRef<string | undefined>
   /** Cada lista completa de expandidos anunciada, en orden. */
   expandedEvents: string[][]
   /** Cada cambio puntual anunciado, en orden. */
@@ -129,6 +132,7 @@ function createGrouping(
     groupBy?: readonly string[]
     expandedGroups?: readonly string[]
     defaultExpanded?: boolean
+    emptyGroupLabel?: string
   } = {},
 ): GroupingFixture {
   const rows = shallowRef<readonly Task[]>(options.rows ?? TASKS)
@@ -136,6 +140,7 @@ function createGrouping(
   const groupBy = shallowRef<readonly string[]>(options.groupBy ?? [])
   const expandedGroups = shallowRef<readonly string[] | undefined>(options.expandedGroups)
   const defaultExpanded = shallowRef(options.defaultExpanded ?? true)
+  const emptyGroupLabel = shallowRef<string | undefined>(options.emptyGroupLabel)
 
   const expandedEvents: string[][] = []
   const toggleEvents: { groupId: string; expanded: boolean }[] = []
@@ -146,6 +151,7 @@ function createGrouping(
     groupBy,
     expandedGroups,
     defaultExpanded,
+    emptyGroupLabel,
     onExpandedChange: (expanded) => expandedEvents.push(expanded),
     onToggle: (groupId, expanded) => toggleEvents.push({ groupId, expanded }),
   })
@@ -157,6 +163,7 @@ function createGrouping(
     groupBy,
     expandedGroups,
     defaultExpanded,
+    emptyGroupLabel,
     expandedEvents,
     toggleEvents,
   }
@@ -1062,14 +1069,19 @@ async function commitEdit(harness: TableHarness, value: string): Promise<void> {
 describe('component — grouping plugged into everything that already existed', () => {
   it('becomes a treegrid while grouping is active and a grid when it is not', async () => {
     const grouped = await mountGrouped()
-    expect(grouped.viewport.getAttribute('role')).toBe('treegrid')
-    // Tres cabeceras más cinco filas, más la de encabezado que ya contaba.
-    expect(grouped.viewport.getAttribute('aria-rowcount')).toBe('9')
+    // El rol viaja con la grilla, que es la raíz: el `treegrid` tiene que
+    // contener también a la fila de encabezado, porque un árbol tabular con la
+    // cabecera afuera es exactamente el defecto que se corrigió.
+    expect(grouped.grid.getAttribute('role')).toBe('treegrid')
+    expect(grouped.grid.querySelector('.dt-header-inner')?.getAttribute('role')).toBe('row')
+    // Tres cabeceras más cinco filas, más la de encabezado que ahora existe de
+    // verdad dentro de la grilla.
+    expect(grouped.grid.getAttribute('aria-rowcount')).toBe('9')
     grouped.unmount()
 
     const flat = await mountGrouped({ groupBy: [] })
-    expect(flat.viewport.getAttribute('role')).toBe('grid')
-    expect(flat.viewport.getAttribute('aria-rowcount')).toBe('6')
+    expect(flat.grid.getAttribute('role')).toBe('grid')
+    expect(flat.grid.getAttribute('aria-rowcount')).toBe('6')
     flat.unmount()
   })
 
@@ -1172,7 +1184,7 @@ describe('component — grouping plugged into everything that already existed', 
       'status:late',
     ])
     // Dos filas menos: el grupo plegado ya no aporta sus hijos.
-    expect(harness.viewport.getAttribute('aria-rowcount')).toBe('7')
+    expect(harness.grid.getAttribute('aria-rowcount')).toBe('7')
     harness.unmount()
   })
 
@@ -1420,7 +1432,7 @@ describe('component — persistence round trip for grouping', () => {
       },
     })
 
-    expect(second.viewport.getAttribute('role')).toBe('treegrid')
+    expect(second.grid.getAttribute('role')).toBe('treegrid')
     const restored = [...second.canvas.querySelectorAll('.dt-group-row')].filter(
       (node): node is HTMLElement => node instanceof HTMLElement && !node.hidden,
     )
@@ -1455,7 +1467,7 @@ describe('component — persistence round trip for grouping', () => {
       },
     })
 
-    expect(harness.viewport.getAttribute('role')).toBe('grid')
+    expect(harness.grid.getAttribute('role')).toBe('grid')
     expect(harness.canvas.querySelectorAll('.dt-group-row')).toHaveLength(0)
     harness.unmount()
   })
@@ -1571,5 +1583,228 @@ describe('pool — the data row / group row slot hazard', () => {
       expect(after[slot]).toBe(before[slot])
     }
     fixture.destroy()
+  })
+})
+
+/* ---------------------------------------------------- column.formatAggregate */
+
+/**
+ * El formateador propio de los agregados.
+ *
+ * `column.format` no se puede aplicar acá y no es un descuido: su firma pide una
+ * fila y un índice, y una cabecera de grupo no pertenece a ninguna fila. El
+ * resultado era que una columna de moneda mostraba `1234.5` pelado en la cabecera
+ * y un `avg` mostraba `47.31818181818182`.
+ *
+ * `formatAggregate` es la firma que sí corresponde: valor y columna, nada más.
+ */
+describe('formatAggregate — group aggregates get a formatter of their own', () => {
+  /** Columnas del andamiaje, con un `formatAggregate` opcional sobre `amount`. */
+  function aggregateColumns(
+    formatAggregate?: DataTableColumn<DemoRow>['formatAggregate'],
+  ): readonly DataTableColumn<DemoRow>[] {
+    return [
+      { key: 'name', width: 100 },
+      { key: 'status', width: 80 },
+      { key: 'amount', width: 120, aggregate: 'sum', formatAggregate },
+    ]
+  }
+
+  /** Textos de los agregados visibles de la primera cabecera pintada. */
+  function firstAggregateText(container: HTMLElement): string | null | undefined {
+    return groupNodes(container)[0]?.querySelector('.dt-group-aggregate')?.textContent
+  }
+
+  it('applies formatAggregate to the figure painted in the group header', () => {
+    const rows = demoRows(6)
+    const columns = aggregateColumns((value) => (typeof value === 'number' ? `$${value}` : ''))
+    const flatRows = flattenDemo({ rows, groupBy: ['status'], columns })
+    const fixture = createPoolFixture({ rows, flatRows, groupDepth: 1, visibleRows: 8 })
+    fixture.paint({ columns: resolveColumns(columns) })
+
+    // 0 + 100 + 200, ya con el formato de la columna.
+    expect(firstAggregateText(fixture.container)).toBe('$300')
+    fixture.destroy()
+  })
+
+  it('falls back to the default representation when the column declares none', () => {
+    const rows = demoRows(6)
+    const columns = aggregateColumns()
+    const flatRows = flattenDemo({ rows, groupBy: ['status'], columns })
+    const fixture = createPoolFixture({ rows, flatRows, groupDepth: 1, visibleRows: 8 })
+    fixture.paint({ columns: resolveColumns(columns) })
+
+    // Exactamente lo que escribía antes de que la opción existiera: sumar una
+    // opción no puede cambiarle la salida a quien no la declara.
+    expect(firstAggregateText(fixture.container)).toBe('300')
+    fixture.destroy()
+  })
+
+  it('receives the aggregate value and the column definition, and nothing else', () => {
+    const seen: { value: CellValue; columnKey: string }[] = []
+    const rows = demoRows(6)
+    const columns = aggregateColumns((value, column) => {
+      seen.push({ value, columnKey: column.key })
+      return 'x'
+    })
+    const flatRows = flattenDemo({ rows, groupBy: ['status'], columns })
+    const fixture = createPoolFixture({ rows, flatRows, groupDepth: 1, visibleRows: 8 })
+    fixture.paint({ columns: resolveColumns(columns) })
+
+    expect(seen[0]).toEqual({ value: 300, columnKey: 'amount' })
+    // Las dos cabeceras visibles, cada una con SU total: 0+100+200 y 300+400+500.
+    expect(seen.map((entry) => entry.value)).toEqual([300, 1200])
+    fixture.destroy()
+  })
+
+  it('is never called without grouping, because there is no header to paint', () => {
+    const formatAggregate = vi.fn(() => 'never')
+    const rows = demoRows(6)
+    const columns = aggregateColumns(formatAggregate)
+    const fixture = createPoolFixture({ rows, flatRows: null, visibleRows: 8 })
+    fixture.paint({ columns: resolveColumns(columns) })
+
+    // Sin agrupación no hay cabeceras, así que no hay agregados que formatear.
+    // Declarar `formatAggregate` en una columna no le cuesta nada a una tabla
+    // que nunca agrupa.
+    expect(formatAggregate).not.toHaveBeenCalled()
+    fixture.destroy()
+  })
+
+  it('keeps the skip-identical-writes discipline: a redundant repaint writes nothing', () => {
+    const rows = demoRows(6)
+    const columns = aggregateColumns((value) => (typeof value === 'number' ? `$${value}` : ''))
+    const flatRows = flattenDemo({ rows, groupBy: ['status'], columns })
+    const fixture = createPoolFixture({ rows, flatRows, groupDepth: 1, visibleRows: 8 })
+    const resolved = resolveColumns(columns)
+    fixture.paint({ columns: resolved })
+    fixture.paint({ columns: resolved })
+
+    const measured = measureDomWrites(fixture.container, () => fixture.paint({ columns: resolved }))
+
+    // El formateador vuelve a correr, pero produce el mismo texto y
+    // `setAggregateText` corta antes de tocar el DOM. Formatear no puede
+    // convertir un repintado redundante en escrituras.
+    expect(measured.counts.total, measured.report).toBe(0)
+    fixture.destroy()
+  })
+
+  it('component: formats every group total end to end', async () => {
+    const harness = await mountTable({
+      viewport: { width: 600, height: 400 },
+      props: {
+        rows: gridRows(),
+        columns: [
+          { key: 'id', width: 120 },
+          { key: 'status', width: 120 },
+          {
+            key: 'amount',
+            width: 120,
+            aggregate: 'sum',
+            formatAggregate: (value) => (typeof value === 'number' ? `$${value.toFixed(2)}` : ''),
+          },
+        ],
+        rowKey: 'id',
+        rowHeight: 40,
+        groupBy: ['status'],
+      },
+    })
+
+    const totals = [...harness.canvas.querySelectorAll('.dt-group-aggregate')]
+      .filter((node): node is HTMLElement => node instanceof HTMLElement && !node.hidden)
+      .map((node) => node.textContent)
+
+    expect(totals).toEqual(['$30.00', '$70.00', '$50.00'])
+    harness.unmount()
+  })
+})
+
+/* --------------------------------------------------------- emptyGroupLabel */
+
+describe('emptyGroupLabel — the empty bucket carries a configurable label', () => {
+  it('defaults to (empty), the same literal the constant always held', () => {
+    const rows: Task[] = [
+      { ...TASKS[0]!, id: 0, status: null },
+      { ...TASKS[0]!, id: 1, status: undefined as unknown as string },
+    ]
+    const fixture = createGrouping({ rows, groupBy: ['status'] })
+
+    expect(groupById(fixture.grouping.flatRows.value, 'status:~null').label).toBe('(empty)')
+    expect(groupById(fixture.grouping.flatRows.value, 'status:~undefined').label).toBe('(empty)')
+  })
+
+  it('uses the provided label for both null and undefined', () => {
+    const rows: Task[] = [
+      { ...TASKS[0]!, id: 0, status: null },
+      { ...TASKS[0]!, id: 1, status: undefined as unknown as string },
+    ]
+    const fixture = createGrouping({ rows, groupBy: ['status'], emptyGroupLabel: 'Sin asignar' })
+
+    // Siguen siendo buckets DISTINTOS: lo que comparten es la etiqueta, porque
+    // para el usuario los dos son "vacío".
+    expect(groupById(fixture.grouping.flatRows.value, 'status:~null').label).toBe('Sin asignar')
+    expect(groupById(fixture.grouping.flatRows.value, 'status:~undefined').label).toBe(
+      'Sin asignar',
+    )
+  })
+
+  it('relabels when the label changes, because it lives in the tree', () => {
+    const rows: Task[] = [{ ...TASKS[0]!, id: 0, status: null }]
+    const fixture = createGrouping({ rows, groupBy: ['status'], emptyGroupLabel: 'Sin asignar' })
+
+    fixture.emptyGroupLabel.value = '(vacío)'
+
+    // La etiqueta se resuelve al construir el árbol, no al pintar, así que
+    // cambiarla tiene que reconstruirlo. Sin eso, la prop quedaría inerte hasta
+    // que algún otro cambio moviera los datos.
+    expect(groupById(fixture.grouping.flatRows.value, 'status:~null').label).toBe('(vacío)')
+  })
+
+  it('leaves a present value alone: it only relabels what is empty', () => {
+    const fixture = createGrouping({ groupBy: ['status'], emptyGroupLabel: 'Sin asignar' })
+
+    expect(groupById(fixture.grouping.flatRows.value, 'status:open').label).toBe('open')
+    expect(groupById(fixture.grouping.flatRows.value, 'status:~null').label).toBe('Sin asignar')
+  })
+
+  it('component: paints the default label when the prop is omitted', async () => {
+    const harness = await mountTable({
+      viewport: { width: 600, height: 400 },
+      props: {
+        rows: [{ id: 0, status: null, amount: 10 }],
+        columns: GRID_COLUMNS,
+        rowKey: 'id',
+        rowHeight: 40,
+        groupBy: ['status'],
+      },
+    })
+
+    expect(groupNodes(harness.canvas)[0]?.querySelector('.dt-group-label')?.textContent).toBe(
+      '(empty)',
+    )
+    harness.unmount()
+  })
+
+  it('component: paints the override in the group header', async () => {
+    const harness = await mountTable({
+      viewport: { width: 600, height: 400 },
+      props: {
+        rows: [
+          { id: 0, status: null, amount: 10 },
+          { id: 1, status: 'open', amount: 20 },
+        ],
+        columns: GRID_COLUMNS,
+        rowKey: 'id',
+        rowHeight: 40,
+        groupBy: ['status'],
+        emptyGroupLabel: 'Sin asignar',
+      },
+    })
+
+    const labels = groupNodes(harness.canvas).map(
+      (node) => node.querySelector('.dt-group-label')?.textContent,
+    )
+    expect(labels).toEqual(['Sin asignar', 'open'])
+    harness.unmount()
   })
 })

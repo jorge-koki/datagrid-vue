@@ -230,6 +230,7 @@ function onEditCommit(event: EditCommitEvent<Invoice>): void {
 | `expandedGroups`        | `readonly string[]`                                              | _no controlado_               | `v-model:expanded-groups`. `groupId` de los grupos expandidos. Una lista vacía significa "controlado y todo colapsado".                                                        |
 | `groupsDefaultExpanded` | `boolean`                                                        | `true`                        | Estado inicial de un grupo del que todavía no se sabe nada. Deja de intervenir cuando `expandedGroups` está controlado.                                                        |
 | `showGroupCount`        | `boolean`                                                        | `true`                        | Si la cabecera de grupo muestra la insignia con cuántas filas contiene.                                                                                                        |
+| `emptyGroupLabel`       | `string`                                                         | `'(empty)'`                   | Etiqueta del grupo que junta los valores ausentes. Ver [Agrupación](#groupid-una-identidad-por-camino).                                                                        |
 
 ### Controlado y no controlado
 
@@ -455,27 +456,66 @@ Ninguno de los dos se emite cuando la selección se fija en la celda que ya esta
 
 ### Accesibilidad
 
-El viewport que scrollea es la grilla. Los roles y los índices se escriben una vez por nodo donde son
-estructurales, y solo cuando cambian donde no lo son: `aria-rowindex` vive en la fila y no en cada
-celda, que es la misma información para un lector de pantalla a la quinceava parte de las escrituras.
+**La grilla es `.dt-root`**, la raíz del componente, porque es el único elemento que contiene a la vez
+la fila de encabezado y el cuerpo. No es el viewport: ese scrollea y recibe el teclado, pero queda por
+debajo de la grilla. ARIA no exige que la grilla sea el contenedor con scroll, y esa es exactamente la
+libertad que hace falta acá, porque el header se dibuja arriba del contenedor que scrollea.
 
-| Elemento               | Atributos                                                                                                                                                                                                       |
-| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `.dt-viewport`         | `role="grid"` —o `role="treegrid"` con agrupación activa—, `aria-rowcount` (entradas visibles **+ 1** por el header), `aria-colcount` (columnas visibles), `tabindex="0"` salvo con `selectionMode` en `'none'` |
-| `.dt-row`              | `role="row"`, `aria-rowindex` (base 1, corrido por la fila de header: la fila de datos `0` reporta `2`), `aria-selected` en modo `'row'`, `aria-level` con agrupación activa                                    |
-| `.dt-row.dt-group-row` | Además: `aria-expanded`, `aria-level` (base 1, igual a `depth + 1`), `aria-posinset` y `aria-setsize` entre sus hermanos de nivel                                                                               |
-| `.dt-cell`             | `role="gridcell"`, `aria-colindex` (base 1 sobre las columnas **visibles**, así que una columna oculta no ocupa slot), `aria-selected` en modo `'cell'`, `tabindex="-1"`                                        |
+La estructura completa, de afuera hacia adentro:
+
+```
+.dt-root                  role="grid" | "treegrid"   aria-rowcount, aria-colcount
+├── .dt-header            role="rowgroup"
+│   └── .dt-header-inner  role="row"                 aria-rowindex="1"
+│       └── .dt-header-cell  role="columnheader"     aria-colindex
+└── .dt-viewport          — sin rol: scrollea y recibe el teclado
+    └── .dt-canvas        role="rowgroup"
+        └── .dt-row       role="row"                 aria-rowindex
+            └── .dt-cell  role="gridcell"            aria-colindex
+```
+
+| Elemento               | Atributos                                                                                                                                                                        |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.dt-root`             | `role="grid"` —o `role="treegrid"` con agrupación activa—, `aria-rowcount` (entradas visibles **+ 1** por la fila de encabezado), `aria-colcount` (columnas visibles)            |
+| `.dt-header`           | `role="rowgroup"`                                                                                                                                                                |
+| `.dt-header-inner`     | `role="row"`, `aria-rowindex="1"`: es LA fila de encabezado, y es la que da sentido al corrimiento del resto                                                                     |
+| `.dt-header-cell`      | `role="columnheader"`, `aria-colindex` (base 1 sobre las columnas **visibles**)                                                                                                  |
+| `.dt-viewport`         | Sin rol propio. `tabindex="0"` salvo con `selectionMode` en `'none'`, y el manejador de teclado                                                                                  |
+| `.dt-canvas`           | `role="rowgroup"`                                                                                                                                                                |
+| `.dt-row`              | `role="row"`, `aria-rowindex` (base 1, corrido por la fila de encabezado: la fila de datos `0` reporta `2`), `aria-selected` en modo `'row'`, `aria-level` con agrupación activa |
+| `.dt-row.dt-group-row` | Además: `aria-expanded`, `aria-level` (base 1, igual a `depth + 1`), `aria-posinset` y `aria-setsize` entre sus hermanos de nivel                                                |
+| `.dt-cell`             | `role="gridcell"`, `aria-colindex` (base 1 sobre las columnas **visibles**, así que una columna oculta no ocupa slot), `aria-selected` en modo `'cell'`, `tabindex="-1"`         |
+
+`aria-sort` **no** aparece, y no es un olvido: no hay ordenamiento (ver [Limitaciones](#limitaciones)).
+Anunciar una columna como ordenable donde no se puede ordenar sería peor que no anunciar nada.
+
+**Cómo se asocia una celda con el nombre de su columna.** Por la estructura, no por un atributo extra.
+Un `columnheader` dentro de la misma grilla es lo que hace que la mayoría de los lectores de pantalla
+anuncien el nombre de la columna al entrar en una celda; `aria-colindex` es lo que mantiene alineados
+los dos lados cuando la virtualización horizontal cambia qué columnas hay pintadas y cuando el usuario
+oculta o reordena columnas. Antes solo existía el lado del cuerpo, y una asociación necesita dos.
+
+La alternativa era un `aria-describedby` por celda apuntando al id de su encabezado. Se descartó por
+costo, y el costo está medido: es una escritura de atributo **por celda** cada vez que un slot cambia
+de columna —diez más por paso de scroll horizontal sobre una ventana de diez filas, y una más por
+celda entrante en cada paso vertical—, todo sobre el camino caliente. El `columnheader` cuesta cero:
+es un atributo estático que Vue escribe al montar.
+
+El índice es 1..N sobre las columnas **visibles**, así que ocultar o reordenar columnas mueve los dos
+lados juntos y una columna oculta no deja un hueco en la numeración.
 
 Las celdas llevan `tabindex="-1"` para poder recibir el foco por código y por clic sin entrar en el
 orden de tabulación: con unas 450 celdas visibles, entrar en ese orden haría imposible tabular más
 allá de la tabla.
 
-> **Hueco conocido.** El header se renderiza fuera del elemento con `role="grid"` y no lleva
-> `role="row"` ni `role="columnheader"`. Tanto `aria-rowcount` como `aria-rowindex` cuentan una fila
-> de header que la tecnología asistiva no puede encontrar dentro de la grilla. Por eso los nombres de
-> las columnas no se anuncian junto con las celdas. Resolverlo implica mover el header adentro de la
-> grilla o cablear un `aria-describedby` por columna; hasta entonces, conviene tratar al header como
-> puramente visual.
+**El foco y el teclado no se movieron con el rol.** Siguen en `.dt-viewport`, que es la caja que
+scrollea: es donde tiene sentido que aparezca el anillo de foco, y es el elemento al que el usuario le
+está mandando las teclas de desplazamiento. El manejador escucha ahí y la posición activa sigue siendo
+estado del componente, no el nodo enfocado.
+
+> **Lo único que queda afuera del contrato.** El mensaje de `emptyText` se renderiza como un `div`
+> dentro de `.dt-root`, o sea dentro de la grilla, y no es una fila. Solo aparece con `rows` vacío,
+> cuando la grilla no tiene ninguna fila de datos que pueda entrar en conflicto con él.
 
 ---
 
@@ -540,6 +580,7 @@ interface DataTableColumn<TRow> {
   align?: 'left' | 'center' | 'right'
   editable?: boolean
   format?: (value: CellValue, row: TRow, rowIndex: number) => string
+  formatAggregate?: (value: CellValue, column: DataTableColumn<TRow>) => string
   cellClass?: (value: CellValue, row: TRow, rowIndex: number) => string | undefined
   accessor?: (row: TRow) => CellValue
   renderer?: string | CellRenderer<TRow>
@@ -564,7 +605,8 @@ interface DataTableColumn<TRow> {
 | `resizable`             | `false`                                        | Muestra un handle de arrastre en el borde del header.                                                                                          |
 | `align`                 | el `defaultAlign` del renderer, si no `'left'` | Un `align` explícito siempre gana. Se aplica como clase, no como estilo inline.                                                                |
 | `editable`              | `false`                                        | Tiene que ser exactamente `true` para que la celda se pueda editar.                                                                            |
-| `format`                | —                                              | Valor crudo → el string que se escribe en la celda. **Debe ser puro y barato.** No se aplica a los agregados.                                  |
+| `format`                | —                                              | Valor crudo → el string que se escribe en la celda. **Debe ser puro y barato.** No se aplica a los agregados: para eso está `formatAggregate`. |
+| `formatAggregate`       | —                                              | Valor agregado → el string que se escribe en la cabecera de grupo. Ver [Formato de los agregados](#formato-de-los-agregados).                  |
 | `cellClass`             | —                                              | Clase CSS extra sobre el elemento de celda. También está en el camino caliente.                                                                |
 | `accessor`              | `row[key]`                                     | Lee el valor desde la fila. Devuelve `CellValue`: no puede devolver un objeto ni un array.                                                     |
 | `renderer`              | `'text'`                                       | Nombre de un renderer registrado, o una implementación. Un nombre desconocido cae en `'text'` en lugar de lanzar.                              |
@@ -869,6 +911,7 @@ function onGroupToggle(event: GroupToggleEvent): void {
 | `expandedGroups`        | `readonly string[]` | _no controlado_ | `v-model:expanded-groups`. `groupId` de los grupos expandidos.                                                                                                       |
 | `groupsDefaultExpanded` | `boolean`           | `true`          | Estado inicial de un grupo del que todavía no se sabe nada.                                                                                                          |
 | `showGroupCount`        | `boolean`           | `true`          | Si la cabecera muestra la insignia con la cantidad de filas descendientes.                                                                                           |
+| `emptyGroupLabel`       | `string`            | `'(empty)'`     | Etiqueta del grupo que junta los valores ausentes, tanto `null` como `undefined`.                                                                                    |
 
 `groupBy` se sanea antes de usarse: se descartan las claves que no nombran ninguna columna, las de
 columnas con `groupable: false` y los duplicados. Un duplicado no es teórico: crearía un nivel entero
@@ -909,6 +952,18 @@ grupos quedaron colapsados.
 `null` y `undefined` conservan **buckets distintos**, porque son valores distintos y en muchos
 dominios esa diferencia significa algo. Lo que comparten es la etiqueta: los dos se muestran como
 `(empty)`.
+
+Ese texto es configurable con la prop **`emptyGroupLabel`**, porque es de cara al usuario y una
+aplicación que no está en inglés tiene que poder traducirlo:
+
+```vue
+<DataTable v-model:group-by="groupBy" empty-group-label="Sin asignar" … />
+```
+
+También se aplica cuando el valor existe pero su representación de texto queda vacía —una cadena
+vacía, por ejemplo—, de modo que una cabecera nunca aparece sin nombre. El `groupId` **no** cambia:
+sigue siendo `status:~null`, así que traducir la etiqueta no invalida ningún estado colapsado que se
+haya persistido.
 
 La etiqueta de la cabecera se resuelve primero contra `column.options`, así una columna de estados
 agrupa bajo `Open` y no bajo `open`. La lista de opciones ya es la fuente de verdad de cómo se llama
@@ -1062,9 +1117,10 @@ Con la celda activa parada sobre una cabecera de grupo, cuatro teclas cambian de
 | `→` (`ArrowRight`) | Si el grupo está **colapsado**, lo expande. Si ya estaba abierto, no hay nada que abrir y la tecla vuelve a mover una columna. |
 | `←` (`ArrowLeft`)  | Si el grupo está **expandido**, lo colapsa. Si ya estaba cerrado, mueve una columna hacia atrás.                               |
 
-Es el comportamiento de un `treegrid`, y por eso el `role` del viewport pasa a `treegrid` mientras
-hay agrupación activa: es lo que hace que un lector de pantalla anuncie `aria-expanded` y
-`aria-level`, que con `grid` simplemente ignoraría.
+Es el comportamiento de un `treegrid`, y por eso el `role` de la grilla pasa a `treegrid` mientras hay
+agrupación activa: es lo que hace que un lector de pantalla anuncie `aria-expanded` y `aria-level`,
+que con `grid` simplemente ignoraría. Con un árbol tabular la estructura importa todavía más, así que
+la fila de encabezado sigue adentro de la grilla y con su `aria-rowindex="1"` intacto.
 
 El resto de las teclas no cambia. `↓` desde una cabecera aterriza en la entrada visible siguiente,
 que suele ser su primera fila de datos. Una cabecera de grupo **se puede seleccionar**, así que
@@ -1171,30 +1227,50 @@ una posición que no se pueda traducir a píxeles sin una búsqueda no serviría
 cabecera de grupo, además, no tiene índice en `rows` y aun así se puede seleccionar y recorrer con el
 teclado.
 
-### Limitación conocida: `column.format` no se aplica a los agregados
+### Formato de los agregados
 
-Un agregado se escribe en la cabecera con la representación por defecto del valor, **sin pasar por el
-`format` de su columna**. La razón es la firma: `format` pide `(value, row, rowIndex)`, y una cabecera
-de grupo no representa a ninguna fila en particular.
+`column.format` **no** se aplica a las cifras de las cabeceras, y la razón es la firma: pide
+`(value, row, rowIndex)`, y una cabecera de grupo no pertenece a ninguna fila en particular. Por eso el
+formato de un agregado se declara aparte, con `column.formatAggregate`, cuya firma solo pide lo que
+una cabecera sí tiene:
 
-En la práctica esto significa que una columna de moneda que muestra `$1,200` en sus celdas muestra
-`1200` pelado en la cabecera de su grupo, y que un `avg` sobre una columna de porcentajes muestra
-todos sus decimales. Una columna de fechas con `min` o `max` muestra el string ISO completo.
-
-No hay hoy un punto de enganche para formatear un agregado. La alternativa disponible es una
-**agregación propia que devuelva el string ya armado**, ya que `AggregationFn` puede devolver
-cualquier `CellValue`, texto incluido:
+```ts
+formatAggregate?: (value: CellValue, column: DataTableColumn<TRow>) => string
+```
 
 ```ts
 const money = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' })
 
-// En lugar de `aggregate: 'sum'`, una función que suma y formatea de una vez.
-const total: AggregationFn<Invoice> = (rows) =>
-  money.format(rows.reduce((sum, row) => sum + row.total, 0))
+const columns: readonly DataTableColumn<Invoice>[] = [
+  { key: 'region', label: 'Region', width: 140 },
+  {
+    key: 'total',
+    label: 'Total',
+    width: 140,
+    renderer: 'number',
+    aggregate: 'sum',
+    // La celda sigue usando `format`; la cabecera usa este.
+    format: (value) => (typeof value === 'number' ? money.format(value) : ''),
+    formatAggregate: (value) => (typeof value === 'number' ? money.format(value) : ''),
+  },
+]
 ```
 
-El costo de esa salida es que el valor deja de ser un número: si algo aguas arriba consumiera el
-agregado como dato, recibiría texto. Para la cabecera, que es presentación, no cambia nada.
+Sin `formatAggregate`, la cifra se escribe con la representación por defecto del valor: una columna de
+moneda muestra `1200` pelado, un `avg` sobre porcentajes muestra `47.31818181818182` y un `min` sobre
+fechas muestra el string ISO completo. Es exactamente el comportamiento anterior, así que agregar la
+opción no le cambió la salida a nadie.
+
+**Corre en el camino de pintado de la cabecera**, una vez por columna agregada y por grupo visible en
+cada frame. Vale la misma regla que para `format`: el formateador se construye a nivel de módulo y la
+función es una sola llamada barata. El caché de escrituras sigue vigente aguas abajo —si el texto
+producido es idéntico al que la cabecera ya muestra, no se toca el DOM—, pero la función igual se
+ejecuta, así que un `formatAggregate` caro sí se paga por frame.
+
+La alternativa sigue disponible y a veces es la correcta: una **agregación propia que devuelva el
+string ya armado**, porque `AggregationFn` puede devolver cualquier `CellValue`, texto incluido. La
+diferencia es dónde queda el valor: con `formatAggregate` el agregado sigue siendo un número y solo su
+presentación cambia; con una agregación que formatea, el dato mismo pasa a ser texto.
 
 ### Clases CSS de un grupo
 
@@ -1596,18 +1672,19 @@ parchea `textContent`, `style`, `setAttribute`, `classList`, `hidden`, `checked`
 creación, inserción y eliminación de nodos, y cuenta cada escritura dentro de un subárbol. Con eso
 fija estos invariantes:
 
-| Invariante                                                                      | Por qué importa                                                             |
-| ------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| Repintar con entradas idénticas produce **cero** escrituras, en los 8 renderers | Es la afirmación central de la librería                                     |
-| Los nodos de fila y de celda sobreviven al scroll como los **mismos objetos**   | Reciclar, no recrear                                                        |
-| El costo por frame depende de la ventana, **no** del dataset ni de la distancia | 100.000 filas cuestan lo mismo que 200; saltar 150 filas, lo mismo que 1    |
-| Mover la celda activa en horizontal alterna **exactamente 2** clases            | La selección no repinta la ventana                                          |
-| Los nodos sobrantes se **ocultan**, nunca se eliminan                           | `hidden` conserva la capa de composición; `removeChild` la descarta         |
-| `Intl.NumberFormat` se construye **una sola vez**                               | Un formateador por celda y por frame domina el presupuesto de pintado       |
-| `avatar` y `tags` mutan sin asignar dentro de `update`                          | La basura del camino caliente la cobra el recolector con un frame perdido   |
-| Cambiar el tipo de renderer en un slot reciclado **reconstruye** la estructura  | Un slot puede pasar de `badge` a `progress` durante el scroll horizontal    |
-| Los índices ARIA se escriben **por fila**, no por celda                         | Misma información para el lector de pantalla, quince veces menos escrituras |
-| Un slot que pasa de fila de datos a cabecera de grupo **recicla** su nodo       | Plegar un grupo mueve de tipo a varios slots a la vez, en mitad del scroll  |
+| Invariante                                                                      | Por qué importa                                                                 |
+| ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| Repintar con entradas idénticas produce **cero** escrituras, en los 8 renderers | Es la afirmación central de la librería                                         |
+| Los nodos de fila y de celda sobreviven al scroll como los **mismos objetos**   | Reciclar, no recrear                                                            |
+| El costo por frame depende de la ventana, **no** del dataset ni de la distancia | 100.000 filas cuestan lo mismo que 200; saltar 150 filas, lo mismo que 1        |
+| Mover la celda activa en horizontal alterna **exactamente 2** clases            | La selección no repinta la ventana                                              |
+| Los nodos sobrantes se **ocultan**, nunca se eliminan                           | `hidden` conserva la capa de composición; `removeChild` la descarta             |
+| `Intl.NumberFormat` se construye **una sola vez**                               | Un formateador por celda y por frame domina el presupuesto de pintado           |
+| `avatar` y `tags` mutan sin asignar dentro de `update`                          | La basura del camino caliente la cobra el recolector con un frame perdido       |
+| Cambiar el tipo de renderer en un slot reciclado **reconstruye** la estructura  | Un slot puede pasar de `badge` a `progress` durante el scroll horizontal        |
+| Los índices ARIA se escriben **por fila**, no por celda                         | Misma información para el lector de pantalla, quince veces menos escrituras     |
+| La estructura accesible del header cuesta **cero** escrituras por frame         | Los roles son estáticos; asociar por `columnheader` evita un atributo por celda |
+| Un slot que pasa de fila de datos a cabecera de grupo **recicla** su nodo       | Plegar un grupo mueve de tipo a varios slots a la vez, en mitad del scroll      |
 
 ### Estas aserciones son estructurales
 
@@ -1625,16 +1702,16 @@ explicar qué se compró a cambio.
 
 ### El resto de la suite
 
-| Archivo                       | Qué cubre                                                                                         |
-| ----------------------------- | ------------------------------------------------------------------------------------------------- |
-| `useVirtualWindow.test.ts`    | Matemática de la ventana: 100k filas, scroll negativo, overscroll, overscan                       |
-| `useColumnLayout.test.ts`     | Offsets acumulados, acotado de anchos, orden, y la búsqueda binaria por fuerza bruta              |
-| `reconcile.test.ts`           | Estado guardado contra columnas que cambiaron; payloads corruptos                                 |
-| `useTablePersistence.test.ts` | Orden carga/guardado, debounce, volcado al desmontar, degradación en SSR y modo privado           |
-| `useCellEditor.test.ts`       | Veto de `beforeEdit`, coacción de tipos, y que `rows` nunca se muta                               |
-| `selection.test.ts`           | Teclado completo, auto-scroll en píxeles exactos, columnas ocultas                                |
-| `renderers.test.ts`           | Valores inesperados en cada renderer incluido                                                     |
-| `grouping.test.ts`            | Aplanado, agregados anidados, expansión controlada, y que `editCommit` reporta el índice ORIGINAL |
+| Archivo                       | Qué cubre                                                                                                                                                                             |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `useVirtualWindow.test.ts`    | Matemática de la ventana: 100k filas, scroll negativo, overscroll, overscan                                                                                                           |
+| `useColumnLayout.test.ts`     | Offsets acumulados, acotado de anchos, orden, y la búsqueda binaria por fuerza bruta                                                                                                  |
+| `reconcile.test.ts`           | Estado guardado contra columnas que cambiaron; payloads corruptos                                                                                                                     |
+| `useTablePersistence.test.ts` | Orden carga/guardado, debounce, volcado al desmontar, degradación en SSR y modo privado                                                                                               |
+| `useCellEditor.test.ts`       | Veto de `beforeEdit`, coacción de tipos, y que `rows` nunca se muta                                                                                                                   |
+| `selection.test.ts`           | Teclado completo, auto-scroll en píxeles exactos, columnas ocultas, y la estructura accesible: roles, `aria-rowindex` del encabezado y `aria-colindex` alineado entre header y cuerpo |
+| `renderers.test.ts`           | Valores inesperados en cada renderer incluido                                                                                                                                         |
+| `grouping.test.ts`            | Aplanado, agregados anidados, expansión controlada, `formatAggregate`, `emptyGroupLabel`, y que `editCommit` reporta el índice ORIGINAL                                               |
 
 ---
 
@@ -1649,7 +1726,6 @@ Dicho sin vueltas. Nada de esto está implementado:
 | **Selección de rangos**                           | La selección es exactamente una celda (o una fila). Sin `Shift`+clic, sin rango con `Shift`+flechas, sin multiselección con `Ctrl`+clic, sin copiar un bloque.                                                                                                                                                   |
 | **Selección de varias filas con casillas**        | No hay modelo `selectedRows` ni columna de casillas incluida. El modo `'row'` marca una fila por vez; `rowClick` y `cellSelect` son los enganches para construir la propia.                                                                                                                                      |
 | **Pivoteo**                                       | La agrupación **sí** está implementada (ver [Agrupación](#agrupación)); pivotear no, y queda **deliberadamente fuera de alcance**: exige una matriz de columnas derivadas de los datos, lo que rompe el supuesto de que las columnas son configuración estática sobre el que se apoya todo el camino de pintado. |
-| **Formato de los agregados**                      | `column.format` no se aplica a las cifras de las cabeceras de grupo. Ver [la limitación conocida](#limitación-conocida-columnformat-no-se-aplica-a-los-agregados).                                                                                                                                               |
 | **Reordenar columnas arrastrando**                | El v-model `columnOrder` existe y está completamente reconciliado, pero no viene ninguna UI de arrastre. El redimensionado sí tiene su handle.                                                                                                                                                                   |
 | **Virtualización de filas con alturas variables** | `rowHeight` es fijo por tabla. Las alturas variables reemplazarían la división O(1) por un índice de offsets medidos.                                                                                                                                                                                            |
 | **Columnas fijas o congeladas**                   | Todas las columnas scrollean.                                                                                                                                                                                                                                                                                    |
