@@ -94,6 +94,54 @@
   contain: layout style;
 }
 
+/*
+ * `hidden` apaga un nodo. Siempre, y sin excepciones.
+ *
+ * ## Por qué hace falta declararlo
+ *
+ * `hidden` es el ÚNICO mecanismo con el que el componente apaga una estructura
+ * que sigue viva: las filas y celdas sobrantes del pool, la cabecera de grupo de
+ * un nodo que ahora muestra datos, las celdas de un nodo que ahora muestra una
+ * cabecera, las píldoras sobrantes del renderer `tags`, la imagen de un avatar
+ * sin `src`, los controles de edición cerrados. Nunca se saca nada del DOM: ver
+ * `internal/dom.ts`.
+ *
+ * Ese mecanismo se apoyaba en `[hidden] { display: none }`, que NO es una regla
+ * de esta hoja: vive en la hoja del navegador. Y una declaración de autor le gana
+ * a una del navegador por ORIGEN, antes de que la especificidad llegue a
+ * intervenir. Así que toda clase de acá que declare `display` —`.dt-group-header`
+ * es flex, `.dt-cell--box` es flex, `.dt-badge` y `.dt-tag` son inline-block—
+ * dejaba a `hidden` sin ningún efecto sobre los nodos que la llevan.
+ *
+ * El resultado era exactamente el reporte: un nodo reciclado pintando las DOS
+ * estructuras encima, la etiqueta del último grupo que mostró superpuesta a los
+ * datos de la fila que muestra ahora, o los avatares y badges de la última fila
+ * superpuestos a una cabecera de grupo. Solo se veía en un navegador de verdad y
+ * solo en las columnas cuyo renderer declara el modo caja, porque `.dt-cell` a
+ * secas no declara `display` y ahí `hidden` alcanzaba.
+ *
+ * ## Por qué una sola regla y no una excepción por clase
+ *
+ * `.dt-group-header[hidden]` habría tapado el síntoma reportado y dejado en pie
+ * los otros tres, más el próximo: la clase que alguien agregue mañana con un
+ * `display` adentro vuelve a romper el mismo invariante, en silencio y sin que
+ * ningún test lo note. Declarado una vez para todo el subárbol, no hay clase que
+ * auditar ni orden de reglas que respetar.
+ *
+ * `!important` es lo que lo vuelve incondicional. Por especificidad esta regla ya
+ * le gana a todo lo que hay hoy en la hoja, pero eso es una propiedad del estado
+ * actual y no una garantía: un selector compuesto futuro la empataría o la
+ * superaría. Con `!important` la garantía deja de depender de qué se escriba
+ * después.
+ *
+ * Queda acotada al subárbol del componente a propósito: es el alcance exacto de
+ * lo que la librería apaga, y así una librería no le impone una regla global a la
+ * página que la usa.
+ */
+.dt-root [hidden] {
+  display: none !important;
+}
+
 /* ------------------------------------------------------------------ Header */
 
 .dt-header {

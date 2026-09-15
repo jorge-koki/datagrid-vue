@@ -762,6 +762,13 @@ export function setAggregateText(
  * la basura su capa de composición, mientras que `hidden` solo lo saca del flujo
  * y lo deja listo para volver a usarse en el próximo frame. Se compara antes de
  * escribir porque alternar `hidden` sí invalida layout.
+ *
+ * Que esto APAGUE el nodo no se cumple solo: `[hidden] { display: none }` vive en
+ * la hoja del navegador, y cualquier `display` de autor le gana por origen. La
+ * hoja de la librería lo restituye para todo su subárbol con una única regla; ver
+ * el bloque `.dt-root [hidden]` en `styles/datatable.css`. Sin esa regla, toda
+ * clase con `display` propio —`.dt-group-header`, `.dt-cell--box`, `.dt-tag`—
+ * seguiría pintando el nodo que acá se acaba de apagar.
  */
 export function setHidden(node: HTMLElement, hidden: boolean): void {
   if (node.hidden === hidden) return

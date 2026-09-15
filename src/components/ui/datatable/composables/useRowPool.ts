@@ -677,6 +677,12 @@ export function useRowPool<TRow extends Record<string, unknown>>(
    * los dos tipos lo haría en cada paso. Convivir cuesta unos pocos nodos
    * escondidos por fila del pool; recrear cuesta trabajo por frame.
    *
+   * Turnarse con `hidden` depende de que `hidden` apague de verdad, y eso lo
+   * garantiza la hoja de estilos con una sola regla para todo el subárbol: ver
+   * `setHidden` en `internal/dom.ts` y el bloque `.dt-root [hidden]` de
+   * `styles/datatable.css`. Sin ella las dos estructuras se pintan superpuestas,
+   * con este archivo escribiendo exactamente lo que corresponde.
+   *
    * Los índices se invalidan en el cambio porque la identidad se compara contra
    * ellos: sin esto, un slot que vuelve a mostrar datos con el mismo índice
    * visible que ya tenía se saltearía la reescritura de `data-row-key`.

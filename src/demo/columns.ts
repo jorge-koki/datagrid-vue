@@ -116,11 +116,10 @@ export const projectColumns: readonly DataTableColumn<ProjectRow>[] = [
     renderer: 'select',
     editor: 'slot',
     options: STATUS_OPTIONS,
-    // `count` es el `COUNT(columna)` de SQL: cuenta las filas descendientes cuyo
-    // valor está presente, no las filas del grupo. Con este dataset las dos
-    // cuentas coinciden porque ninguna fila tiene el estado vacío, y ese es
-    // justamente el punto: son preguntas distintas que acá dan lo mismo.
-    aggregate: 'count',
+    // Sin `aggregate` a propósito. Esta es la columna por la que se agrupa en la
+    // demo, y un `count` sobre ella repite el número que la cabecera ya muestra
+    // en su contador. Un agregado tiene que aportar algo que no esté a la vista;
+    // los que sí lo hacen están en `progress` (promedio) y `budget` (suma).
   },
   {
     key: 'priority',

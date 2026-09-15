@@ -2004,6 +2004,15 @@ posiciona nada —lo hace `justify-content`, que la hoja ya deriva de la alineac
 que se agregue adentro se comporta como un ítem flex. Las celdas de texto siguen siendo bloques
 normales. Ver [Dos modos de maquetado](#dos-modos-de-maquetado-texto-y-caja).
 
+El otro detalle es que dentro de `.dt-root` rige `[hidden] { display: none !important }`. El pool no
+saca nada del DOM: apaga con `hidden` las filas y celdas sobrantes, la cabecera de grupo de un nodo
+que pasó a mostrar datos y las celdas de uno que pasó a mostrar una cabecera. Como `[hidden]` vive en
+la hoja del navegador, cualquier `display` de autor —de la librería o del consumidor— le ganaría por
+origen y dejaría esos nodos pintados encima de los que sí corresponden. La regla restituye ese
+significado para todo el subárbol: **un nodo con `hidden` no se pinta, declare lo que declare su
+clase**. Para mostrar u ocultar contenido propio conviene no apoyarse en `display` sobre un nodo que
+lleve `hidden`.
+
 ---
 
 ## Visibilidad, orden y persistencia de columnas
@@ -2249,6 +2258,7 @@ fija estos invariantes:
 | El costo por frame depende de la ventana, **no** del dataset ni de la distancia | 100.000 filas cuestan lo mismo que 200; saltar 150 filas, lo mismo que 1        |
 | Mover la celda activa en horizontal alterna **exactamente 2** clases            | La selección no repinta la ventana                                              |
 | Los nodos sobrantes se **ocultan**, nunca se eliminan                           | `hidden` conserva la capa de composición; `removeChild` la descarta             |
+| Un nodo con `hidden` **no se pinta**, declare lo que declare su clase           | `[hidden]` es del navegador y cualquier `display` de autor le gana por origen   |
 | `Intl.NumberFormat` se construye **una sola vez**                               | Un formateador por celda y por frame domina el presupuesto de pintado           |
 | `avatar` y `tags` mutan sin asignar dentro de `update`                          | La basura del camino caliente la cobra el recolector con un frame perdido       |
 | Cambiar el tipo de renderer en un slot reciclado **reconstruye** la estructura  | Un slot puede pasar de `badge` a `progress` durante el scroll horizontal        |
