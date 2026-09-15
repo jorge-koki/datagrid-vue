@@ -110,23 +110,25 @@ también Nuxt y la mayoría de las configuraciones de webpack con TS.
 
 ---
 
-## Ejemplo completo
+## Uso
 
-Un ejemplo ejecutable, con la edición conectada de punta a punta:
+Dos ejemplos completos, sin recortes: se copian, se pegan y andan. El primero es una grilla
+virtualizada con edición; el segundo agrega agrupación, agregados y persistencia encima del primero.
+
+Los dos importan desde `datagrid-vue`. Si el código se copió al proyecto (la [opción
+A](#opción-a--copiar-el-directorio-estilo-shadcn)), el único cambio es el especificador del import
+—`@/components/ui/datatable`— y que la línea de la hoja de estilos sobra.
+
+### Ejemplo A — uso básico, sin agrupación
 
 ```vue
 <script setup lang="ts">
-import { shallowRef, useTemplateRef } from 'vue'
-import { COLOR_TOKENS, DataTable, DataTableColumnToggle } from 'datagrid-vue'
-import type {
-  BeforeEditEvent,
-  ColumnVisibilityState,
-  DataTableColumn,
-  DataTableInstance,
-  EditCommitEvent,
-} from 'datagrid-vue'
+import { shallowRef } from 'vue'
+import { COLOR_TOKENS, DataTable } from 'datagrid-vue'
+import type { DataTableColumn, EditCommitEvent } from 'datagrid-vue'
 import 'datagrid-vue/style.css'
 
+// `type` y no `interface`: ver la nota al final de la sección.
 type Invoice = {
   id: number
   customer: string
@@ -134,37 +136,46 @@ type Invoice = {
   status: 'draft' | 'sent' | 'paid'
 }
 
+// `shallowRef` y no `ref`: un ref profundo envolvería cada fila en un Proxy.
 const rows = shallowRef<readonly Invoice[]>([
   { id: 1, customer: 'Acme', total: 1200, status: 'paid' },
   { id: 2, customer: 'Globex', total: 380, status: 'draft' },
+  { id: 3, customer: 'Initech', total: 7450, status: 'sent' },
 ])
 
 const columns: readonly DataTableColumn<Invoice>[] = [
-  { key: 'customer', label: 'Customer', width: 220, resizable: true, editable: true },
-  { key: 'total', label: 'Total', width: 120, renderer: 'number', editable: true },
+  // Texto plano. Sin `renderer` rige el incluido por defecto, que es `text`.
+  { key: 'customer', label: 'Cliente', width: 220, resizable: true, editable: true },
+  // El renderer `number` ya alinea a la derecha por su cuenta; `align` se declara
+  // igual para dejar visible que la alineación es una decisión de la columna y
+  // que un `align` explícito siempre le gana al del renderer.
+  { key: 'total', label: 'Total', width: 140, renderer: 'number', align: 'right', editable: true },
+  // Una píldora de color. `options` es la fuente de verdad de cómo se llama y de
+  // qué color es cada valor: la usa el renderer para pintar y, como la columna es
+  // editable y su valor no es numérico ni booleano, también el editor `select`
+  // que se infiere de tenerla.
   {
     key: 'status',
-    label: 'Status',
-    width: 120,
-    renderer: 'select',
+    label: 'Estado',
+    width: 140,
+    renderer: 'badge',
     editable: true,
     options: [
-      { value: 'draft', label: 'Draft', color: COLOR_TOKENS.neutral },
-      { value: 'sent', label: 'Sent', color: COLOR_TOKENS.blue },
-      { value: 'paid', label: 'Paid', color: COLOR_TOKENS.green },
+      { value: 'draft', label: 'Borrador', color: COLOR_TOKENS.neutral },
+      { value: 'sent', label: 'Enviada', color: COLOR_TOKENS.blue },
+      { value: 'paid', label: 'Pagada', color: COLOR_TOKENS.green },
     ],
   },
 ]
 
-const columnVisibility = shallowRef<ColumnVisibilityState>({})
-const table = useTemplateRef<DataTableInstance>('table')
-
-// Veto: una factura paga es de solo lectura.
-function onBeforeEdit(event: BeforeEditEvent<Invoice>): void {
-  if (event.row.status === 'paid') event.cancel()
-}
-
-// La tabla es controlada: nunca escribe sobre `rows`. La escritura es de este handler.
+/**
+ * El único evento que pide escribir.
+ *
+ * La tabla es CONTROLADA: nunca toca `props.rows`. Sin este handler la edición se
+ * ve mientras el editor está abierto y la celda vuelve al valor anterior en el
+ * próximo pintado. Se reemplazan la fila y el array en lugar de mutarlos, porque
+ * lo que el componente observa es la identidad del array, no su contenido.
+ */
 function onEditCommit(event: EditCommitEvent<Invoice>): void {
   const next = rows.value.slice()
   next[event.rowIndex] = { ...event.row, [event.columnKey]: event.newValue }
@@ -173,13 +184,141 @@ function onEditCommit(event: EditCommitEvent<Invoice>): void {
 </script>
 
 <template>
-  <DataTableColumnToggle v-model="columnVisibility" :columns="columns" />
-  <button type="button" @click="table?.resetLayout()">Reset layout</button>
-
+  <!-- El componente llena su contenedor y no tiene altura propia: sin un
+       contenedor con altura solo se ve una caja vacía. -->
   <div style="height: 60vh">
     <DataTable
-      ref="table"
-      v-model:column-visibility="columnVisibility"
+      :rows="rows"
+      :columns="columns"
+      row-key="id"
+      stripe
+      bordered
+      empty-text="Sin facturas"
+      @edit-commit="onEditCommit"
+    />
+  </div>
+</template>
+```
+
+Eso ya es una grilla completa: virtualización en los dos ejes, selección por celda y navegación con
+el teclado encendidas, y la edición cerrando el círculo contra el dataset del consumidor.
+
+> **La tabla no muta `props.rows`, y esto es lo que más sorprende al empezar.** `rows` y `columns`
+> son `readonly` en la firma justamente para decirlo en el tipo. `editCommit` es el único evento que
+> pide escribir, y si se ignora no cambia nada en pantalla: no es un bug del componente, es la
+> semántica de un componente controlado. Mutar `rows` en el lugar tampoco alcanza —el componente
+> guarda una referencia superficial y no se entera—; para ese caso está
+> [`refresh()`](#métodos-expuestos).
+
+### Ejemplo B — con agrupación
+
+El mismo dataset, ahora agrupado por dos niveles, con el total sumado y formateado en cada cabecera,
+el plegado bajo control del padre y el layout persistido entre sesiones.
+
+```vue
+<script setup lang="ts">
+import { shallowRef } from 'vue'
+import { COLOR_TOKENS, DataTable } from 'datagrid-vue'
+import type { DataTableColumn, EditCommitEvent, GroupToggleEvent } from 'datagrid-vue'
+import 'datagrid-vue/style.css'
+
+type Invoice = {
+  id: number
+  customer: string
+  region: string
+  total: number
+  status: 'draft' | 'sent' | 'paid'
+}
+
+const rows = shallowRef<readonly Invoice[]>([
+  { id: 1, customer: 'Acme', region: 'LATAM', total: 1200, status: 'paid' },
+  { id: 2, customer: 'Globex', region: 'EMEA', total: 380, status: 'draft' },
+  { id: 3, customer: 'Initech', region: 'LATAM', total: 7450, status: 'sent' },
+  { id: 4, customer: 'Umbrella', region: 'EMEA', total: 2100, status: 'paid' },
+])
+
+// A nivel de módulo, no adentro de `formatAggregate`: construir un
+// `Intl.NumberFormat` por llamada se paga en el camino de pintado de la cabecera.
+const money = new Intl.NumberFormat('es-AR', {
+  style: 'currency',
+  currency: 'USD',
+  maximumFractionDigits: 0,
+})
+
+const columns: readonly DataTableColumn<Invoice>[] = [
+  { key: 'customer', label: 'Cliente', width: 220, resizable: true, editable: true },
+  // Las dos columnas por las que se agrupa. Siguen siendo columnas normales: se
+  // ven, se pueden ocultar y se pueden editar como cualquier otra.
+  { key: 'region', label: 'Región', width: 120 },
+  {
+    key: 'status',
+    label: 'Estado',
+    width: 140,
+    renderer: 'badge',
+    editable: true,
+    options: [
+      { value: 'draft', label: 'Borrador', color: COLOR_TOKENS.neutral },
+      { value: 'sent', label: 'Enviada', color: COLOR_TOKENS.blue },
+      { value: 'paid', label: 'Pagada', color: COLOR_TOKENS.green },
+    ],
+  },
+  {
+    key: 'total',
+    label: 'Total',
+    width: 160,
+    renderer: 'number',
+    align: 'right',
+    editable: true,
+    // Lo que esta columna aporta a cada cabecera de grupo. Se calcula al aplanar,
+    // una vez por reconstrucción, nunca por frame.
+    aggregate: 'sum',
+    // `format` es el de la celda y pide `(value, row, rowIndex)`. Una cabecera de
+    // grupo no pertenece a ninguna fila, así que su formato se declara aparte.
+    format: (value) => (typeof value === 'number' ? money.format(value) : ''),
+    formatAggregate: (value) => (typeof value === 'number' ? money.format(value) : ''),
+  },
+]
+
+/**
+ * Dos niveles: primero por región y, dentro de cada una, por estado.
+ *
+ * Se controla con v-model porque la persistencia devuelve la agrupación guardada
+ * por esta misma vía, y porque `resetLayout()` la vacía: tener el estado acá es lo
+ * que permite que un `<select>` de la aplicación siga reflejando la verdad.
+ */
+const groupBy = shallowRef<readonly string[]>(['region', 'status'])
+
+/**
+ * Qué grupos están abiertos, por `groupId`.
+ *
+ * El `groupId` es un camino de `columna:valor` unido con `/`, y por eso es estable
+ * entre sesiones. Controlado, esta lista es la verdad LITERAL: un id que no está
+ * acá está colapsado y `groupsDefaultExpanded` deja de intervenir, así que los
+ * grupos de segundo nivel arrancan cerrados hasta que alguien los abra.
+ */
+const expandedGroups = shallowRef<readonly string[]>(['region:LATAM', 'region:EMEA'])
+
+/** Un cambio puntual. Expandir o colapsar todo NO emite uno por grupo. */
+function onGroupToggle(event: GroupToggleEvent): void {
+  console.log(event.groupId, event.expanded ? 'expandido' : 'colapsado')
+}
+
+/**
+ * Igual que en el ejemplo A, y con grupos activos vale exactamente lo mismo:
+ * `event.rowIndex` indexa `rows`, no la posición vertical de la celda editada.
+ */
+function onEditCommit(event: EditCommitEvent<Invoice>): void {
+  const next = rows.value.slice()
+  next[event.rowIndex] = { ...event.row, [event.columnKey]: event.newValue }
+  rows.value = next
+}
+</script>
+
+<template>
+  <div style="height: 60vh">
+    <DataTable
+      v-model:group-by="groupBy"
+      v-model:expanded-groups="expandedGroups"
       :rows="rows"
       :columns="columns"
       row-key="id"
@@ -187,16 +326,43 @@ function onEditCommit(event: EditCommitEvent<Invoice>): void {
       persist
       stripe
       bordered
-      @before-edit="onBeforeEdit"
+      empty-group-label="Sin región"
       @edit-commit="onEditCommit"
+      @group-toggle="onGroupToggle"
     />
   </div>
 </template>
 ```
 
+Tres cosas de este ejemplo que conviene no pasar por alto:
+
+- **`persist` necesita `table-id`.** Es lo que separa el layout de una tabla del de otra; sin él se
+  emite un aviso y la persistencia queda apagada. Guarda visibilidad, orden, anchos **y** agrupación,
+  esto último bajo la bandera `include.grouping`, que viene en `true`.
+- **Con `persist` encendido, el valor inicial de `expandedGroups` dura hasta que carga lo guardado.**
+  La restauración llega por `update:expandedGroups`, el v-model la adopta, y el literal del `script`
+  pasa a ser solo el estado de la primera visita. Es lo esperable, pero sorprende si no se sabe.
+- **El agregado se pinta en el offset horizontal de su columna.** Declararlo en la **primera** columna
+  taparía el chevron, la etiqueta y la insignia del grupo, así que las columnas con `aggregate`
+  conviene dejarlas hacia la derecha.
+
+> **Qué índice de fila reporta cada cosa.** Es la única parte de la agrupación que se puede usar mal
+> en silencio. **Los eventos** —`editCommit`, `beforeEdit`, `afterEdit`, `cellSelect`, `rowClick`—
+> reportan siempre el índice dentro de la prop `rows`. **Las posiciones** —`v-model:active-cell`,
+> `selectCell()`, `scrollToCell()`, `scrollToRow()`— indexan la secuencia VISIBLE, donde cada cabecera
+> de grupo ocupa una entrada propia y un grupo colapsado esconde a las suyas. Sin agrupación los dos
+> números coinciden y no hay nada que distinguir; con agrupación, usar uno donde va el otro escribe la
+> edición sobre otra fila del dataset y nada lo delata. La regla corta: **el índice de un evento se
+> usa para escribir en `rows`; una `CellPosition` se usa para mover la vista.** Está desarrollado en
+> [Dos números distintos](#dos-números-distintos-posición-visible-e-índice-original).
+
 > **`TRow` tiene que ser un `type`, no una `interface`.** El componente se declara como
 > `generic="TRow extends Record<string, unknown>"`, y en TypeScript solo los alias de tipo reciben
 > una firma de índice implícita. `interface Invoice { … }` no satisface la restricción.
+
+Para el resto —selector de columnas, veto de edición por fila, `resetLayout()`, editores propios
+desde el slot `#editor`— cada sección de abajo trae su propio fragmento. Y en `src/App.vue` de este
+repositorio está todo cableado a la vez sobre un dataset de hasta 50.000 filas.
 
 ---
 
@@ -283,6 +449,19 @@ Hay uno solo, y es opcional.
 Es la única vía por la que entra un componente Vue del consumidor, y entra con una regla: **uno
 montado a la vez**, no uno por celda. Está desarrollado, con la medición que lo justifica, en
 [Componentes de terceros dentro de una celda](#componentes-de-terceros-dentro-de-una-celda).
+
+Dos consecuencias que conviene tener presentes desde el principio, porque cambian cómo se lee lo que
+aparece en pantalla:
+
+- **El control es del consumidor, no de la librería.** Un desplegable que se abre sobre una celda con
+  `editor: 'slot'` es el componente que el consumidor puso en el slot. La tabla aporta la caja
+  posicionada y la tubería de `commit()` / `cancel()`; el aspecto y el comportamiento del control son
+  ajenos.
+- **La cantidad de instancias no depende del tamaño del dataset.** Se monta al abrir el editor y se
+  desmonta al cerrarlo, y solo puede haber un editor abierto por vez: hay como mucho **una instancia
+  en toda la página**, con 100 filas cargadas o con 50.000. Medido desde afuera, abrir el editor suma
+  los nodos de ese componente y cerrarlo los devuelve; el conteo de nodos del DOM no crece con la
+  cantidad de filas.
 
 ### El ciclo de edición
 
@@ -1409,6 +1588,20 @@ posibilidad de plegarlas. Por dentro, lo que el virtualizador recorre deja de se
 una **vista aplanada**: un array derivado donde cada entrada es una cabecera de grupo o una fila de
 datos. Eso es lo que permite que la posición vertical siga siendo un índice y que el costo por frame
 siga siendo constante.
+
+De ahí salen dos formas de contar filas que no son intercambiables, y conviene fijarlas antes de
+seguir:
+
+- **La vista aplanada** es lo que se ve y lo que el virtualizador recorre. Cada cabecera de grupo
+  ocupa una entrada propia, y un grupo colapsado aporta su cabecera y esconde a todos sus
+  descendientes. Es lo que cuenta cualquier medición hecha sobre el DOM, y lo que indexa una
+  `CellPosition`.
+- **El dataset** es la prop `rows`, y no cambia nunca por agrupar ni por plegar. Es lo que indexan
+  los eventos.
+
+Plegar un grupo achica la primera y deja la segunda intacta. Si las dos se mezclan, el resultado es
+el error que está descrito en
+[Dos números distintos](#dos-números-distintos-posición-visible-e-índice-original).
 
 Con `groupBy` vacío —el valor por defecto— la tabla no paga absolutamente nada por esta función: no
 se construye ningún árbol, no se aplana nada y el pool recorre el mismo camino de siempre sobre

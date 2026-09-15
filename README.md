@@ -16,6 +16,9 @@ npm install github:jorge-koki/datagrid-vue
 **→ [Documentación del componente](./src/components/ui/datatable/README.md)** — props, eventos,
 selección, agrupación, renderers, temas, persistencia, rendimiento, limitaciones.
 
+**→ [Dos ejemplos completos para copiar](./src/components/ui/datatable/README.md#uso)** — uno básico y
+uno con agrupación, los dos ejecutables tal como están escritos.
+
 ## Qué trae
 
 - **Virtualización en los dos ejes.** Filas y columnas. El cálculo de la ventana es O(1): una
@@ -83,7 +86,7 @@ La demo abre con **100 filas**, para que se lea como un ejemplo de uso. Desde ah
 | ------------------------------ | ------------------------------------------------------------------------------------------------------- |
 | `src/components/ui/datatable/` | El componente. Autocontenido: solo imports relativos, y `vue` como única dependencia de runtime.     |
 | `src/demo/`                    | El generador de datos sembrado de la demo, las definiciones de columna, los presets de agrupación, el panel de estadísticas y la bitácora de eventos. |
-| `src/App.vue`                  | La página de la demo. Conviene leerla primero para ver un ejemplo de uso funcionando.                |
+| `src/App.vue`                  | La página de la demo: la tabla cableada de punta a punta, con todos sus controles.                   |
 
 ## Scripts
 

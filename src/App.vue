@@ -35,6 +35,15 @@ import './demo/demo.css'
  */
 const { entries: eventLog, push: logEvent } = useDemoLog()
 
+/**
+ * Documentación del componente.
+ *
+ * La demo muestra el comportamiento; el porqué —el slot `#editor`, los agregados,
+ * qué índice reporta cada evento— vive en el README y no en esta pantalla.
+ */
+const DOCS_URL =
+  'https://github.com/jorge-koki/datagrid-vue/blob/main/src/components/ui/datatable/README.md'
+
 /* ------------------------------------------------------------------ Datos */
 
 /** Tamaños ofrecidos. El primero es el que se carga al abrir la página. */
@@ -325,19 +334,9 @@ function onAfterEdit(event: AfterEditEvent<ProjectRow>): void {
     </p>
 
     <p class="demo-note">
-      La columna <strong>Estado</strong> se edita con un componente Vue propio, montado desde el
-      slot <code>#editor</code>: el desplegable no es del componente, lo pone esta demo. Se monta al
-      abrir el editor y se desmonta al cerrarlo, así que existe
-      <strong>una instancia a la vez</strong>
-      en toda la página, con 100 filas o con 50.000. El contador de nodos de acá abajo no se mueve
-      al abrirlo.
-    </p>
-
-    <p v-if="grouped" class="demo-note">
-      Con agrupación activa, el contador de filas en el DOM y la posición de la celda activa cuentan
-      entradas de la <strong>vista aplanada</strong>: cada cabecera de grupo ocupa una fila propia y
-      un grupo colapsado esconde a las suyas. El contador de filas en los datos sigue siendo el
-      tamaño del dataset, que es lo que no cambia al plegar nada.
+      Qué se está mirando acá —el slot <code>#editor</code>, los agregados, qué cuentan estos
+      contadores con agrupación activa— está explicado en el
+      <a :href="DOCS_URL" target="_blank" rel="noreferrer">README del componente</a>.
     </p>
 
     <div ref="tableHost" class="demo-table">
@@ -365,20 +364,10 @@ function onAfterEdit(event: AfterEditEvent<ProjectRow>): void {
         @group-toggle="onGroupToggle"
       >
         <!--
-          Editor por slot. Se renderiza SOLO sobre la celda en edición y solo
-          cuando esa celda pertenece a una columna con `editor: 'slot'`, así que
-          hay como mucho UNA instancia de `DemoStatusPicker` en toda la página,
-          con 50.000 filas cargadas o con 100. El contador de nodos del panel de
-          estadísticas no se mueve al abrirlo.
-
-          El `v-if` por clave de columna es el patrón que corresponde con más de
-          una columna de slot: el slot es uno solo para toda la tabla y el
-          consumidor decide qué control montar en cada una.
-
-          `commit` y `cancel` son la tubería de siempre: `commit` publica
-          `afterEdit` y, si el valor cambió, `editCommit`; `cancel` publica solo
-          `afterEdit` con `canceled: true`. La bitácora de abajo los muestra en
-          vivo.
+          Editor por slot. El `v-if` por clave de columna es el patrón que
+          corresponde cuando hay más de una columna con `editor: 'slot'`: el slot
+          es uno solo para toda la tabla y el consumidor decide qué control
+          montar en cada una. El resto está en el README del componente.
         -->
         <template #editor="{ column, value, commit }">
           <DemoStatusPicker

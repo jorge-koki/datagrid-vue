@@ -190,8 +190,8 @@ body {
 }
 
 /*
- * Aviso contextual: solo aparece con una agrupación activa, y aclara qué cuentan
- * los contadores del panel de estadísticas cuando la vista deja de ser plana.
+ * Puntero a la documentación. La demo enseña el comportamiento; las
+ * explicaciones viven en el README del componente, no en esta pantalla.
  */
 .demo-note {
   margin: 0;
@@ -202,6 +202,11 @@ body {
   border-radius: var(--dt-radius);
   background: var(--dt-bg);
   color: var(--dt-text-muted);
+}
+
+/* El color de enlace por defecto no sobrevive al tema oscuro: se usa el token. */
+.demo-note a {
+  color: var(--dt-color-blue);
 }
 
 /* ------------------------------------------------------------------ Tabla */
