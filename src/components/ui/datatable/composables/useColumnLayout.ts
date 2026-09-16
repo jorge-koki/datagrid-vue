@@ -78,12 +78,16 @@ export interface UseColumnLayoutReturn<TRow> {
   findColumnRange(scrollLeft: number, viewportWidth: number, overscan: number): ColumnRange
   /** Pide un ancho nuevo. Devuelve el ancho efectivo tras acotarlo. */
   setColumnWidth(key: string, width: number): number
-  /** Ancho resuelto actual de una columna visible, o `null` si no lo está. */
-  getColumnWidth(key: string): number | null
-  /** Columna resuelta por clave, o `null` si está oculta o es desconocida. */
+  /**
+   * Columna resuelta por clave, o `null` si está oculta o es desconocida.
+   *
+   * Los dos casos devuelven exactamente lo mismo, y es deliberado: para la
+   * geometría, "oculta" y "no existe" son la misma respuesta —no hay ancho ni
+   * offset que dar— y distinguirlas obligaría a todos los llamadores a decidir
+   * qué hacer con una diferencia que ninguno necesita. Quien sí necesita
+   * distinguirlas tiene `orderedColumns`, que incluye las ocultas.
+   */
   getResolvedColumn(key: string): ResolvedColumn<TRow> | null
-  /** Si una columna está visible según el estado vigente. */
-  isColumnVisible(key: string): boolean
 }
 
 /**
@@ -268,16 +272,8 @@ export function useColumnLayout<TRow>(
     return next
   }
 
-  function getColumnWidth(key: string): number | null {
-    return resolvedColumns.value.find((entry) => entry.key === key)?.width ?? null
-  }
-
   function getResolvedColumn(key: string): ResolvedColumn<TRow> | null {
     return resolvedColumns.value.find((entry) => entry.key === key) ?? null
-  }
-
-  function isColumnVisible(key: string): boolean {
-    return resolvedColumns.value.some((entry) => entry.key === key)
   }
 
   return {
@@ -288,9 +284,7 @@ export function useColumnLayout<TRow>(
     visibleCount,
     findColumnRange,
     setColumnWidth,
-    getColumnWidth,
     getResolvedColumn,
-    isColumnVisible,
   }
 }
 

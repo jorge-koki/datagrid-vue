@@ -902,19 +902,36 @@ export interface VirtualWindow {
  * alcanzan: saltar a un resultado de búsqueda, o forzar un repintado después de
  * mutar objetos de fila en el lugar (algo que la tabla no puede observar, por
  * diseño).
+ *
+ * ## Una columna oculta y una desconocida valen lo mismo
+ *
+ * Todo método que recibe una clave de columna resuelve esa clave contra las
+ * columnas VISIBLES. Una columna oculta —por el selector de columnas, por un
+ * layout restaurado o por `defaultVisible: false`— no resuelve, igual que una
+ * clave que no corresponde a ninguna columna declarada. Ninguno de los dos casos
+ * avisa por consola ni lanza: ocultar una columna es una acción normal del
+ * usuario, y un método que se queja de ella se quejaría durante el uso
+ * corriente. Cada método documenta abajo qué hace exactamente en ese caso.
  */
 export interface DataTableInstance {
   /**
-   * Scrollea hasta que `index` sea la primera fila totalmente visible. Se acota.
+   * Scrollea hasta que `index` sea la primera fila totalmente visible. Se ACOTA.
    *
    * `index` recorre la secuencia visible, igual que {@link CellPosition.rowIndex}:
    * con grupos activos cuenta también las cabeceras y saltea a los hijos de los
    * grupos colapsados.
+   *
+   * Un índice fuera de rango va al borde más cercano y una fracción se trunca.
+   * Es la asimetría con {@link DataTableInstance.scrollToCell}, que NO acota su
+   * índice de fila; el porqué está documentado ahí.
    */
   scrollToRow(index: number): void
   /**
    * Scrollea hasta que la columna con esa clave quede en el borde izquierdo.
-   * No hace nada si la clave es desconocida.
+   *
+   * No hace nada si la columna está OCULTA ni si la clave es DESCONOCIDA: una
+   * columna oculta no tiene borde izquierdo al que llevar la vista, exactamente
+   * como una que no existe.
    */
   scrollToColumn(key: string): void
   /**
@@ -939,13 +956,51 @@ export interface DataTableInstance {
    */
   refresh(): void
   /**
-   * Descarta el layout guardado y vuelve a visibilidad, orden y anchos por
-   * defecto. Es el "restablecer columnas" de la UI.
+   * Descarta el layout guardado y vuelve a visibilidad, orden, anchos,
+   * agrupación y grupos colapsados por defecto. Es el "restablecer columnas" de
+   * la UI.
+   *
+   * Borra el almacenamiento Y el estado vivo, en ese orden. Borrar solo el
+   * almacenamiento dejaría al usuario mirando la misma configuración que quiso
+   * descartar hasta el próximo reload. Cada parte del estado se emite por su
+   * `update:*`, así que en modo controlado el padre se entera y decide.
    */
   resetLayout(): void
-  /** Fija la celda activa, o la limpia con `null`. Desplaza la vista si hace falta. */
+  /**
+   * Fija la celda activa, o la limpia con `null`. Desplaza la vista si hace falta.
+   *
+   * Con una columna OCULTA o DESCONOCIDA la posición igual se guarda y se
+   * anuncia por `update:activeCell`: es la posición que se pidió, y el
+   * componente no inventa otra. Lo que no ocurre es el resto. No se emite
+   * `cellSelect`, porque no hay columna que reportar; ninguna celda se pinta
+   * activa; y `.dt-root` informa `data-active-cell="false"`, de modo que el
+   * anillo de foco del viewport queda disponible como única señal visible. El
+   * desplazamiento sigue la regla de {@link DataTableInstance.scrollToCell}: se
+   * mueve el eje vertical y no el horizontal.
+   */
   selectCell(position: CellPosition | null): void
-  /** Desplaza lo mínimo necesario para que la celda quede visible. */
+  /**
+   * Desplaza lo mínimo necesario para que la celda quede visible.
+   *
+   * ## Los dos ejes son independientes
+   *
+   * Si la columna está OCULTA o la clave es DESCONOCIDA, el eje horizontal no se
+   * mueve y **el vertical sí**. Es intencional: son dos coordenadas separadas, y
+   * `rowIndex` sigue siendo un número de fila válido sin importar qué diga
+   * `columnKey`, así que se resuelve el eje sobre el que sí había información.
+   * Cortar del todo rompería el caso ordinario de una celda activa cuya columna
+   * el usuario acaba de ocultar: la navegación vertical dejaría de traer filas a
+   * la vista por un motivo ajeno al eje vertical.
+   *
+   * ## No acota el índice de fila
+   *
+   * A diferencia de {@link DataTableInstance.scrollToRow}, que sí lo acota. La
+   * razón es de dónde viene cada uno: `scrollToRow` es un salto absoluto que
+   * pide el consumidor con un número suelto, mientras que la posición que llega
+   * acá ya viene acotada por el camino de navegación interno. Con un índice
+   * fuera de rango, el navegador acota la escritura del scroll contra la altura
+   * real del canvas y la vista queda en el extremo.
+   */
   scrollToCell(position: CellPosition): void
   /**
    * Escribe de inmediato el layout que esté pendiente por el debounce.

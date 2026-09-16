@@ -124,8 +124,10 @@ describe('useColumnLayout — hidden columns leave no gap', () => {
       ],
     })
 
-    expect(layout.isColumnVisible('a')).toBe(true)
-    expect(layout.isColumnVisible('b')).toBe(false)
+    // Estar visible ES tener geometría resuelta: no hay un segundo predicado
+    // aparte que pueda desincronizarse del que usa el pintado.
+    expect(layout.getResolvedColumn('a')).not.toBeNull()
+    expect(layout.getResolvedColumn('b')).toBeNull()
   })
 
   it('lets an explicit visibility entry override defaultVisible', () => {
@@ -134,7 +136,7 @@ describe('useColumnLayout — hidden columns leave no gap', () => {
       visibility: { a: true },
     })
 
-    expect(layout.isColumnVisible('a')).toBe(true)
+    expect(layout.getResolvedColumn('a')).not.toBeNull()
   })
 })
 
@@ -142,37 +144,37 @@ describe('useColumnLayout — width resolution and clamping', () => {
   it('prefers the runtime width over the declared one', () => {
     const { layout } = setup({ widths: { a: 260 } })
 
-    expect(layout.getColumnWidth('a')).toBe(260)
+    expect(layout.getResolvedColumn('a')?.width).toBe(260)
   })
 
   it('falls back to defaultColumnWidth when the column declares none', () => {
     const { layout } = setup({ columns: [{ key: 'a' }], defaultColumnWidth: 180 })
 
-    expect(layout.getColumnWidth('a')).toBe(180)
+    expect(layout.getResolvedColumn('a')?.width).toBe(180)
   })
 
   it('clamps below the global minimum so the column stays grabbable', () => {
     const { layout } = setup({ columns: [{ key: 'a', width: 4 }] })
 
-    expect(layout.getColumnWidth('a')).toBe(MIN_COLUMN_WIDTH)
+    expect(layout.getResolvedColumn('a')?.width).toBe(MIN_COLUMN_WIDTH)
   })
 
   it('clamps above the global maximum so the canvas cannot overflow', () => {
     const { layout } = setup({ columns: [{ key: 'a', width: 1e9 }] })
 
-    expect(layout.getColumnWidth('a')).toBe(MAX_COLUMN_WIDTH)
+    expect(layout.getResolvedColumn('a')?.width).toBe(MAX_COLUMN_WIDTH)
   })
 
   it('applies the column minWidth when it is stricter than the global one', () => {
     const { layout } = setup({ columns: [{ key: 'a', width: 50, minWidth: 200 }] })
 
-    expect(layout.getColumnWidth('a')).toBe(200)
+    expect(layout.getResolvedColumn('a')?.width).toBe(200)
   })
 
   it('applies the column maxWidth when it is stricter than the global one', () => {
     const { layout } = setup({ columns: [{ key: 'a', width: 900, maxWidth: 300 }] })
 
-    expect(layout.getColumnWidth('a')).toBe(300)
+    expect(layout.getResolvedColumn('a')?.width).toBe(300)
   })
 
   it('resolves a contradictory min/max pair in favour of the minimum', () => {
@@ -180,20 +182,20 @@ describe('useColumnLayout — width resolution and clamping', () => {
 
     // Una columna no puede ser más angosta que su propio mínimo: entre dos
     // límites imposibles gana el que garantiza que se pueda agarrar.
-    expect(layout.getColumnWidth('a')).toBe(300)
+    expect(layout.getResolvedColumn('a')?.width).toBe(300)
   })
 
   it('ignores a non-finite runtime width and falls back to the declared one', () => {
     const { layout } = setup({ widths: { a: Number.NaN } })
 
-    expect(layout.getColumnWidth('a')).toBe(100)
+    expect(layout.getResolvedColumn('a')?.width).toBe(100)
   })
 
   it('ignores a non-positive defaultColumnWidth', () => {
     const { layout } = setup({ columns: [{ key: 'a' }], defaultColumnWidth: 0 })
 
     // Cae al valor por defecto del módulo de constantes, 150.
-    expect(layout.getColumnWidth('a')).toBe(150)
+    expect(layout.getResolvedColumn('a')?.width).toBe(150)
   })
 })
 
@@ -208,7 +210,7 @@ describe('useColumnLayout — runtime resize', () => {
     expect(onWidthChange).toHaveBeenCalledExactlyOnceWith('a', 80)
     // El layout no guarda nada: sin que el dueño devuelva el ancho por `widths`,
     // la columna sigue midiendo lo de antes.
-    expect(layout.getColumnWidth('a')).toBe(100)
+    expect(layout.getResolvedColumn('a')?.width).toBe(100)
   })
 
   it('reflects the new width once the owner feeds it back', () => {
@@ -216,7 +218,7 @@ describe('useColumnLayout — runtime resize', () => {
     const applied = layout.setColumnWidth('c', 400)
     widths.value = { c: applied }
 
-    expect(layout.getColumnWidth('c')).toBe(400)
+    expect(layout.getResolvedColumn('c')?.width).toBe(400)
     // Las columnas siguientes se recolocan: `c` medía 200 y ahora mide 400.
     expect(layout.getResolvedColumn('d')?.offset).toBe(550)
   })
@@ -235,7 +237,7 @@ describe('useColumnLayout — runtime resize', () => {
 
     expect(layout.setColumnWidth('b', 220)).toBe(220)
     // Pero sigue sin tener geometría resuelta mientras esté oculta.
-    expect(layout.getColumnWidth('b')).toBeNull()
+    expect(layout.getResolvedColumn('b')).toBeNull()
   })
 })
 
@@ -296,19 +298,18 @@ describe('useColumnLayout — order', () => {
 })
 
 describe('useColumnLayout — lookups', () => {
-  it('returns null for a hidden column', () => {
+  it('returns the same null for a hidden column and for an unknown one', () => {
     const { layout } = setup({ visibility: { b: false } })
 
+    // Los dos casos son indistinguibles desde acá, y es la decisión de diseño
+    // que sostiene todo lo que hay más arriba: para la geometría no hay
+    // diferencia entre "está oculta" y "no existe", porque ninguna de las dos
+    // tiene ancho ni offset que dar. Quien necesita distinguirlas mira
+    // `orderedColumns`, que sí incluye las ocultas.
     expect(layout.getResolvedColumn('b')).toBeNull()
-    expect(layout.getColumnWidth('b')).toBeNull()
-    expect(layout.isColumnVisible('b')).toBe(false)
-  })
-
-  it('returns null for an unknown column', () => {
-    const { layout } = setup()
-
     expect(layout.getResolvedColumn('nope')).toBeNull()
-    expect(layout.isColumnVisible('nope')).toBe(false)
+    expect(layout.orderedColumns.value.some((column) => column.key === 'b')).toBe(true)
+    expect(layout.orderedColumns.value.some((column) => column.key === 'nope')).toBe(false)
   })
 
   it('derives alignment from the renderer unless the column overrides it', () => {

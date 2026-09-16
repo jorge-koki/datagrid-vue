@@ -546,6 +546,30 @@ function selectCell(position: CellPosition | null): void {
  * desplazamiento contra una posición que ya cambió. Escribir el scroll dispara
  * el evento nativo, así que el repintado sigue el camino de siempre y no pelea
  * con el acelerador de rAF.
+ *
+ * ## Los dos ejes son independientes, y es deliberado
+ *
+ * Si la columna no resuelve —está oculta, o la clave es desconocida— el eje
+ * horizontal no se mueve y el VERTICAL SÍ. No es un caso a medio resolver: son
+ * dos coordenadas separadas, y `rowIndex` sigue siendo un número de fila válido
+ * sin importar qué diga `columnKey`. Llevar la fila a la vista es exactamente lo
+ * que se pidió en el eje sobre el que sí había información.
+ *
+ * Lo contrario —cortar y no hacer nada— rompería el caso ordinario de una celda
+ * activa cuya columna el usuario acaba de ocultar: la navegación vertical
+ * dejaría de traer filas a la vista por un motivo que no tiene nada que ver con
+ * el eje vertical.
+ *
+ * ## No acota el índice de fila, y `scrollToRow` sí
+ *
+ * La asimetría es real. `scrollToRow` es un salto absoluto que el consumidor
+ * pide con un número, y acotarlo es lo que convierte un índice fuera de rango en
+ * el borde más cercano en vez de en una posición vacía. `scrollToCell` recibe
+ * una posición de celda que en el camino interno YA viene acotada por
+ * `moveActiveTo`, así que volver a acotarla sería trabajo repetido en cada
+ * flecha. Fuera de rango, el navegador acota la escritura de `scrollTop` contra
+ * la altura real del canvas, de modo que la consecuencia observable es la misma:
+ * la vista se queda en el extremo.
  */
 function scrollToCell(position: CellPosition): void {
   const metrics = scroll.live
@@ -633,6 +657,19 @@ function seedIndexFor(delta: number, count: number): number {
  *
  * `Home` y `End` no pasan por acá justamente porque no son movimientos con
  * sentido sino saltos absolutos: ver el manejador de teclado.
+ *
+ * ## El `Math.max(..., 0)` es una RECUPERACIÓN, y se conserva a propósito
+ *
+ * `activeColumnIndex` vale -1 cuando la columna de la posición activa no
+ * resuelve a ninguna columna pintada: o la clave es desconocida, o el usuario
+ * ocultó la columna donde estaba parado. Ese segundo caso es estado legítimo y
+ * llega por una acción normal del usuario.
+ *
+ * Desde ahí, el acotado a 0 hace que la flecha siguiente reingrese a la grilla
+ * por la primera columna visible en vez de no hacer nada. Convertirlo en un
+ * no-op dejaría al usuario atrapado: sin marca en pantalla y sin ninguna tecla
+ * que lo saque de ahí, la única salida sería el mouse. Un teclado que no
+ * responde es peor accesibilidad que un reingreso predecible.
  */
 function moveActiveBy(rowDelta: number, columnDelta: number): void {
   const current = activeCell.value
@@ -1133,14 +1170,29 @@ function onResizePointerDown(event: PointerEvent, column: ResolvedColumn<TRow>):
 
 /* ------------------------------------------------------------ API imperativa */
 
-/** Scrollea hasta dejar `index` como primera fila visible. */
+/**
+ * Scrollea hasta dejar `index` como primera fila visible.
+ *
+ * ACOTA el índice: fuera de rango se va al borde más cercano, y una fracción se
+ * trunca. Es la asimetría con {@link scrollToCell}, que no acota el suyo; el
+ * porqué está documentado ahí.
+ */
 function scrollToRow(index: number): void {
   const maxIndex = Math.max(0, visibleRowCount.value - 1)
   const clamped = Math.min(Math.max(Math.floor(index), 0), maxIndex)
   scroll.scrollTo({ top: clamped * rowHeight.value })
 }
 
-/** Scrollea hasta dejar la columna en el borde izquierdo. */
+/**
+ * Scrollea hasta dejar la columna en el borde izquierdo.
+ *
+ * No hace nada si la columna está OCULTA o si la clave es DESCONOCIDA. Los dos
+ * casos se tratan igual porque una columna oculta no tiene borde izquierdo al
+ * que llevar la vista, exactamente como una que no existe. El silencio es
+ * intencional: ocultar una columna es una acción normal del usuario —el selector
+ * de columnas, un layout restaurado, `defaultVisible: false`—, y una tabla que
+ * se queja de eso se quejaría durante el uso corriente.
+ */
 function scrollToColumn(key: string): void {
   const resolved = layout.getResolvedColumn(key)
   if (!resolved) return
@@ -1203,6 +1255,15 @@ function flushPersistence(): void {
  * Se diferencia del `selectCell` interno en que además trae la celda a la vista:
  * quien la llama por código —un resultado de búsqueda, un enlace profundo— no
  * tiene forma de saber si esa celda estaba dentro de la ventana.
+ *
+ * ## Con una columna oculta o desconocida
+ *
+ * La posición se GUARDA y se anuncia por `update:activeCell` igual que
+ * cualquier otra, porque es la posición que pidió quien llamó y el componente no
+ * inventa una distinta. Lo que no ocurre es el resto: no se emite `cellSelect`
+ * —no hay columna que reportar—, ninguna celda se pinta activa, y `.dt-root`
+ * informa `data-active-cell="false"`, de modo que el anillo de foco del viewport
+ * sigue disponible como única señal visible.
  */
 function selectCellFromApi(position: CellPosition | null): void {
   selectCell(position)
@@ -1271,20 +1332,46 @@ const canvasStyle = computed(() => ({
 const gridRole = computed(() => (grouping.active.value ? 'treegrid' : 'grid'))
 
 /**
- * Si existe una celda activa, expuesto como atributo para la hoja de estilos.
+ * Si hay una celda activa QUE SE PINTA, expuesto como atributo para la hoja de
+ * estilos.
  *
  * Es lo que suprime el anillo de foco del viewport cuando `focusRing` está
  * encendido: con la celda ya marcada, encerrar además la tabla entera serían dos
  * señales para una sola posición.
  *
+ * ## Por qué mira la columna resuelta y no solo `activeCell`
+ *
+ * La condición que la hoja de estilos necesita no es "hay una posición
+ * guardada", es "hay una marca visible en pantalla". Las dos se separan cuando
+ * la columna de la posición activa no resuelve a ninguna columna pintada, y eso
+ * pasa por dos caminos distintos:
+ *
+ * 1. `selectCell()` recibió por código una clave de columna que no existe.
+ * 2. El usuario ocultó la columna donde estaba parado, con el selector de
+ *    columnas o restaurando un layout guardado.
+ *
+ * En los dos casos `activeColumnIndex` vale -1 y NINGUNA celda se pinta activa.
+ * Reportar `'true'` ahí apagaba el anillo sin poner nada en su lugar: la tabla
+ * quedaba enfocada, el usuario navegando por teclado, y cero señales visuales de
+ * dónde estaba parado. El anillo vuelve justamente porque ahora es la única
+ * señal que queda.
+ *
+ * Nótese que esto NO cambia la selección: la posición sigue guardada y se sigue
+ * anunciando por `update:activeCell`. Lo único que cambia es qué se le dice a la
+ * hoja de estilos, que es la parte que estaba mintiendo.
+ *
+ * ## Sigue sin costar nada por frame
+ *
  * Va como atributo escrito por Vue sobre `.dt-root` y NO como una escritura del
- * pool, y la diferencia es el presupuesto por frame. La condición solo cambia al
- * pasar de "sin selección" a "con selección" y de vuelta; mover la selección de
- * una celda a otra no la mueve. Vue parchea un atributo únicamente cuando su
- * valor cambia, así que recorrer la tabla entera con las flechas no escribe nada
- * acá, y el scroll —que no toca la selección— tampoco.
+ * pool. `activeColumnIndex` es un `computed` que ya existía y que depende de
+ * `activeCell` y de `resolvedColumns`: ninguna de las dos se mueve durante el
+ * scroll, que es el único camino verdaderamente caliente. Cambia al aparecer o
+ * desaparecer la selección, y ahora también al ocultar o mostrar la columna
+ * activa —un cambio de configuración, no un frame—. Vue parchea un atributo
+ * únicamente cuando su valor cambia, así que recorrer la tabla entera con las
+ * flechas sigue sin escribir nada acá.
  */
-const hasActiveCell = computed(() => (activeCell.value !== null ? 'true' : 'false'))
+const hasActiveCell = computed(() => (activeColumnIndex.value >= 0 ? 'true' : 'false'))
 
 function headerAlignClass(column: ResolvedColumn<TRow>): string | undefined {
   if (column.align === 'center') return 'dt-header-cell--center'

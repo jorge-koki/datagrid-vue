@@ -27,6 +27,7 @@ import type {
   CellPosition,
   ColumnResizeEvent,
   DataTableColumn,
+  DataTableInstance,
   DataTableProps,
   EditCommitEvent,
   FlatRow,
@@ -254,6 +255,15 @@ export interface ViewportSize {
 export interface TableHarness {
   wrapper: VueWrapper
   /**
+   * API imperativa del componente, tipada como {@link DataTableInstance}.
+   *
+   * `DataTable` es un SFC genérico y `wrapper.vm` no lleva el tipo de lo que
+   * expuso `defineExpose`, así que sin esto cada test tendría que rebuscar el
+   * método a mano. Ver {@link imperativeApi} para cómo se construye sin
+   * aserciones de tipo.
+   */
+  api: DataTableInstance
+  /**
    * Elemento que lleva el rol de grilla.
    *
    * Es `.dt-root`, o sea la raíz del componente, porque es el único nodo que
@@ -392,6 +402,50 @@ export interface MountTableOptions {
 }
 
 /**
+ * Envuelve lo que expuso `defineExpose` en la forma tipada del contrato público.
+ *
+ * El componente es un SFC genérico: `wrapper.vm` no arrastra el tipo de la API
+ * imperativa, y afirmarlo sería exactamente el tipo de mentira que después tapa
+ * un método que dejó de exponerse. Acá cada miembro se busca en tiempo de
+ * ejecución y falla con un mensaje que nombra al método, mientras que el tipo de
+ * retorno —{@link DataTableInstance}, el mismo que ve el consumidor— obliga a que
+ * el envoltorio siga cubriendo la API entera: si mañana aparece un método nuevo,
+ * este archivo deja de compilar hasta que se lo agregue.
+ */
+function imperativeApi(wrapper: VueWrapper): DataTableInstance {
+  const instance: unknown = wrapper.vm
+  if (typeof instance !== 'object' || instance === null) {
+    throw new Error('[harness] la tabla montada no expuso su instancia')
+  }
+
+  // Arrow function en un `const` y no una declaración `function`: una
+  // declaración se iza al tope del bloque, y para TypeScript eso significa que
+  // se creó ANTES del `typeof` de arriba, con lo cual `instance` volvería a ser
+  // `unknown` dentro del cuerpo. Declarándola después, el estrechamiento a
+  // `object` sobrevive y `Reflect.get` resuelve su firma sin aserciones.
+  const call = (name: keyof DataTableInstance, ...args: unknown[]): void => {
+    const method: unknown = Reflect.get(instance, name)
+    if (typeof method !== 'function') {
+      throw new Error(`[harness] el componente no expuso "${name}"`)
+    }
+    method.call(instance, ...args)
+  }
+
+  return {
+    scrollToRow: (index) => call('scrollToRow', index),
+    scrollToColumn: (key) => call('scrollToColumn', key),
+    scrollToCell: (position) => call('scrollToCell', position),
+    selectCell: (position) => call('selectCell', position),
+    refresh: () => call('refresh'),
+    resetLayout: () => call('resetLayout'),
+    flushPersistence: () => call('flushPersistence'),
+    toggleGroup: (groupId) => call('toggleGroup', groupId),
+    expandAllGroups: () => call('expandAllGroups'),
+    collapseAllGroups: () => call('collapseAllGroups'),
+  }
+}
+
+/**
  * Monta `DataTable` con un viewport de tamaño conocido y el primer frame ya
  * pintado.
  */
@@ -430,6 +484,7 @@ export async function mountTable(options: MountTableOptions): Promise<TableHarne
 
   const harness: TableHarness = {
     wrapper,
+    api: imperativeApi(wrapper),
     grid,
     viewport,
     canvas,

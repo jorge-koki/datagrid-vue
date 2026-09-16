@@ -470,12 +470,20 @@
  * De ahí las dos condiciones:
  *
  * 1. `data-focus-ring` replica la prop `focusRing`, que por defecto es `false`.
- * 2. `data-active-cell` dice si hay una celda marcada. Con una celda activa el
- *    anillo sobra, incluso con `focusRing` encendido.
+ * 2. `data-active-cell` dice si hay una celda MARCADA EN PANTALLA. Con una celda
+ *    marcada el anillo sobra, incluso con `focusRing` encendido.
+ *
+ * La segunda condición es "hay una marca visible", no "hay una posición
+ * guardada", y la diferencia importa: si la columna de la posición activa está
+ * oculta o su clave es desconocida, ninguna celda se pinta activa y el atributo
+ * vuelve a `'false'`. Sin eso, el anillo se apagaba sin poner nada en su lugar y
+ * la tabla quedaba enfocada sin una sola señal de dónde estaba parado el
+ * usuario.
  *
  * Los dos atributos los escribe Vue sobre `.dt-root`, no el pool: cambian al
- * pasar de "sin selección" a "con selección", no al mover la selección de una
- * celda a otra, así que el anillo no cuesta ni una escritura por frame.
+ * pasar de "sin selección" a "con selección" y al ocultar o mostrar la columna
+ * activa, no al mover la selección de una celda a otra ni al scrollear, así que
+ * el anillo no cuesta ni una escritura por frame.
  *
  * El costo de accesibilidad del valor por defecto es real y está documentado en
  * el README: sin celda activa y sin anillo, quien entra a la tabla con Tab no

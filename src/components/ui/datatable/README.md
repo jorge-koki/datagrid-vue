@@ -609,9 +609,10 @@ está parado el usuario y el anillo vuelve a sobrar.
 
 **No cuesta nada por frame.** El anillo se decide enteramente desde CSS, con dos atributos que Vue
 escribe sobre `.dt-root`: `data-focus-ring` replica la prop y `data-active-cell` dice si hay una
-celda marcada. Este segundo solo cambia al pasar de "sin selección" a "con selección" y de vuelta
-—recorrer la tabla entera con las flechas no lo mueve, porque sigue habiendo selección—, así que el
-camino caliente del scroll no lo toca nunca.
+celda marcada en pantalla. Este segundo solo cambia al pasar de "sin selección" a "con selección" y
+de vuelta, o al ocultar o mostrar la columna de la celda activa —recorrer la tabla entera con las
+flechas no lo mueve, porque sigue habiendo selección—, así que el camino caliente del scroll no lo
+toca nunca.
 
 ### Teclas
 
@@ -788,9 +789,9 @@ const table = useTemplateRef<DataTableInstance>('table')
 
 | Método                 | Descripción                                                                                                                           |
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `scrollToRow(index)`   | Desplaza hasta que `index` sea la primera fila completamente visible. Se acota. Con grupos, `index` recorre la secuencia visible.     |
-| `scrollToColumn(key)`  | Desplaza hasta que esa columna quede en el borde izquierdo. No hace nada con una clave desconocida.                                   |
-| `scrollToCell(pos)`    | Desplaza lo mínimo necesario para traer esa celda a la vista. No centra y no mueve la selección.                                      |
+| `scrollToRow(index)`   | Desplaza hasta que `index` sea la primera fila completamente visible. **Acota** el índice. Con grupos recorre la secuencia visible.   |
+| `scrollToColumn(key)`  | Desplaza hasta que esa columna quede en el borde izquierdo. No hace nada si está oculta ni con una clave desconocida.                 |
+| `scrollToCell(pos)`    | Desplaza lo mínimo necesario para traer esa celda a la vista. No centra y no mueve la selección. **No acota** el índice de fila.      |
 | `selectCell(pos)`      | Fija la celda activa, o la limpia con `null`. **Además la trae a la vista**, a diferencia de una selección interna.                   |
 | `refresh()`            | Invalida todos los valores de celda cacheados, rehace el árbol de grupos **y agenda un repintado en el próximo frame**.               |
 | `resetLayout()`        | Descarta el layout guardado y vuelve visibilidad, orden, anchos y agrupación a sus valores por defecto. Es el "restablecer columnas". |
@@ -802,6 +803,35 @@ const table = useTemplateRef<DataTableInstance>('table')
 `selectCell` desplaza y el camino interno de clic y teclado no lo necesita, porque el código que la
 llama —un resultado de búsqueda, un enlace profundo— no tiene forma de saber si esa celda estaba
 dentro de la ventana. Emite `update:activeCell` y `cellSelect` exactamente igual que un clic.
+
+### Qué pasa con una columna oculta y con una desconocida
+
+Los cuatro métodos que reciben una clave de columna la resuelven contra las columnas **visibles**.
+Una columna oculta —por el selector de columnas, por un layout restaurado o por
+`defaultVisible: false`— no resuelve, exactamente igual que una clave que no corresponde a ninguna
+columna declarada. **Los dos casos se comportan idénticamente** y ninguno avisa por consola ni lanza:
+ocultar una columna es una acción normal del usuario, y un método que se quejara de eso se quejaría
+durante el uso corriente.
+
+| Método                 | Columna oculta                                                                                                                                                                   | Clave desconocida |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------- |
+| `scrollToColumn(key)`  | No hace nada.                                                                                                                                                                    | Igual.            |
+| `scrollToCell(pos)`    | **Mueve el eje vertical, no el horizontal.**                                                                                                                                     | Igual.            |
+| `selectCell(pos)`      | Guarda la posición y emite `update:activeCell`, pero no emite `cellSelect`, no pinta ninguna celda y deja `data-active-cell="false"`. Desplaza según la regla de `scrollToCell`. | Igual.            |
+| `toggleGroup(groupId)` | No aplica: recibe un id de grupo, no una clave de columna.                                                                                                                       | —                 |
+
+**Por qué `scrollToCell` mueve un solo eje.** Porque son dos coordenadas independientes. `rowIndex`
+es un número de fila válido sin importar qué diga `columnKey`, así que se resuelve el eje sobre el
+que sí había información y se deja quieto el otro. Cortar del todo sería peor, y no en un caso
+rebuscado: cuando el usuario oculta la columna donde está parado, la navegación vertical dejaría de
+traer filas a la vista por un motivo que no tiene nada que ver con el eje vertical.
+
+**Por qué `scrollToRow` acota y `scrollToCell` no.** La asimetría es real y responde a de dónde viene
+cada índice. `scrollToRow` es un salto absoluto que pide el consumidor con un número suelto, y
+acotarlo convierte un índice fuera de rango en el borde más cercano en vez de en una posición vacía.
+La posición que llega a `scrollToCell` ya viene acotada por el camino de navegación interno, así que
+volver a acotarla sería trabajo repetido en cada flecha. Con un índice fuera de rango, el navegador
+acota la escritura del scroll contra la altura real del canvas y la vista queda en el extremo.
 
 **Cuándo hace falta `refresh()` de verdad.** El caché de pintado se indexa por el valor crudo de la
 celda, así que un valor que cambió se repinta solo, _en el próximo frame que alguien agende_. Los
@@ -2270,7 +2300,7 @@ La selección no introduce ningún token nuevo: se dibuja enteramente con `--dt-
 | `.dt-header-cell--active`          | El header de la columna activa. Fondo acentuado más un subrayado de 2px en `--dt-primary`.                                                                 |
 | `[data-selection]` en `.dt-root`   | Replica `selectionMode` (`none` / `cell` / `row`). La hoja de estilos lo usa para mover el anillo: en modo `'row'` lo recibe la fila y la celda lo pierde. |
 | `[data-focus-ring]` en `.dt-root`  | Replica `focusRing` (`'true'` / `'false'`). Es la primera de las dos condiciones del anillo del viewport.                                                  |
-| `[data-active-cell]` en `.dt-root` | `'true'` mientras hay una celda activa. Es la segunda condición: con una celda marcada, el anillo del viewport se suprime.                                 |
+| `[data-active-cell]` en `.dt-root` | `'true'` mientras hay una celda marcada **en pantalla**. Es la segunda condición: con una celda marcada, el anillo del viewport se suprime.                |
 
 El anillo del viewport sale de una sola regla, y las dos condiciones son literales del selector:
 
@@ -2280,6 +2310,17 @@ El anillo del viewport sale de una sola regla, y las dos condiciones son literal
   outline-offset: -2px;
 }
 ```
+
+**`data-active-cell` dice "hay una marca visible", no "hay una posición guardada".** La diferencia se
+nota cuando la columna de la celda activa no resuelve a ninguna columna pintada: porque el usuario la
+ocultó con el selector de columnas, o porque `selectCell()` recibió por código una clave que no
+existe. En ese estado ninguna celda se pinta activa, así que el atributo vuelve a `'false'` y el
+anillo del viewport reaparece. Es deliberado: con la marca de celda ausente, el anillo es la **única**
+señal que le queda a quien navega por teclado, y suprimirlo dejaría la tabla enfocada sin ninguna
+indicación de dónde está parado el usuario.
+
+La selección en sí no cambia por esto. La posición sigue guardada, se sigue anunciando por
+`update:activeCell`, y volver a mostrar la columna vuelve a pintar la celda y a suprimir el anillo.
 
 El anillo es un `box-shadow: inset`, y no un `border` ni un `outline`. La elección sostiene algo:
 
