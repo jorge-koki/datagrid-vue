@@ -1,0 +1,59 @@
+name: Release
+
+# Publica en npm cuando se empuja un tag `vX.Y.Z`. No corre en `main`: publicar
+# es un acto explícito y el tag es la forma de expresarlo.
+#
+# Requisito único: un secreto `NPM_TOKEN` en el repositorio, con un token de
+# automatización de npm (Settings → Secrets and variables → Actions).
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+  # Necesario para firmar la procedencia del paquete. Es lo que le permite a npm
+  # mostrar desde qué commit y qué workflow salió cada versión publicada.
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          # Escribe el .npmrc que hace que `npm publish` use NODE_AUTH_TOKEN.
+          registry-url: 'https://registry.npmjs.org'
+
+      # El tag y la versión del paquete tienen que decir lo mismo. Publicar
+      # `0.1.0` desde un tag `v0.2.0` deja el repositorio mintiendo para siempre:
+      # el tag queda apuntando a un commit que nunca se publicó con ese número.
+      - name: Tag y versión coinciden
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          pkg="$(node -p "require('./package.json').version")"
+          if [ "$tag" != "$pkg" ]; then
+            echo "El tag $GITHUB_REF_NAME no coincide con la versión $pkg de package.json" >&2
+            exit 1
+          fi
+
+      - name: Install
+        run: npm ci
+
+      # Tipos, tests, formato y build de la librería. `npm publish` volvería a
+      # correr los tipos y los tests por `prepublishOnly`, pero que el filtro
+      # esté acá arriba hace que el log diga qué falló antes de tocar el registro.
+      - name: Verify
+        run: npm run verify
+
+      # `--provenance` exige que el paquete sea público y que el repositorio
+      # también lo sea. En un repositorio privado hay que quitar el flag.
+      - name: Publish
+        run: npm publish --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

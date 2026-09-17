@@ -45,4 +45,10 @@ jobs:
       # El formateo se verifica al final porque un fallo acá no invalida nada de
       # lo anterior: informa una diferencia de estilo, no un error de código.
       - name: Format check
-        run: npx oxfmt --check src/
+        run: npm run format:check
+
+      # Lo que realmente se publica. `npm pack --dry-run` no escribe el tarball
+      # pero imprime su contenido exacto, así que un archivo que se cuele en
+      # `files` —o uno que falte— falla acá y no después de un `npm publish`.
+      - name: Package contents
+        run: npm pack --dry-run
