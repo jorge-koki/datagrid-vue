@@ -22,7 +22,18 @@ import vueDevTools from 'vite-plugin-vue-devtools'
  * Vite fija `NODE_ENV=production` cuando la variable no viene del entorno, sin
  * mirar el modo. La compilación de la librería sale optimizada igual.
  */
-const LIB_ENTRY = fileURLToPath(new URL('./src/components/ui/datatable/index.ts', import.meta.url))
+
+/** La raíz del paquete publicado. `src/` es la librería, nada más. */
+const LIB_ENTRY = fileURLToPath(new URL('./src/index.ts', import.meta.url))
+
+/**
+ * Hoja de estilos de la librería, tal como la resuelve el consumidor.
+ *
+ * Es el mismo archivo que importan los SFC por efecto secundario, así que el
+ * `import '@jorge-koki/datagrid-vue/style.css'` de la demo resuelve al módulo que ya estaba
+ * cargado y no duplica una sola regla.
+ */
+const LIB_STYLE = fileURLToPath(new URL('./src/styles/datatable.css', import.meta.url))
 
 export default defineConfig(({ mode }) => {
   const isLib = mode === 'lib'
@@ -41,8 +52,23 @@ export default defineConfig(({ mode }) => {
         : [vue(), vueJsx(), vueDevTools()],
 
     resolve: {
+      /*
+       * La demo importa la librería POR SU NOMBRE DE PAQUETE, no por una ruta
+       * relativa ni por un alias de conveniencia tipo `@/`. Es deliberado: así
+       * cada archivo de `demo/` está escrito exactamente como lo escribiría una
+       * aplicación que instaló el paquete desde npm, y la demo deja de ser una
+       * pantalla para pasar a ser una prueba de integración de la API pública.
+       * Si algo sale del `index.ts`, la demo no compila.
+       *
+       * El orden importa. Vite hace coincidir una clave de texto cuando el
+       * import es igual a la clave o empieza con la clave más `/`, y se queda
+       * con la primera que coincide: `'@jorge-koki/datagrid-vue'` puesto antes se tragaría
+       * `@jorge-koki/datagrid-vue/style.css` y lo reescribiría como `<index.ts>/style.css`.
+       * La entrada más específica va primero.
+       */
       alias: {
-        '@': fileURLToPath(new URL('./src', import.meta.url)),
+        '@jorge-koki/datagrid-vue/style.css': LIB_STYLE,
+        '@jorge-koki/datagrid-vue': LIB_ENTRY,
       },
     },
 
@@ -90,24 +116,26 @@ export default defineConfig(({ mode }) => {
         },
 
     // La configuración de Vitest vive acá y no en un `vitest.config.ts` aparte
-    // para que la suite resuelva exactamente el mismo alias `@` y la misma
-    // cadena de plugins que compilan la aplicación. Vite ignora esta clave en
-    // `build`, así que ni `vite build` ni `vite build --mode lib` la ven.
+    // para que la suite resuelva exactamente los mismos alias y la misma cadena
+    // de plugins que compilan la aplicación. Vite ignora esta clave en `build`,
+    // así que ni `vite build` ni `vite build --mode lib` la ven.
     test: {
       // `happy-dom` en lugar de `jsdom`: arranca en una fracción del tiempo y
       // esta suite no necesita nada de lo que jsdom implementa de más
       // (navegación, layout, red). Lo que falta —`ResizeObserver` y un
       // `requestAnimationFrame` gobernable— lo provee `__tests__/setup.ts`.
       environment: 'happy-dom',
-      include: ['src/**/__tests__/**/*.test.ts'],
-      setupFiles: ['./src/components/ui/datatable/__tests__/setup.ts'],
+      include: ['src/__tests__/**/*.test.ts'],
+      setupFiles: ['./src/__tests__/setup.ts'],
       // Los tests de rendimiento parchean prototipos del DOM. Restaurar espías
       // y mocks entre tests evita que una suite contamine a la siguiente.
       restoreMocks: true,
       coverage: {
         provider: 'v8',
-        include: ['src/components/ui/datatable/**/*.ts', 'src/components/ui/datatable/**/*.vue'],
-        exclude: ['src/components/ui/datatable/__tests__/**'],
+        // La cobertura mide la librería. `demo/` es la pantalla de ejemplo y no
+        // forma parte de lo que se publica.
+        include: ['src/**/*.ts', 'src/**/*.vue'],
+        exclude: ['src/__tests__/**'],
       },
     },
   }

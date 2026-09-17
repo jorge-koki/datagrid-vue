@@ -1,0 +1,1950 @@
+/*
+ * Estilos del DataTable.
+ *
+ * ## Contrato de tokens
+ *
+ * Cada color se declara como `var(--ui-*, <fallback>)`. Si la aplicación
+ * anfitriona define los tokens de NuxtUI v3, la tabla los adopta sin
+ * configuración; si no existen, el fallback la deja presentable por sí sola. La
+ * indirección extra `--dt-*` permite además que un consumidor sobrescriba un
+ * solo token de la tabla sin tocar el tema global.
+ *
+ * ## Quién manda sobre la altura de fila
+ *
+ * `--dt-row-height` aparece aquí con un valor por defecto, pero el componente lo
+ * escribe inline sobre `.dt-root` a partir de la prop `rowHeight`. Es
+ * deliberado: el virtualizador divide el scroll por la altura de fila en cada
+ * frame, y leer ese número desde CSS obligaría a un `getComputedStyle` por
+ * frame, que fuerza layout. La prop es la fuente de verdad y el CSS es su
+ * espejo, nunca al revés. Lo mismo aplica a `--dt-header-height`.
+ */
+
+.dt-root {
+  /* Superficies */
+  --dt-bg: var(--ui-bg, #ffffff);
+  --dt-bg-muted: var(--ui-bg-muted, #f9fafb);
+  --dt-bg-elevated: var(--ui-bg-elevated, #f3f4f6);
+  --dt-bg-accented: var(--ui-bg-accented, #e5e7eb);
+
+  /* Bordes */
+  --dt-border: var(--ui-border, #e5e7eb);
+  --dt-border-accented: var(--ui-border-accented, #d1d5db);
+
+  /* Texto */
+  --dt-text: var(--ui-text, #111827);
+  --dt-text-muted: var(--ui-text-muted, #6b7280);
+  --dt-text-dimmed: var(--ui-text-dimmed, #9ca3af);
+
+  /* Acento */
+  --dt-primary: var(--ui-primary, #00c16a);
+  --dt-radius: var(--ui-radius, 0.375rem);
+
+  /*
+   * Color al que viaja la línea que confirma un copiado. Ver `.dt-copy-flash`.
+   *
+   * Vive acá, entre los tokens de la raíz, y no adentro de la regla que lo usa,
+   * porque es el único lugar desde donde se puede elegir POR TEMA: los
+   * selectores de tema apuntan a `.dt-root`, así que un consumidor escribe
+   * `.dt-root[data-theme='light'] { --dt-copy-flash-color: #111827 }` y listo.
+   *
+   * El bloque de tema oscuro NO lo redefine, a propósito: el valor por defecto
+   * es blanco en los dos temas. Sobre oscuro es el contraste máximo contra el
+   * acento; sobre claro coincide con el fondo, así que ahí la línea se apaga
+   * medio segundo en vez de encenderse —sigue siendo una confirmación, más
+   * sutil—, y quien quiera lo contrario lo cambia con la línea de arriba.
+   */
+  --dt-copy-flash-color: #ffffff;
+
+  /*
+   * Paleta de estados, para `CellOption.color`.
+   *
+   * Los valores son los del TEMA CLARO: pensados como texto saturado sobre un
+   * fondo teñido claro. El bloque de tema oscuro los redefine con versiones más
+   * luminosas, porque el mismo azul que contrasta sobre blanco desaparece sobre
+   * gris oscuro. Al ser tokens, un consumidor cambia toda la paleta —badges,
+   * avatares y anillos de progreso— desde un solo lugar.
+   */
+  --dt-color-blue: #1d4ed8;
+  --dt-color-red: #b91c1c;
+  --dt-color-amber: #b45309;
+  --dt-color-green: #15803d;
+  --dt-color-purple: #7e22ce;
+  --dt-color-neutral: #4b5563;
+
+  /*
+   * Cuánto del color de acento se usa como fondo.
+   *
+   * Se eligió FONDO TEÑIDO con texto saturado, y no relleno sólido con texto
+   * blanco, por una razón concreta: con relleno sólido habría que garantizar
+   * contraste del texto contra seis colores distintos y contra los que aporte el
+   * consumidor, lo que en la práctica obliga a calcular luminancia. Con fondo
+   * teñido el texto conserva el color de acento —que ya se eligió legible sobre
+   * el fondo del tema— y el tinte nunca lo tapa.
+   */
+  --dt-tint-strength: 14%;
+
+  /* Métricas. El componente sobrescribe las dos alturas inline. */
+  --dt-row-height: 40px;
+  --dt-header-height: 44px;
+  --dt-font-size: 0.875rem;
+  --dt-cell-px: 0.75rem;
+  /* Sangría que suma cada nivel de anidamiento en una cabecera de grupo. */
+  --dt-group-indent: 16px;
+
+  /*
+   * Radio de la caja exterior, separado de `--dt-radius`.
+   *
+   * Son dos cosas distintas: `--dt-radius` es el radio del TEMA, el que llevan
+   * los controles de edición, las píldoras y el panel del selector; este es el
+   * de la tabla como caja. Compartirlos obligaba a elegir entre una tabla
+   * cuadrada con píldoras cuadradas o ninguna de las dos.
+   *
+   * Recto por defecto: una grilla casi siempre va adentro de un panel que ya
+   * tiene su propio redondeo, y dos radios distintos a pocos píxeles uno del
+   * otro se leen como un error de alineación. La prop `radiusBorder` escribe el
+   * atributo que lo cambia, más abajo.
+   */
+  --dt-root-radius: 0;
+
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--dt-border);
+  border-radius: var(--dt-root-radius);
+  background: var(--dt-bg);
+  color: var(--dt-text);
+  font-size: var(--dt-font-size);
+  line-height: 1.4;
+  /*
+   * La grilla NO selecciona texto. Nunca.
+   *
+   * Arrastrar sobre una tabla significa "seleccionar estas celdas", igual que en
+   * cualquier planilla, y la selección de texto del navegador competía por el
+   * mismo gesto: pintaba media tabla de azul, se llevaba el arrastre puesto y,
+   * al copiar, mandaba al portapapeles el texto suelto de los nodos que
+   * tocó —incluidas las etiquetas de las cabeceras de grupo— en vez de las
+   * celdas seleccionadas.
+   *
+   * Apagarla arregla además un destello que parecía otra cosa: el doble clic que
+   * abre el editor seleccionaba de paso la palabra bajo el puntero, así que la
+   * celda pegaba un fogonazo azul un instante antes de que el `<input>` tomara
+   * el foco. Ese destello no era del editor; era esta selección.
+   *
+   * Los controles de edición la recuperan más abajo: ahí adentro seleccionar
+   * texto es exactamente lo que corresponde.
+   */
+  user-select: none;
+  /*
+   * `contain: layout style` aísla el subárbol: un cambio dentro de la tabla no
+   * puede invalidar el layout del documento que la contiene, así que el
+   * navegador recalcula solo esta caja durante el scroll.
+   */
+  contain: layout style;
+}
+
+/*
+ * `hidden` apaga un nodo. Siempre, y sin excepciones.
+ *
+ * ## Por qué hace falta declararlo
+ *
+ * `hidden` es el ÚNICO mecanismo con el que el componente apaga una estructura
+ * que sigue viva: las filas y celdas sobrantes del pool, la cabecera de grupo de
+ * un nodo que ahora muestra datos, las celdas de un nodo que ahora muestra una
+ * cabecera, las píldoras sobrantes del renderer `tags`, la imagen de un avatar
+ * sin `src`, los controles de edición cerrados. Nunca se saca nada del DOM: ver
+ * `internal/dom.ts`.
+ *
+ * Ese mecanismo se apoyaba en `[hidden] { display: none }`, que NO es una regla
+ * de esta hoja: vive en la hoja del navegador. Y una declaración de autor le gana
+ * a una del navegador por ORIGEN, antes de que la especificidad llegue a
+ * intervenir. Así que toda clase de acá que declare `display` —`.dt-group-header`
+ * es flex, `.dt-cell--box` es flex, `.dt-badge` y `.dt-tag` son inline-block—
+ * dejaba a `hidden` sin ningún efecto sobre los nodos que la llevan.
+ *
+ * El resultado era exactamente el reporte: un nodo reciclado pintando las DOS
+ * estructuras encima, la etiqueta del último grupo que mostró superpuesta a los
+ * datos de la fila que muestra ahora, o los avatares y badges de la última fila
+ * superpuestos a una cabecera de grupo. Solo se veía en un navegador de verdad y
+ * solo en las columnas cuyo renderer declara el modo caja, porque `.dt-cell` a
+ * secas no declara `display` y ahí `hidden` alcanzaba.
+ *
+ * ## Por qué una sola regla y no una excepción por clase
+ *
+ * `.dt-group-header[hidden]` habría tapado el síntoma reportado y dejado en pie
+ * los otros tres, más el próximo: la clase que alguien agregue mañana con un
+ * `display` adentro vuelve a romper el mismo invariante, en silencio y sin que
+ * ningún test lo note. Declarado una vez para todo el subárbol, no hay clase que
+ * auditar ni orden de reglas que respetar.
+ *
+ * `!important` es lo que lo vuelve incondicional. Por especificidad esta regla ya
+ * le gana a todo lo que hay hoy en la hoja, pero eso es una propiedad del estado
+ * actual y no una garantía: un selector compuesto futuro la empataría o la
+ * superaría. Con `!important` la garantía deja de depender de qué se escriba
+ * después.
+ *
+ * Queda acotada al subárbol del componente a propósito: es el alcance exacto de
+ * lo que la librería apaga, y así una librería no le impone una regla global a la
+ * página que la usa.
+ */
+.dt-root [hidden] {
+  display: none !important;
+}
+
+/* ------------------------------------------------------- Redondeo exterior */
+
+/*
+ * Los cuatro pasos de `radiusBorder`. `none` es el valor de la regla de arriba,
+ * así que no necesita el suyo.
+ *
+ * `md` no es un número sino el radio del TEMA: una aplicación que define
+ * `--ui-radius` para el resto de su interfaz pide `md` y la tabla la acompaña
+ * sin repetir el valor. Los otros tres son pasos fijos, para cuando la tabla
+ * tiene que verse distinta del resto a propósito.
+ */
+.dt-root[data-radius='sm'] {
+  --dt-root-radius: 0.25rem;
+}
+
+.dt-root[data-radius='md'] {
+  --dt-root-radius: var(--dt-radius);
+}
+
+.dt-root[data-radius='lg'] {
+  --dt-root-radius: 0.5rem;
+}
+
+.dt-root[data-radius='xl'] {
+  --dt-root-radius: 0.75rem;
+}
+
+/* ------------------------------------------------------------------ Header */
+
+/*
+ * El encabezado.
+ *
+ * ## Por qué vive DENTRO del viewport
+ *
+ * Porque así el scroll horizontal lo mueve el navegador, gratis y sin retraso, y
+ * `position: sticky` lo deja pegado arriba mientras el cuerpo pasa por debajo.
+ *
+ * Afuera —que es donde estuvo— había que espejarle el `scrollLeft` con un
+ * `transform` escrito en el `requestAnimationFrame`, y eso llega tarde por
+ * construcción: el navegador compone el frame con el desplazamiento nuevo antes
+ * de que el hilo principal alcance a escribir el espejo. Medido frame compuesto
+ * por frame compuesto, el encabezado iba UNO por detrás del cuerpo en la mitad de
+ * ellos: una columna y su título se despegaban durante el scroll rápido.
+ *
+ * Su alto entra en el contenido desplazable, así que todo lo que traduzca entre
+ * scroll y filas lo descuenta —ver `rowViewportHeight` en el componente— y el
+ * canvas arranca justo debajo.
+ *
+ * La línea inferior va por `box-shadow` y no por `border`: un borde sumaría 1px
+ * al alto de la caja y dejaría al canvas corrido ese píxel respecto de la
+ * regleta, que se ubica sola por el flujo.
+ */
+.dt-header {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  height: var(--dt-header-height);
+  box-shadow: inset 0 -1px 0 var(--dt-border);
+  background: var(--dt-bg-elevated);
+}
+
+/*
+ * La fila de encabezado: un `flex` que pone la esquina y las tres tiras una al
+ * lado de la otra, cada una con su ancho exacto. La suma de los cuatro es el
+ * ancho total de la tabla, así que las posiciones siguen saliendo de
+ * `column.offset` y no de una medición aparte.
+ */
+.dt-header-row {
+  position: relative;
+  display: flex;
+  height: 100%;
+}
+
+/* La tira que scrollea. No lleva nada especial: se deja llevar. */
+.dt-header-inner {
+  position: relative;
+  flex: 0 0 auto;
+  height: 100%;
+}
+
+/*
+ * Las tiras de columnas ancladas.
+ *
+ * Se quedan quietas con `position: sticky`, igual que los carriles del cuerpo y
+ * por la misma razón: quien las sostiene es el compositor, así que no pueden ir
+ * un frame por detrás de lo que están compensando.
+ *
+ * `overflow: hidden` las recorta contra su propio ancho: sin eso, una celda más
+ * ancha que su tira asomaría por encima de las que scrollean.
+ */
+.dt-header-pinned {
+  position: sticky;
+  z-index: 1;
+  flex: 0 0 auto;
+  height: 100%;
+  overflow: hidden;
+  background: var(--dt-bg-elevated);
+}
+
+/* Se pega donde termina la regleta, que ya ocupa ese borde. */
+.dt-header-pinned--start {
+  left: var(--dt-row-number-width, 0px);
+}
+
+.dt-header-pinned--end {
+  right: 0;
+}
+
+/*
+ * El CORTE: la línea donde termina lo anclado y empieza lo que scrollea.
+ *
+ * Es lo único que distingue a una columna anclada de una cualquiera, así que se
+ * dibuja al doble del grosor de una separación de celda. Va sobre la ÚLTIMA
+ * columna del bloque del inicio y sobre la PRIMERA del bloque del final: son las
+ * dos caras del mismo corte.
+ *
+ * Se dibuja con un pseudoelemento y no con un `border` porque un borde cambia la
+ * caja: en el encabezado ensancharía la tira y correría al resto del `flex`, y en
+ * el cuerpo se comería dos píxeles del texto de la celda. Acá la línea se
+ * superpone y no le mueve nada a nadie.
+ */
+.dt-header-pinned--start::after,
+.dt-header-pinned--end::before,
+.dt-cell--pinned-edge::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--dt-border-accented);
+  pointer-events: none;
+}
+
+.dt-header-pinned--start::after,
+.dt-pinned-lane--start .dt-cell--pinned-edge::after {
+  right: 0;
+}
+
+.dt-header-pinned--end::before,
+.dt-pinned-lane--end .dt-cell--pinned-edge::after {
+  right: auto;
+  left: 0;
+}
+
+/* Sin columnas ancladas la tira mide cero: la línea sería un palito suelto. */
+.dt-header-pinned:empty::after,
+.dt-header-pinned:empty::before {
+  content: none;
+}
+
+.dt-header-cell {
+  position: absolute;
+  top: 0;
+  left: 0;
+  box-sizing: border-box;
+  height: 100%;
+  padding: 0 var(--dt-cell-px);
+  overflow: hidden;
+  color: var(--dt-text);
+  font-weight: 600;
+  line-height: var(--dt-header-height);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/*
+ * Encabezado de una columna alcanzada por el rango.
+ *
+ * Es lo que vuelve legible una selección de columnas enteras: el rectángulo
+ * puede quedar íntegramente fuera de la pantalla —una columna de 50.000 filas no
+ * entra en ningún viewport— y el encabezado seguir a la vista. Sin esta marca,
+ * seleccionar una columna y scrollear hasta el medio de la tabla no dejaría
+ * ninguna señal de qué está seleccionado.
+ *
+ * Va ANTES que `--active` a propósito: las dos tienen la misma especificidad y
+ * una columna seleccionada entera es además la columna activa, así que el orden
+ * es lo único que decide. Gana "acá estás", que es la información más precisa.
+ */
+.dt-header-cell--range {
+  background: color-mix(in srgb, var(--dt-primary) 16%, transparent);
+  color: var(--dt-text);
+}
+
+/*
+ * Header de la columna activa.
+ *
+ * Existe para que el usuario sepa en qué columna está sin tener que apartar la
+ * vista de la fila donde está trabajando. En una tabla ancha, con el header
+ * fijo, es la única referencia que queda.
+ */
+.dt-header-cell--active {
+  background: var(--dt-bg-accented);
+  color: var(--dt-text);
+  box-shadow: inset 0 -2px 0 0 var(--dt-primary);
+}
+
+/* Con la selección por encabezado encendida, el título es accionable y tiene que
+   parecerlo. El handle de redimensionado conserva su propio cursor. */
+.dt-root[data-select-columns='true'] .dt-header-cell {
+  cursor: pointer;
+}
+
+/*
+ * Con las columnas móviles, el cursor de "esto se agarra y se lleva".
+ *
+ * `move` gana sobre el `pointer` de la selección por orden, y es lo correcto:
+ * mover es el gesto que el usuario puede descubrir solo, y el que necesita que
+ * se lo anuncien antes de apretar. La columna anclada vuelve al cursor normal,
+ * así que la diferencia se ve sin tener que intentarlo.
+ */
+.dt-root[data-reorder='true'] .dt-header-cell {
+  cursor: move;
+}
+
+.dt-root[data-reorder='true'] .dt-header-cell--fixed {
+  cursor: default;
+}
+
+/* La columna en vuelo se atenúa: deja de ser el lugar donde está y pasa a ser lo
+   que se está moviendo. */
+.dt-header-cell--dragging {
+  opacity: 0.4;
+}
+
+/*
+ * Línea de caída.
+ *
+ * Atraviesa el header y el cuerpo de una sola pieza, porque lo que anuncia es
+ * dónde va a quedar la COLUMNA, no dónde va a quedar su título. Aparece solo
+ * cuando soltar ahí produciría un cambio: su presencia ya responde "¿esto sirve
+ * de algo?" antes de soltar.
+ */
+.dt-drop-indicator {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 3;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--dt-primary);
+  pointer-events: none;
+  will-change: transform;
+}
+
+/* Las dos puntas, para que la línea se lea como un cursor de inserción y no como
+   un borde de columna más. */
+.dt-drop-indicator::before,
+.dt-drop-indicator::after {
+  content: '';
+  position: absolute;
+  left: -3px;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--dt-primary);
+}
+
+.dt-drop-indicator::before {
+  top: 0;
+}
+
+.dt-drop-indicator::after {
+  bottom: 0;
+}
+
+.dt-header-cell--center {
+  text-align: center;
+}
+
+.dt-header-cell--right {
+  text-align: right;
+}
+
+.dt-header-label {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.dt-resize-handle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 1;
+  width: 9px;
+  height: 100%;
+  cursor: col-resize;
+  /* Sin esto el navegador interpreta el arrastre como scroll táctil. */
+  touch-action: none;
+  user-select: none;
+}
+
+.dt-resize-handle::after {
+  content: '';
+  position: absolute;
+  top: 25%;
+  right: 4px;
+  width: 1px;
+  height: 50%;
+  background: var(--dt-border-accented);
+  transition:
+    background-color 120ms ease,
+    width 120ms ease;
+}
+
+.dt-resize-handle:hover::after,
+.dt-resize-handle:active::after {
+  width: 2px;
+  height: 100%;
+  top: 0;
+  background: var(--dt-primary);
+}
+
+/* ---------------------------------------------------------------- Viewport */
+
+.dt-viewport {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  outline: none;
+  /* Barra de scroll acorde al tema en Firefox. */
+  scrollbar-width: thin;
+  scrollbar-color: var(--dt-border-accented) transparent;
+}
+
+.dt-viewport::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.dt-viewport::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.dt-viewport::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: var(--dt-border-accented);
+  background-clip: content-box;
+}
+
+.dt-viewport::-webkit-scrollbar-thumb:hover {
+  background: var(--dt-text-dimmed);
+  background-clip: content-box;
+}
+
+.dt-viewport::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/*
+ * El canvas existe únicamente para dar tamaño a la barra de scroll nativa:
+ * ancho total de columnas por alto total de filas. Nunca contiene todas las
+ * filas, solo las del pool.
+ *
+ * Va ABSOLUTO y no en el flujo, y no es un detalle: un elemento absoluto sigue
+ * contando para el área desplazable —que es todo lo que se le pide— pero deja el
+ * flujo del viewport libre para el encabezado y la regleta de numeración, que
+ * necesitan estar EN el flujo para poder ser `position: sticky`.
+ *
+ * Arranca debajo del encabezado, que es lo primero del flujo y ocupa alto real.
+ * La regleta llega ahí sola, porque el flujo la pone justo después.
+ */
+.dt-canvas {
+  position: absolute;
+  top: var(--dt-header-height);
+  left: 0;
+}
+
+/* ------------------------------------------------- Regleta de numeración */
+
+/*
+ * El carril de los números y la esquina que lo corona.
+ *
+ * ## Por qué no es una columna
+ *
+ * Porque entonces habría que excluirla a mano de todo: de la selección, del
+ * copiado, del reordenamiento, del selector de columnas, de la navegación con
+ * flechas, del `aria-colcount`. Cada una de esas exclusiones es una oportunidad
+ * de olvidarse de una. Como carril aparte no participa de nada de eso por
+ * construcción: no hay nada que excluir.
+ *
+ * ## Cómo queda fija
+ *
+ * Vive DENTRO del viewport que scrollea, así que el scroll vertical la mueve
+ * sola —que es justo lo que se quiere— y el horizontal lo cancela
+ * `position: sticky`. Cero escrituras por frame, y lo más importante: quien la
+ * sostiene es el COMPOSITOR.
+ *
+ * Compensarlo desde JS —que es lo que hacía antes, con un `transform` de signo
+ * contrario dentro del `requestAnimationFrame`— no puede funcionar bien, y no
+ * por estar mal escrito: el navegador scrollea en el hilo del compositor y
+ * compone el frame con el desplazamiento nuevo ANTES de que el hilo principal
+ * alcance a escribir la compensación. El resultado, medido frame a frame en el
+ * navegador, era que uno de cada dos frames compuestos mostraba la regleta
+ * corrida el delta entero del scroll y el siguiente la devolvía a su lugar.
+ *
+ * El ancho se lo reserva el layout corriendo el offset de todas las columnas,
+ * así que nada queda debajo.
+ */
+.dt-gutter {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  width: var(--dt-row-number-width);
+  overflow: hidden;
+  border-right: 1px solid var(--dt-border);
+  background: var(--dt-bg-muted);
+}
+
+/*
+ * La esquina que corona la regleta.
+ *
+ * Primer tramo del `flex` de la fila de encabezado: además de tapar las celdas
+ * que pasan por debajo, le reserva a la regleta su ancho, de modo que la tira
+ * anclada que sigue arranca exactamente donde termina la numeración. Se queda
+ * quieta con `sticky`, como todo lo demás que no debe moverse.
+ */
+.dt-corner {
+  position: sticky;
+  left: 0;
+  /* Por encima de las celdas de header, que pasan por debajo al scrollear. */
+  z-index: 2;
+  flex: 0 0 auto;
+  width: var(--dt-row-number-width);
+  height: 100%;
+  border-right: 1px solid var(--dt-border);
+  background: var(--dt-bg-elevated);
+}
+
+.dt-row-number {
+  position: absolute;
+  top: 0;
+  left: 0;
+  box-sizing: border-box;
+  width: 100%;
+  height: var(--dt-row-height);
+  padding: 0 calc(var(--dt-cell-px) * 0.5);
+  overflow: hidden;
+  color: var(--dt-text-dimmed);
+  font-size: 0.8125em;
+  line-height: var(--dt-row-height);
+  text-align: center;
+  white-space: nowrap;
+  /* Los dígitos de ancho fijo evitan que la columna "baile" al scrollear. */
+  font-variant-numeric: tabular-nums;
+  will-change: transform;
+}
+
+/*
+ * Número de una fila alcanzada por el rango.
+ *
+ * El gemelo de `.dt-header-cell--range`, en el otro eje: con la tabla corrida en
+ * horizontal, la regleta puede ser lo único visible de las filas seleccionadas.
+ * Se declara antes que `--active` por la misma razón de orden.
+ */
+.dt-row-number--range {
+  background: color-mix(in srgb, var(--dt-primary) 16%, transparent);
+  color: var(--dt-text);
+}
+
+/* Con la selección por fila encendida, el número es accionable. */
+.dt-root[data-select-rows='true'] .dt-row-number {
+  cursor: pointer;
+}
+
+/*
+ * El número de la fila activa.
+ *
+ * Es la misma información que da el realce de la fila, pero sobrevive al scroll
+ * horizontal: con la tabla corrida, la regleta puede ser lo único visible de la
+ * fila donde uno está parado.
+ */
+.dt-row-number--active {
+  background: var(--dt-bg-accented);
+  color: var(--dt-text);
+  font-weight: 600;
+}
+
+/* -------------------------------------------------------------- Filas y celdas */
+
+/*
+ * El ANCHO de la fila no está acá: lo escribe el pool, con el ancho total de la
+ * tabla, porque es el único que lo conoce. No es decoración: la fila es el
+ * bloque contenedor de los carriles anclados, y `position: sticky` no puede
+ * correrse más allá de él. Ver `.dt-pinned-lane`.
+ */
+.dt-row {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: var(--dt-row-height);
+  /*
+   * La fila NO PINTA. Solo declara de qué color es.
+   *
+   * `--dt-row-bg` es el color que le tocaría a esta fila —normal, rayado, activo,
+   * cabecera de grupo— y lo leen las piezas que sí necesitan taparlo todo: la
+   * celda de una columna anclada y el agregado de un grupo. La fila en sí queda
+   * transparente, así que darle un fondo, una raya o un borde jamás cambia lo que
+   * se ve a lo ancho de la tabla.
+   *
+   * Es deliberado y es lo que se veía antes: la fila no tenía ancho propio, así
+   * que ninguna de esas reglas llegaba a dibujar nada. Al dárselo —lo necesita
+   * para sostener los carriles anclados— todas se habrían encendido de golpe.
+   * Separar "de qué color soy" de "yo pinto" deja el ancho donde hace falta sin
+   * arrastrar decoración que nadie pidió.
+   */
+  --dt-row-bg: var(--dt-bg);
+  /*
+   * `will-change: transform` promueve la fila a su propia capa para que
+   * moverla no repinte a las vecinas. `contain: layout style` impide que un
+   * cambio dentro de una celda escale a un recálculo de toda la tabla.
+   */
+  will-change: transform;
+  contain: layout style;
+}
+
+/* Fila que contiene la celda activa. */
+.dt-row--active {
+  --dt-row-bg: var(--dt-bg-accented);
+}
+
+.dt-cell {
+  position: absolute;
+  top: 0;
+  left: 0;
+  box-sizing: border-box;
+  height: var(--dt-row-height);
+  padding: 0 var(--dt-cell-px);
+  overflow: hidden;
+  outline: none;
+  /*
+   * Centrado vertical por `line-height` y no por flex: `text-overflow: ellipsis`
+   * no se aplica al texto anónimo dentro de un contenedor flex, y el recorte con
+   * puntos suspensivos es justamente lo que se necesita en una celda de ancho
+   * fijo.
+   *
+   * Esto es correcto PARA TEXTO y solo para texto. Una celda cuyo contenido es
+   * una caja —un badge, un avatar, un anillo— declara el modo `box` y se lleva
+   * el bloque de abajo. Ver `.dt-cell--box`.
+   */
+  line-height: var(--dt-row-height);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/*
+ * Celda cuyo contenido es una caja estructurada y no texto suelto.
+ *
+ * ## Qué estaba mal
+ *
+ * El centrado por `line-height` de arriba centra el TEXTO. Una caja en línea no
+ * se ubica igual: `vertical-align: middle` no apunta al centro geométrico de la
+ * caja de línea sino a la línea base más media altura de x. Con la altura de
+ * línea puesta en la altura de fila y una tipografía de 14px esos dos puntos no
+ * coinciden —la diferencia son uno o dos píxeles, según la métrica de la fuente
+ * del anfitrión— y toda caja estructurada quedaba sistemáticamente más abajo de
+ * lo que debía, mientras el texto plano se veía perfecto.
+ *
+ * En `tags` el error se aplicaba DOS veces: la lista heredaba la altura de línea
+ * de la fila, así que el desfase entraba una vez al ubicar la lista dentro de la
+ * celda y otra al ubicar cada píldora dentro de la lista.
+ *
+ * ## Por qué acá sí se puede usar flex
+ *
+ * La objeción que impide usarlo en `.dt-cell` es el recorte con puntos
+ * suspensivos del texto anónimo, y en modo caja no hay texto anónimo: el
+ * renderer siempre construye un elemento, y ese elemento recorta por su cuenta.
+ * `align-items: center` centra contra el centro geométrico de la caja, que es lo
+ * que se quería desde el principio, y lo hace bien con cualquier altura de fila,
+ * `dense` incluido.
+ *
+ * `line-height: normal` deshace la altura de línea del tamaño de la fila para
+ * los descendientes: heredada, volvería a inflar cualquier caja interna.
+ */
+.dt-cell--box {
+  display: flex;
+  align-items: center;
+  line-height: normal;
+}
+
+/*
+ * Carril de las columnas ANCLADAS de una fila.
+ *
+ * Es una caja de tamaño cero que no dibuja nada. Todo lo que hace es quedarse
+ * quieta mientras la fila scrollea por debajo, y de eso se encarga el
+ * COMPOSITOR: `position: sticky` no cuesta una sola línea de JS por frame, y —lo
+ * que importa más— no puede llegar tarde. La alternativa, correr cada celda
+ * anclada por el scroll dentro del `requestAnimationFrame`, se compone un frame
+ * después del desplazamiento que intenta compensar, y eso se ve: medido en el
+ * navegador, uno de cada dos frames mostraba la columna anclada corrida el delta
+ * entero del scroll, y el siguiente la devolvía de un salto.
+ *
+ * `width: 0; height: 0` es lo que lo vuelve invisible para el layout: está en el
+ * flujo de la fila —condición para poder ser `sticky`— pero no le ocupa ni un
+ * píxel. Las celdas cuelgan de él como absolutas, igual que de la fila.
+ *
+ * `z-index` lo levanta por encima de las celdas que scrollean, que tienen que
+ * pasar POR DEBAJO. Fondo no lleva: no pinta nada, y el color de la fila llega a
+ * sus celdas por herencia de `--dt-row-bg`.
+ */
+.dt-pinned-lane {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  width: 0;
+  height: 0;
+}
+
+/*
+ * El carril del final se ancla al borde DERECHO.
+ *
+ * `margin-left: auto` sobre una caja de ancho cero la empuja hasta el final de
+ * la fila, y `right: 0` la trae desde ahí hasta el borde del viewport. Los dos
+ * juntos dan el comportamiento completo sin una sola medida: pegada al borde
+ * mientras haya scroll horizontal, y quieta donde termina el contenido cuando la
+ * tabla entera entra en pantalla —porque ahí su posición natural ya está dentro
+ * del viewport y `sticky` no la corre—.
+ */
+.dt-pinned-lane--end {
+  left: auto;
+  right: 0;
+  margin-left: auto;
+}
+
+/*
+ * Celda de una columna ANCLADA.
+ *
+ * `--dt-row-bg` es el color de SU fila —normal, rayado, activo— y acá es lo que
+ * la vuelve opaca. Sin eso, las celdas que pasan por debajo se verían a través.
+ * Se toma como token y no con `background: inherit` porque la fila no pinta: el
+ * color viaja por herencia hasta acá, que es el único lugar que lo necesita.
+ *
+ * El tinte del rango no puede vivir en `background-color` por esto mismo: es
+ * semitransparente, y sobre una celda anclada dejaría ver lo que pasa debajo.
+ * Por eso `.dt-cell--range` pinta con una capa de imagen y deja el color de
+ * fondo intacto, que es lo que las dos clases necesitan a la vez.
+ */
+.dt-cell--pinned {
+  background: var(--dt-row-bg);
+}
+
+/* -------------------------------------------------- Marcadores de carga */
+
+/*
+ * Una fila que la tabla sabe que existe pero cuyos datos todavía no llegaron.
+ *
+ * Solo aparece en modo servidor —con `rowCount` declarado—. Fuera de ahí un
+ * hueco en `rows` significa que la fila no existe, y la fila se retira.
+ *
+ * Se pinta una barra por celda, en la posición exacta de SU columna, y no una
+ * franja gris a lo ancho de la fila. La diferencia no es estética: una franja no
+ * se corresponde con nada del encabezado y se lee como un error de pintado,
+ * mientras que las barras alineadas se leen como lo que son, las mismas columnas
+ * esperando su contenido.
+ */
+.dt-row--placeholder .dt-row-number {
+  color: var(--dt-text-dimmed);
+  opacity: 0.45;
+}
+
+/*
+ * La barra va en `::before` y NO en `::after`, y no es indistinto: `::after` de
+ * una celda ya está tomado por `.dt-cell--pinned-edge`, que es la línea de 2px
+ * que marca el corte entre lo anclado y lo que scrollea. Compartiendo
+ * pseudoelemento, la celda del corte mostraba el corte y se comía su barra.
+ */
+.dt-cell--placeholder::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: var(--dt-cell-px);
+  /* Deja libre el padding de los dos lados, igual que haría el texto. */
+  right: var(--dt-cell-px);
+  height: 0.75em;
+  transform: translateY(-50%);
+  border-radius: 0.25rem;
+  background: var(--dt-bg-accented);
+  /*
+   * El latido es la única señal de que esto es un estado transitorio y no una
+   * celda vacía de verdad. Es una animación de `opacity`: la resuelve el
+   * compositor sin volver a pintar nada, así que decenas de barras a la vez no
+   * le cuestan un frame al scroll.
+   */
+  animation: dt-placeholder-pulse 1.2s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes dt-placeholder-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+/*
+ * Quien prefiere no ver movimiento ve la barra quieta, no ve otra cosa. Apagar
+ * la animación no le quita ninguna información: el color apagado ya dice que la
+ * celda está esperando.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .dt-cell--placeholder::before {
+    animation: none;
+  }
+}
+
+.dt-cell--center {
+  text-align: center;
+}
+
+.dt-cell--right {
+  text-align: right;
+}
+
+/*
+ * La misma alineación horizontal, traducida al modo caja.
+ *
+ * `text-align` no posiciona ítems flex, así que sin estas dos reglas una celda
+ * en modo caja quedaría siempre pegada a la izquierda. La traducción es literal:
+ * `left` (sin clase) es `flex-start`, que ya es el valor inicial de
+ * `justify-content` y por eso no necesita regla propia.
+ *
+ * Se reutilizan LAS MISMAS clases que el modo texto en lugar de escribir otras
+ * desde el pool. Es deliberado: con una sola fuente de verdad —el valor de
+ * `align`, escrito una vez por `setCellAlign`— los dos modos no pueden divergir,
+ * y la alineación tampoco cuesta una escritura más al cambiar de modo.
+ */
+.dt-cell--box.dt-cell--center {
+  justify-content: center;
+}
+
+.dt-cell--box.dt-cell--right {
+  justify-content: flex-end;
+}
+
+.dt-cell--editing {
+  background: var(--dt-bg-accented);
+}
+
+/*
+ * Marca de la celda activa.
+ *
+ * Se dibuja con `box-shadow: inset` y no con `border` ni con `outline`, y la
+ * elección no es estética:
+ *
+ * - `border` sumaría 4px a la caja y correría el contenido de la celda, lo que
+ *   provoca un reflow y hace "saltar" el texto al moverse la selección.
+ * - `outline` se dibuja FUERA de la caja, así que el `overflow: hidden` del
+ *   viewport lo recorta justo en los bordes, que es donde más se necesita ver
+ *   dónde estás parado.
+ * - `box-shadow: inset` se pinta dentro, no participa del layout y se compone en
+ *   GPU. No mueve nada ni se recorta.
+ *
+ * `z-index` levanta la celda activa por encima de sus vecinas para que el anillo
+ * no quede tapado por el fondo de la siguiente.
+ */
+.dt-cell--active {
+  z-index: 1;
+  box-shadow: inset 0 0 0 2px var(--dt-primary);
+}
+
+/* En modo `row` la unidad seleccionada es la fila: la celda no lleva anillo. */
+.dt-root[data-selection='row'] .dt-cell--active {
+  box-shadow: none;
+}
+
+/* -------------------------------------------------------- Rango de celdas */
+
+/*
+ * Tinte de una celda del rango.
+ *
+ * `background-color` y no `background`: la celda puede estar rayada o pertenecer
+ * a una fila activa, y el tinte se suma a ese fondo en vez de reemplazarlo.
+ * `color-mix` con transparencia es lo que permite que el mismo valor funcione en
+ * claro y en oscuro sin declarar dos colores.
+ *
+ * La celda ANCLA no lleva esta clase —la excluye el pool— y es deliberado: en
+ * una planilla, la esquina desde donde se extendió la selección queda con el
+ * fondo normal.
+ */
+.dt-cell--range {
+  /*
+   * El tinte va como CAPA DE IMAGEN y no como color de fondo.
+   *
+   * Es semitransparente a propósito —tiene que dejar ver el rayado y el realce
+   * de fila de abajo—, y `background-color` es justamente el canal que una celda
+   * anclada necesita opaco para tapar lo que scrollea por debajo. Separados, las
+   * dos cosas conviven: el color de fondo queda para la opacidad y la imagen
+   * para el tinte.
+   */
+  background-image: linear-gradient(
+    color-mix(in srgb, var(--dt-primary) 16%, transparent),
+    color-mix(in srgb, var(--dt-primary) 16%, transparent)
+  );
+}
+
+/*
+ * Con un rango vivo, la celda activa pierde su anillo y su fila el realce.
+ *
+ * Son dos señales de "acá estás" para una selección que ya tiene la suya: el
+ * recuadro. Dejarlas encendidas dibujaba un anillo adentro del rectángulo y una
+ * fila resaltada entre diez iguales, que es justo lo que confunde sobre dónde
+ * empieza y dónde termina lo seleccionado.
+ */
+.dt-root[data-range='true'] .dt-cell--active {
+  box-shadow: none;
+}
+
+/*
+ * Con un rango activo, la fila de la celda ancla deja de destacarse: el recuadro
+ * del rango ya dice dónde está, y dos marcas sobre lo mismo compiten.
+ *
+ * Pero "dejar de destacarse" es volver al fondo que le tocaría por su posición,
+ * NO quedarse sin fondo. Una fila transparente arrastra consigo al carril anclado
+ * y a sus celdas, que heredan de ella: el contenido que scrollea se leía A TRAVÉS
+ * de la columna anclada mientras hubiera un rango seleccionado.
+ */
+.dt-root[data-range='true'] .dt-row--active {
+  --dt-row-bg: var(--dt-bg);
+}
+
+/*
+ * El recuadro del rango: un solo nodo, cuatro líneas.
+ *
+ * Es la misma decisión que la marca de celda activa un nivel más arriba. Con un
+ * borde por celda habría que saber cuál celda es la del extremo de cada lado,
+ * dato que el pool no tiene porque recicla sus nodos por slot y no por posición
+ * visual; y además el borde correría el contenido de cada celda del rango.
+ *
+ * `pointer-events: none` no es un detalle: el recuadro se dibuja justo encima de
+ * las celdas que el usuario está arrastrando, y sin esto se comería el
+ * `pointermove` que extiende la selección.
+ */
+.dt-range-box {
+  position: absolute;
+  /* Coordenadas del canvas, que empieza debajo del encabezado. */
+  top: var(--dt-header-height);
+  left: 0;
+  z-index: 1;
+  box-sizing: border-box;
+  border: 2px solid var(--dt-primary);
+  pointer-events: none;
+  will-change: transform;
+}
+
+/*
+ * El cuadradito de la esquina inferior derecha.
+ *
+ * Hoy es una marca de extremo y nada más: señala dónde termina el rango, que es
+ * lo que lo vuelve legible de un vistazo cuando el borde inferior queda fuera de
+ * la pantalla. No arrastra.
+ *
+ * El borde del color del fondo lo separa del contenido de la celda que tiene
+ * debajo, para que no se lea como parte del dato.
+ */
+.dt-range-box::after {
+  content: '';
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  width: 6px;
+  height: 6px;
+  border: 1px solid var(--dt-bg);
+  background: var(--dt-primary);
+}
+
+/*
+ * Confirmación del copiado: la línea cambia de color y vuelve.
+ *
+ * El portapapeles no deja ninguna señal visible: sin esto, quien aprieta
+ * `Ctrl`+`C` no puede distinguir "se copió" de "el atajo se lo comió otra cosa".
+ *
+ * Lo que cambia es el COLOR del contorno, no su opacidad. Un contorno que se
+ * apaga y se enciende compite con el fondo y con el tinte de la selección, que
+ * están ahí mismo y con el mismo color de acento: se pierde. Invertir el color
+ * —del acento a blanco y de vuelta— mantiene la línea presente todo el tiempo y
+ * cambia lo único que el ojo no puede confundir con otra cosa.
+ *
+ * Es una caja propia, montada por Vue sobre el área copiada y desmontada al
+ * terminar, y no una clase sobre `.dt-range-box`: el copiado también alcanza a
+ * UNA celda, y ahí no hay recuadro —el contorno lo dibuja la celda activa, que es
+ * territorio del pool—. Con caja propia, el mismo gesto sirve para los dos casos
+ * y el camino caliente no se entera. Y como el nodo es nuevo en cada copiado, la
+ * animación arranca sola: una animación CSS no se reinicia sobre un elemento que
+ * ya la terminó.
+ *
+ * La duración la escribe el componente inline, que es su dueño: el mismo número
+ * decide cuándo se quita el nodo, y si el CSS declarara el suyo podrían discrepar
+ * y dejar la línea de otro color en pantalla.
+ */
+.dt-copy-flash {
+  position: absolute;
+  /* Coordenadas del canvas, que empieza debajo del encabezado. */
+  top: var(--dt-header-height);
+  left: 0;
+  z-index: 2;
+  box-sizing: border-box;
+  border: 2px solid var(--dt-primary);
+  pointer-events: none;
+  animation-name: dt-copy-flash;
+  animation-timing-function: ease-in-out;
+}
+
+/*
+ * Un viaje de ida y vuelta, no un parpadeo.
+ *
+ * Empieza y termina en el color de acento, que es el mismo que tiene el contorno
+ * de abajo: por eso el nodo puede aparecer y desaparecer sin que se note ni el
+ * montaje ni el desmontaje. Lo único que se ve es el color yendo y viniendo.
+ */
+@keyframes dt-copy-flash {
+  0% {
+    border-color: var(--dt-primary);
+  }
+  45% {
+    border-color: var(--dt-copy-flash-color);
+  }
+  100% {
+    border-color: var(--dt-primary);
+  }
+}
+
+/*
+ * El anillo de foco del viewport: opcional, y apagado por defecto.
+ *
+ * Las celdas no son enfocables —no llevan `tabindex`, ver `createCellElement`—
+ * porque la posición activa es estado del componente y no el foco del DOM. Hubo
+ * además una regla `.dt-cell:focus-visible` con este mismo color, y era un
+ * segundo sistema dibujando lo mismo: al hacer clic en una celda esa celda
+ * tomaba el foco, y la primera flecha hacía que el navegador la considerara
+ * enfocada por teclado y le pintara el anillo, mientras `dt-cell--active` ya
+ * había pasado a la celda siguiente. Se veían dos celdas seleccionadas a la vez.
+ * La marca de selección es `dt-cell--active` y nada más.
+ *
+ * ## Por qué esta regla dejó de ser incondicional
+ *
+ * Quitar aquel `tabindex` obligó a enfocar el viewport de forma EXPLÍCITA en
+ * cada clic sobre una celda, y eso volvió alcanzable una regla que hasta
+ * entonces no se disparaba nunca: antes el clic enfocaba la celda, así que el
+ * viewport no recibía el foco y su anillo no existía en la práctica. Con el foco
+ * puesto siempre acá, cada selección pasó a encerrar la tabla ENTERA en un borde
+ * del color de acento. Es el mismo error un nivel más arriba: dos señales para
+ * una sola posición.
+ *
+ * De ahí las dos condiciones:
+ *
+ * 1. `data-focus-ring` replica la prop `focusRing`, que por defecto es `false`.
+ * 2. `data-active-cell` dice si hay una celda MARCADA EN PANTALLA. Con una celda
+ *    marcada el anillo sobra, incluso con `focusRing` encendido.
+ *
+ * La segunda condición es "hay una marca visible", no "hay una posición
+ * guardada", y la diferencia importa: si la columna de la posición activa está
+ * oculta o su clave es desconocida, ninguna celda se pinta activa y el atributo
+ * vuelve a `'false'`. Sin eso, el anillo se apagaba sin poner nada en su lugar y
+ * la tabla quedaba enfocada sin una sola señal de dónde estaba parado el
+ * usuario.
+ *
+ * Los dos atributos los escribe Vue sobre `.dt-root`, no el pool: cambian al
+ * pasar de "sin selección" a "con selección" y al ocultar o mostrar la columna
+ * activa, no al mover la selección de una celda a otra ni al scrollear, así que
+ * el anillo no cuesta ni una escritura por frame.
+ *
+ * El costo de accesibilidad del valor por defecto es real y está documentado en
+ * el README: sin celda activa y sin anillo, quien entra a la tabla con Tab no
+ * tiene ninguna señal de dónde quedó el foco. `focusRing: true` es la opción
+ * accesible para un consumidor cuyos usuarios navegan sobre todo por teclado.
+ */
+.dt-root[data-focus-ring='true'][data-active-cell='false'] .dt-viewport:focus-visible {
+  outline: 2px solid var(--dt-primary);
+  outline-offset: -2px;
+}
+
+/* ------------------------------------------------- Cabeceras de grupo */
+
+/*
+ * Una cabecera de grupo ocupa la misma caja que una fila de datos: mismo alto,
+ * misma posición absoluta, mismo `transform`. Lo único que cambia es lo que hay
+ * adentro, y eso es justamente lo que permite que el virtualizador siga siendo
+ * una división: con cabeceras de alto variable habría que mantener un árbol de
+ * offsets acumulados y el costo por frame dejaría de ser constante.
+ */
+.dt-group-row {
+  /* Nivel de anidamiento. Lo escribe el pool, una sola propiedad por fila. */
+  --dt-group-depth: 0;
+
+  /* Igual que cualquier fila: declara su color, no lo pinta. Ver `.dt-row`. */
+  --dt-row-bg: var(--dt-bg-elevated);
+  font-weight: 600;
+}
+
+/*
+ * El realce de fila activa se declara más arriba, así que sin esta regla el
+ * fondo propio de la cabecera le ganaría por orden y una cabecera seleccionada
+ * con el teclado no se distinguiría de las demás.
+ */
+.dt-group-row.dt-row--active {
+  --dt-row-bg: var(--dt-bg-accented);
+}
+
+/*
+ * Una cabecera de grupo son DOS cajas, y hace falta que sean dos.
+ *
+ * La de afuera —`.dt-group-header`— es la banda: cruza la fila de borde a borde,
+ * incluido el tramo de las columnas ancladas. La de adentro
+ * —`.dt-group-header-inner`— lleva el chevrón, la etiqueta y el contador, y se
+ * planta con `position: sticky` para quedarse a la vista mientras la fila se
+ * corre por debajo.
+ *
+ * Una sola caja no puede hacer las dos cosas: o mide lo que la fila y entonces
+ * la etiqueta se va con el scroll, o se queda quieta y entonces la banda no
+ * cubre la fila. Cuando eran una sola, la banda arrancaba en la primera columna
+ * que scrollea y el bloque anclado quedaba como un hueco vacío.
+ *
+ * Las celdas de agregado se apoyan ENCIMA con fondo propio. Así la etiqueta usa
+ * todo el espacio libre que tenga sin que nadie calcule dónde termina: el
+ * recorte lo hace el agregado que se le pone arriba, no una cuenta que habría
+ * que rehacer con cada cambio de columnas o cada paso de scroll horizontal.
+ *
+ * La sangría es `padding-left` sobre la caja de adentro y no divs anidados: una
+ * escritura de custom property contra crear y destruir nodos cada vez que un
+ * slot pasa de un nivel a otro.
+ */
+/*
+ * La banda mide lo que la fila entera, y el ancho se lo escribe el pool. No
+ * lleva `overflow: hidden`, y eso NO es un olvido: `overflow` distinto de
+ * `visible` convierte a la caja en un contenedor de scroll, y entonces el
+ * `position: sticky` del hijo se mediría contra esta banda —que se mueve junto
+ * con la fila— en lugar de contra el viewport. O sea, no se quedaría quieto.
+ * Quien recorta es `.dt-viewport`.
+ */
+.dt-group-header {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 0;
+  box-sizing: border-box;
+  height: var(--dt-row-height);
+  cursor: pointer;
+  user-select: none;
+}
+
+/*
+ * Lo único que se queda a la vista mientras la fila scrollea por debajo.
+ *
+ * Se planta a la derecha de la regleta de numeración, no en el cero del
+ * viewport: la regleta también es sticky y está por encima, así que anclar en 0
+ * dejaría la etiqueta escondida detrás de ella.
+ *
+ * `width: fit-content` NO es cosmética: `position: sticky` corre al elemento
+ * DENTRO de su bloque contenedor, y un elemento que ya ocupa todo el bloque no
+ * tiene hacia dónde correrse. Como hijo de una caja absoluta, este nodo se
+ * estiraría al ancho entero de la banda y el anclaje no haría absolutamente
+ * nada. Encogido al contenido, le sobra todo el ancho de la fila para deslizar.
+ *
+ * `max-width: 100%` acota la caja al ancho de la fila; sin eso una etiqueta muy
+ * larga ensancharía el contenido scrolleable de la tabla.
+ */
+.dt-group-header-inner {
+  position: sticky;
+  left: var(--dt-row-number-width, 0px);
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  box-sizing: border-box;
+  width: fit-content;
+  max-width: 100%;
+  height: 100%;
+  padding-right: var(--dt-cell-px);
+  padding-left: calc(var(--dt-cell-px) + var(--dt-group-depth) * var(--dt-group-indent));
+}
+
+/*
+ * El chevrón gira por CSS a partir de una clase en la fila. Es lo que permite que
+ * expandir un grupo no reescriba ni un atributo del SVG: el pool alterna una
+ * clase y la transición la resuelve el compositor.
+ */
+.dt-group-chevron {
+  flex: 0 0 auto;
+  width: 0.875em;
+  height: 0.875em;
+  color: var(--dt-text-muted);
+  transform: rotate(0deg);
+  transition: transform 120ms ease;
+}
+
+.dt-group-row--expanded .dt-group-chevron {
+  transform: rotate(90deg);
+}
+
+/* `min-width: 0` es lo que habilita el recorte: sin eso un item de flex no baja
+   de su ancho de contenido y los puntos suspensivos no aparecen nunca. */
+.dt-group-label {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.dt-group-count {
+  flex: 0 0 auto;
+  min-width: 1.25rem;
+  padding: 0 0.375rem;
+  border-radius: 999px;
+  background: var(--dt-bg-accented);
+  color: var(--dt-text-muted);
+  font-size: 0.75em;
+  font-weight: 600;
+  line-height: 1.5;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * El agregado se pinta sobre la cabecera, en la posición horizontal de SU
+ * columna: es la única manera de que la cifra caiga debajo del encabezado al que
+ * corresponde. `--dt-row-bg` es el color de la fila, y es lo que lo vuelve opaco
+ * sobre la etiqueta sin tener que repetir el color acá ni saber si la fila está
+ * activa. La fila no pinta: ver `.dt-row`.
+ */
+.dt-group-aggregate {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 1;
+  box-sizing: border-box;
+  height: var(--dt-row-height);
+  padding: 0 var(--dt-cell-px);
+  overflow: hidden;
+  background: var(--dt-row-bg);
+  color: var(--dt-text-muted);
+  line-height: var(--dt-row-height);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+  will-change: transform;
+}
+
+/* ------------------------------------------------------------------ Editor */
+
+/*
+ * Contenedor de los controles de edición, sin tamaño propio.
+ *
+ * Solo existe para dar a los controles un origen de coordenadas en el canvas y
+ * para que Vue tenga un nodo que renderizar una vez y no volver a tocar: los
+ * hijos los administra `useCellEditor`, igual que el pool administra los del
+ * canvas.
+ */
+.dt-editor-host {
+  position: absolute;
+  /* Coordenadas del canvas, que empieza debajo del encabezado. */
+  top: var(--dt-header-height);
+  left: 0;
+  width: 0;
+  height: 0;
+}
+
+/*
+ * Un control por TIPO de editor, no por celda. Viven dentro del viewport que
+ * scrollea y se posicionan en coordenadas del canvas, así que acompañan al
+ * scroll sin que haya que reposicionarlos por frame.
+ */
+.dt-editor {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 2;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0 var(--dt-cell-px);
+  border: 2px solid var(--dt-primary);
+  border-radius: var(--dt-radius);
+  outline: none;
+  background: var(--dt-bg);
+  color: var(--dt-text);
+  font: inherit;
+  will-change: transform;
+  /*
+   * Acá adentro sí se selecciona texto.
+   *
+   * `user-select: none` en `.dt-root` se hereda, y en Chrome eso alcanza para
+   * que no se pueda seleccionar dentro de un `<input>` descendiente: se podría
+   * escribir pero no marcar una palabra para reemplazarla, ni arrastrar para
+   * elegir un tramo. El `select()` con el que se abre el editor tampoco se
+   * vería. Esta línea lo devuelve exactamente donde corresponde.
+   */
+  user-select: text;
+}
+
+/* El `<select>` trae su propia flecha nativa, así que no necesita el padding
+   derecho extra que sí lleva un input de texto. */
+.dt-editor--select {
+  padding-right: 0.25rem;
+}
+
+/*
+ * Caja del editor por slot.
+ *
+ * Deliberadamente sin borde ni tipografía propia: el control lo pone el
+ * consumidor y el aspecto es suyo. Lo único que aporta esta caja es la posición
+ * sobre la celda, el tamaño exacto de la celda y un fondo que la tape, para que
+ * el valor de abajo no se transparente a través de un control con espacios
+ * vacíos. Se puede redefinir desde el CSS del consumidor sin tocar la librería.
+ */
+.dt-editor-slot {
+  position: absolute;
+  /* Coordenadas del canvas, que empieza debajo del encabezado. */
+  top: var(--dt-header-height);
+  left: 0;
+  z-index: 2;
+  box-sizing: border-box;
+  outline: none;
+  background: var(--dt-bg);
+  will-change: transform;
+  /* El control lo pone el consumidor y puede ser cualquier cosa, incluido un
+     campo de texto. La grilla no le impone su "acá no se selecciona". */
+  user-select: text;
+}
+
+/* ------------------------------------------------------------------- Vacío */
+
+.dt-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem var(--dt-cell-px);
+  border-top: 1px solid var(--dt-border);
+  color: var(--dt-text-dimmed);
+}
+
+/* ------------------------------------------------- Renderers de celda */
+
+/*
+ * Todos los renderers comparten la misma disciplina visual: su celda declara el
+ * modo `box` y el centrado vertical lo resuelve el `align-items: center` de
+ * `.dt-cell--box`. Por eso ninguna de estas clases declara ya
+ * `vertical-align: middle`: esa propiedad era la compensación del centrado por
+ * altura de línea, y era justamente la que dejaba todo uno o dos píxeles abajo.
+ * Cada renderer solo se ocupa de su propia forma y de su alto.
+ *
+ * El alto sigue derivándose de `--dt-row-height` con `calc()`, así que `dense`
+ * —que solo cambia esa variable— se acompaña sin ninguna regla extra.
+ */
+
+.dt-badge,
+.dt-tag {
+  display: inline-block;
+  max-width: 100%;
+  padding: 0 0.5rem;
+  border-radius: 999px;
+  /* Un poco menos que la altura de fila, para que la píldora respire. */
+  height: calc(var(--dt-row-height) - 14px);
+  line-height: calc(var(--dt-row-height) - 14px);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 0.8em;
+  font-weight: 600;
+  color: var(--dt-badge-color, var(--dt-color-neutral));
+  background: color-mix(
+    in srgb,
+    var(--dt-badge-color, var(--dt-color-neutral)) var(--dt-tint-strength),
+    transparent
+  );
+}
+
+/*
+ * El chevron es geometría fija y no debe encogerse: como ítem flex de la celda
+ * lo haría, y en una columna angosta se vería aplastado. `flex: 0 0 auto` deja
+ * que sea la píldora la que ceda, que es la que sabe recortarse con puntos
+ * suspensivos.
+ */
+.dt-select-chevron {
+  flex: 0 0 auto;
+  width: 0.875em;
+  height: 0.875em;
+  margin-left: 0.375rem;
+  color: var(--dt-text-dimmed);
+}
+
+.dt-cell:hover .dt-select-chevron {
+  color: var(--dt-text-muted);
+}
+
+/* ------------------------------------------------------------- Progreso */
+
+/*
+ * La caja del progreso también es flex, y por el mismo motivo que la celda: sus
+ * dos hijos tienen alturas distintas —el anillo mide lo que mide y la etiqueta
+ * lo que mida su línea de texto— y alinearlos entre sí por línea base arrastraba
+ * el mismo desfase un nivel más abajo.
+ *
+ * Es además lo que vuelve innecesario el `line-height: 1` que esta regla tenía:
+ * existía para que la línea de la etiqueta no inflara la caja por encima del
+ * anillo. Con flex el alto de la caja es el del hijo más alto y la altura de
+ * línea deja de intervenir.
+ */
+.dt-progress {
+  display: inline-flex;
+  align-items: center;
+  /* Sigue haciendo falta: un `column.format` propio puede devolver un texto
+     largo, y sin esto la etiqueta partiría en dos renglones. */
+  white-space: nowrap;
+}
+
+.dt-progress-ring {
+  /* Geometría fija, igual que el chevron: el que cede es el texto. */
+  flex: 0 0 auto;
+  width: calc(var(--dt-row-height) - 18px);
+  height: calc(var(--dt-row-height) - 18px);
+  /*
+   * El trazo arranca a las 3 en punto; girar -90 grados lo lleva a las 12, que
+   * es de donde la gente espera que crezca un indicador de avance.
+   */
+  transform: rotate(-90deg);
+}
+
+.dt-progress-track {
+  stroke: var(--dt-border-accented);
+  stroke-width: 4;
+}
+
+.dt-progress-value {
+  stroke: var(--dt-progress-color, var(--dt-color-blue));
+  stroke-width: 4;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 180ms ease;
+}
+
+.dt-progress-label {
+  margin-left: 0.5rem;
+  color: var(--dt-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* -------------------------------------------------------------- Avatar */
+
+.dt-avatar {
+  position: relative;
+  display: inline-block;
+  /* Un círculo achatado se lee como un error de render: nunca se encoge. */
+  flex: 0 0 auto;
+  width: calc(var(--dt-row-height) - 16px);
+  height: calc(var(--dt-row-height) - 16px);
+  border-radius: 999px;
+  overflow: hidden;
+  background: color-mix(
+    in srgb,
+    var(--dt-avatar-color, var(--dt-color-neutral)) var(--dt-tint-strength),
+    transparent
+  );
+  color: var(--dt-avatar-color, var(--dt-color-neutral));
+}
+
+.dt-avatar-initials {
+  display: block;
+  width: 100%;
+  height: 100%;
+  line-height: calc(var(--dt-row-height) - 16px);
+  text-align: center;
+  font-size: 0.75em;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.dt-avatar-image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* ------------------------------------------------------------ Casilla */
+
+.dt-checkbox {
+  /* El navegador le da su tamaño intrínseco; encogerlo lo volvería inusable. */
+  flex: 0 0 auto;
+  margin: 0;
+  accent-color: var(--dt-primary);
+  cursor: pointer;
+}
+
+.dt-checkbox:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+/* ------------------------------------------------------------ Etiquetas */
+
+/*
+ * La lista de etiquetas es flex por la misma razón que la celda, un nivel más
+ * abajo: las píldoras son cajas y no texto.
+ *
+ * Es donde el desfase se veía peor. La lista era un `inline-block` sin altura de
+ * línea propia, así que heredaba la de la fila —40px— y su caja crecía hasta
+ * ocupar la fila entera; después, las píldoras de adentro se alineaban por línea
+ * base contra esa misma altura. El error entraba dos veces y las píldoras
+ * quedaban tocando el borde inferior.
+ */
+.dt-tags {
+  display: flex;
+  align-items: center;
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+/*
+ * Dentro de la lista, cada píldora conserva su ancho natural y el recorte lo
+ * hace el `overflow: hidden` de la lista, tal como antes de flex. Sin esto un
+ * ítem flex se encogería, y varias etiquetas cortas pasarían a verse todas
+ * recortadas en lugar de verse enteras hasta donde entran.
+ *
+ * `.dt-badge` no lleva esta regla a propósito: es hijo directo de la celda y ahí
+ * sí tiene que ceder, porque es él quien recorta con puntos suspensivos.
+ */
+.dt-tags .dt-tag {
+  flex: 0 0 auto;
+}
+
+.dt-tag + .dt-tag {
+  margin-left: 0.25rem;
+}
+
+/* ------------------------------------------------- Selector de columnas */
+
+/*
+ * El selector es un componente aparte y puede montarse fuera de `.dt-root`, así
+ * que redeclara los tokens con los mismos fallbacks en lugar de heredarlos. Si
+ * se lo coloca dentro de una `.dt-root`, los valores de la tabla ganan por
+ * cascada y ambos quedan coordinados.
+ */
+.dt-toggle {
+  --dt-bg: var(--ui-bg, #ffffff);
+  --dt-bg-elevated: var(--ui-bg-elevated, #f3f4f6);
+  --dt-bg-accented: var(--ui-bg-accented, #e5e7eb);
+  --dt-border: var(--ui-border, #e5e7eb);
+  --dt-text: var(--ui-text, #111827);
+  --dt-text-muted: var(--ui-text-muted, #6b7280);
+  --dt-primary: var(--ui-primary, #00c16a);
+  --dt-radius: var(--ui-radius, 0.375rem);
+  --dt-font-size: 0.875rem;
+  --dt-cell-px: 0.75rem;
+
+  position: relative;
+  display: inline-block;
+  color: var(--dt-text);
+  font-size: var(--dt-font-size);
+}
+
+.dt-toggle-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.375rem var(--dt-cell-px);
+  border: 1px solid var(--dt-border);
+  border-radius: var(--dt-radius);
+  background: var(--dt-bg-elevated);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.dt-toggle-button:hover {
+  background: var(--dt-bg-accented);
+}
+
+.dt-toggle-button:focus-visible {
+  outline: 2px solid var(--dt-primary);
+  outline-offset: 2px;
+}
+
+.dt-toggle-badge {
+  min-width: 1.25rem;
+  padding: 0 0.25rem;
+  border-radius: 999px;
+  background: var(--dt-primary);
+  color: #ffffff;
+  font-size: 0.75rem;
+  line-height: 1.25rem;
+  text-align: center;
+}
+
+.dt-toggle-panel {
+  position: absolute;
+  top: calc(100% + 0.25rem);
+  left: 0;
+  z-index: 20;
+  min-width: 12rem;
+  max-height: 18rem;
+  overflow-y: auto;
+  padding: 0.25rem;
+  border: 1px solid var(--dt-border);
+  border-radius: var(--dt-radius);
+  background: var(--dt-bg);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 12%);
+}
+
+.dt-toggle-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dt-toggle-option {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.375rem var(--dt-cell-px);
+  border-radius: var(--dt-radius);
+  cursor: pointer;
+}
+
+.dt-toggle-option:hover {
+  background: var(--dt-bg-elevated);
+}
+
+/* La última columna visible queda fijada: se comunica, no se rechaza en silencio. */
+.dt-toggle-option.is-locked {
+  color: var(--dt-text-muted);
+  cursor: not-allowed;
+}
+
+.dt-toggle-checkbox {
+  accent-color: var(--dt-primary);
+  margin: 0;
+}
+
+.dt-toggle-checkbox:focus-visible {
+  outline: 2px solid var(--dt-primary);
+  outline-offset: 2px;
+}
+
+.dt-toggle-label {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.dt-toggle-footer {
+  margin-top: 0.25rem;
+  padding-top: 0.25rem;
+  border-top: 1px solid var(--dt-border);
+}
+
+.dt-toggle-action {
+  width: 100%;
+  padding: 0.375rem var(--dt-cell-px);
+  border: none;
+  border-radius: var(--dt-radius);
+  background: transparent;
+  color: var(--dt-primary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.dt-toggle-action:hover:not(:disabled) {
+  background: var(--dt-bg-elevated);
+}
+
+.dt-toggle-action:disabled {
+  color: var(--dt-text-muted);
+  cursor: default;
+}
+
+.dt-toggle-action:focus-visible {
+  outline: 2px solid var(--dt-primary);
+  outline-offset: -2px;
+}
+
+.dt-root[data-dense='true'] .dt-toggle,
+.dt-toggle[data-dense='true'] {
+  --dt-font-size: 0.8125rem;
+  --dt-cell-px: 0.5rem;
+}
+
+/* --------------------------------------------------------------- Bordeado */
+
+.dt-root[data-bordered='true'] .dt-cell {
+  border-right: 1px solid var(--dt-border);
+}
+
+.dt-root[data-bordered='true'] .dt-header-cell {
+  border-right: 1px solid var(--dt-border);
+}
+
+/* ------------------------------------------------------------- Variante cells */
+
+/*
+ * `data-variant="cells"` fuerza una grilla completa, sin importar `stripe` ni
+ * `bordered`: es la marca del preset, no una combinación de las otras dos props.
+ *
+ * Igual que el modo `bordered`, cada celda dibuja solo derecha/abajo y no las
+ * cuatro. Es a propósito: el borde derecho de una celda y el izquierdo de la
+ * siguiente serían la MISMA línea dibujada dos veces, el doble de gruesa que en
+ * cualquier otro cruce de la grilla. Con un solo borde por lado la línea
+ * interior queda tan fina como el resto, al precio de no dibujar el borde
+ * izquierdo de la primera columna ni el inferior de la última fila —los cubre
+ * el propio borde de `.dt-root`—, lo mismo que ya acepta `bordered`.
+ */
+.dt-root[data-variant='cells'] .dt-cell {
+  border-right: 1px solid var(--dt-border);
+  border-bottom: 1px solid var(--dt-border);
+}
+
+/*
+ * La celda donde cae el corte no dibuja su propia separación: la reemplaza la
+ * línea doble. Sumadas darían tres píxeles, que ya no se leen como "el doble"
+ * sino como un error.
+ *
+ * En el encabezado no hace falta la excepción: ahí la línea la dibuja la TIRA, y
+ * al ser el padre de las celdas se pinta por encima del borde de la última.
+ */
+.dt-root[data-bordered='true'] .dt-pinned-lane--start .dt-cell--pinned-edge,
+.dt-root[data-variant='cells'] .dt-pinned-lane--start .dt-cell--pinned-edge {
+  border-right-width: 0;
+}
+
+.dt-root[data-variant='cells'] .dt-header-cell {
+  border-right: 1px solid var(--dt-border-accented);
+}
+
+/* ------------------------------------------------------------------ Denso */
+
+/*
+ * Las alturas también se listan aquí para que el preset quede completo y legible
+ * en un solo lugar, pero el componente las sobrescribe inline: `rowHeight` sigue
+ * siendo la fuente de verdad y ya contempla `dense` al resolver su valor por
+ * defecto.
+ */
+.dt-root[data-dense='true'] {
+  --dt-row-height: 30px;
+  --dt-header-height: 34px;
+  --dt-font-size: 0.8125rem;
+  --dt-cell-px: 0.5rem;
+  /* La sangría acompaña al preset: con filas de 30px, 16px por nivel se come la
+     etiqueta en cuanto hay dos niveles. */
+  --dt-group-indent: 12px;
+}
+
+.dt-root[data-dense='true'] .dt-group-count {
+  padding: 0 0.25rem;
+}
+
+/* ------------------------------------------------------------------ Oscuro */
+
+/*
+ * Tres formas de llegar al tema oscuro, y ninguna puede pisar una elección
+ * explícita de tema claro:
+ *
+ * 1. `data-theme="dark"` en la raíz de la tabla.
+ * 2. Una clase `.dark` en el documento, para acompañar un toggle de aplicación.
+ * 3. `prefers-color-scheme: dark`, acotado con `:root:not(.light)` para que una
+ *    aplicación que fuerza claro gane sobre la preferencia del sistema.
+ *
+ * `data-theme="light"` nunca coincide con ninguno de los tres selectores, así
+ * que la elección explícita de claro siempre prevalece.
+ */
+/*
+ * El selector de columnas vive fuera de `.dt-root` y no tiene `data-theme`
+ * propio, así que sigue al documento: la clase `.dark` de la aplicación o la
+ * preferencia del sistema. `data-theme` explícito sobre el propio selector gana
+ * sobre ambas.
+ */
+.dt-toggle[data-theme='dark'],
+:root.dark .dt-toggle:not([data-theme='light']) {
+  --dt-bg: var(--ui-bg, #111827);
+  --dt-bg-elevated: var(--ui-bg-elevated, #1f2937);
+  --dt-bg-accented: var(--ui-bg-accented, #374151);
+  --dt-border: var(--ui-border, #374151);
+  --dt-text: var(--ui-text, #f9fafb);
+  --dt-text-muted: var(--ui-text-muted, #9ca3af);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not(.light) .dt-toggle:not([data-theme='light']) {
+    --dt-bg: var(--ui-bg, #111827);
+    --dt-bg-elevated: var(--ui-bg-elevated, #1f2937);
+    --dt-bg-accented: var(--ui-bg-accented, #374151);
+    --dt-border: var(--ui-border, #374151);
+    --dt-text: var(--ui-text, #f9fafb);
+    --dt-text-muted: var(--ui-text-muted, #9ca3af);
+  }
+}
+
+.dt-root[data-theme='dark'],
+:root.dark .dt-root[data-theme='auto'] {
+  --dt-bg: var(--ui-bg, #111827);
+  --dt-bg-muted: var(--ui-bg-muted, #1f2937);
+  --dt-bg-elevated: var(--ui-bg-elevated, #1f2937);
+  --dt-bg-accented: var(--ui-bg-accented, #374151);
+  --dt-border: var(--ui-border, #374151);
+  --dt-border-accented: var(--ui-border-accented, #4b5563);
+  --dt-text: var(--ui-text, #f9fafb);
+  --dt-text-muted: var(--ui-text-muted, #9ca3af);
+  --dt-text-dimmed: var(--ui-text-dimmed, #6b7280);
+  --dt-color-blue: #60a5fa;
+  --dt-color-red: #f87171;
+  --dt-color-amber: #fbbf24;
+  --dt-color-green: #4ade80;
+  --dt-color-purple: #c084fc;
+  --dt-color-neutral: #9ca3af;
+  /* Sobre fondo oscuro el tinte necesita algo más de cuerpo para separarse. */
+  --dt-tint-strength: 20%;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not(.light) .dt-root[data-theme='auto'] {
+    --dt-bg: var(--ui-bg, #111827);
+    --dt-bg-muted: var(--ui-bg-muted, #1f2937);
+    --dt-bg-elevated: var(--ui-bg-elevated, #1f2937);
+    --dt-bg-accented: var(--ui-bg-accented, #374151);
+    --dt-border: var(--ui-border, #374151);
+    --dt-border-accented: var(--ui-border-accented, #4b5563);
+    --dt-text: var(--ui-text, #f9fafb);
+    --dt-text-muted: var(--ui-text-muted, #9ca3af);
+    --dt-text-dimmed: var(--ui-text-dimmed, #6b7280);
+    --dt-color-blue: #60a5fa;
+    --dt-color-red: #f87171;
+    --dt-color-amber: #fbbf24;
+    --dt-color-green: #4ade80;
+    --dt-color-purple: #c084fc;
+    --dt-color-neutral: #9ca3af;
+    /* Sobre fondo oscuro el tinte necesita algo más de cuerpo para separarse. */
+    --dt-tint-strength: 20%;
+  }
+}
+
+/* ------------------------------------------------- Accesibilidad de movimiento */
+
+@media (prefers-reduced-motion: reduce) {
+  .dt-resize-handle::after {
+    transition: none;
+  }
+
+  /* El chevrón sigue girando —la rotación ES la información de estado—, pero sin
+     animarla: lo que molesta es el movimiento, no la posición final. */
+  .dt-group-chevron {
+    transition: none;
+  }
+
+  /*
+   * La confirmación del copiado NO se suprime acá, y es a propósito: no hay nada
+   * que se mueva ni que parpadee. Es un cambio de color de ida y vuelta en medio
+   * segundo —muy por debajo de cualquier umbral de destello— y es la única señal
+   * de que el copiado ocurrió. `prefers-reduced-motion` pide menos movimiento,
+   * no menos información.
+   */
+}

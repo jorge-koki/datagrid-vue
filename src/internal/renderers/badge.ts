@@ -1,0 +1,114 @@
+import type { CellOption, CellRenderContext, CellRendererHandle } from '../../types'
+import {
+  BOX_CELL_LAYOUT,
+  createElement,
+  fallbackText,
+  findOption,
+  NEUTRAL_COLOR_TOKEN,
+  writeCustomProperty,
+  writeText,
+} from './shared'
+import type { AnyCellRenderer } from './shared'
+
+/**
+ * Renderer de badge: una píldora con etiqueta y color.
+ *
+ * - **Acepta**: cualquier valor que coincida con una entrada de
+ *   `column.options`, comparando por identidad y después por texto.
+ * - **Valor inesperado**: se muestra el valor crudo con el color neutro. NUNCA
+ *   se deja la celda vacía: un estado que la UI no conoce sigue siendo un dato
+ *   que el usuario necesita ver, y una celda en blanco lo escondería.
+ * - **Sin `options`**: se comporta como un badge neutro con el texto del valor.
+ *
+ * ## Por qué el color va por custom property
+ *
+ * Se escribe una sola propiedad, `--dt-badge-color`, en lugar de `background` y
+ * `color` por separado: una escritura en vez de dos, y la hoja de estilos queda
+ * como dueña de cómo se deriva el fondo del color de acento. Eso permite cambiar
+ * el tratamiento —fondo teñido o relleno sólido— sin tocar una línea de JS, y
+ * que el contraste se resuelva distinto en tema claro y oscuro.
+ */
+
+interface BadgeState {
+  pill: HTMLElement
+  label: string
+  color: string
+}
+
+const states = new WeakMap<CellRendererHandle, BadgeState>()
+
+/** Crea la píldora y registra su estado. Compartido con el renderer `select`. */
+export function createBadgeState(cell: HTMLElement, handle: CellRendererHandle): BadgeState {
+  const pill = createElement('span', 'dt-badge')
+  cell.appendChild(pill)
+  const state: BadgeState = { pill, label: '', color: '' }
+  states.set(handle, state)
+  return state
+}
+
+/**
+ * La regla de la etiqueta, a partir de la opción ya buscada.
+ *
+ * Recibe la opción en vez de buscarla para que `update` —que necesita la opción
+ * igual, por el color— no pague dos veces el mismo `findOption` en el camino
+ * caliente.
+ */
+function labelOf(option: CellOption | null, value: unknown): string {
+  return option ? option.label : fallbackText(value)
+}
+
+/**
+ * La etiqueta de la píldora. Compartida con `select` y con el copiado.
+ *
+ * Es lo que se ve: la etiqueta de la opción, no el valor crudo. Una columna de
+ * estado guarda `'review'` y muestra `'En revisión'`; copiar `'review'` sería
+ * copiar algo que el usuario no vio nunca.
+ */
+export function badgeTextOf<TRow>(ctx: CellRenderContext<TRow>): string {
+  return labelOf(findOption(ctx.column.options, ctx.value), ctx.value)
+}
+
+/** Aplica el valor sobre una píldora ya construida. Compartido con `select`. */
+export function updateBadgeState<TRow>(state: BadgeState, ctx: CellRenderContext<TRow>): void {
+  const option = findOption(ctx.column.options, ctx.value)
+  const label = labelOf(option, ctx.value)
+  const color = option?.color ?? NEUTRAL_COLOR_TOKEN
+
+  if (writeText(state.pill, state.label, label)) state.label = label
+  if (writeCustomProperty(state.pill, '--dt-badge-color', state.color, color)) state.color = color
+}
+
+/** Estado de badge asociado a un handle, si lo tiene. */
+export function getBadgeState(handle: CellRendererHandle): BadgeState | undefined {
+  return states.get(handle)
+}
+
+/** Libera el estado de badge de un handle. */
+export function deleteBadgeState(handle: CellRendererHandle): void {
+  states.delete(handle)
+}
+
+export const badgeRenderer: AnyCellRenderer = {
+  type: 'badge',
+  // La píldora es una caja, no texto suelto: la celda tiene que centrarla con
+  // flex y no con la altura de línea.
+  layout: BOX_CELL_LAYOUT,
+
+  create(cell: HTMLElement): CellRendererHandle {
+    const handle: CellRendererHandle = { root: cell }
+    createBadgeState(cell, handle)
+    return handle
+  },
+
+  update<TRow>(handle: CellRendererHandle, ctx: CellRenderContext<TRow>): void {
+    const state = states.get(handle)
+    if (!state) return
+    updateBadgeState(state, ctx)
+  },
+
+  text: badgeTextOf,
+
+  destroy(handle: CellRendererHandle): void {
+    states.delete(handle)
+  },
+}

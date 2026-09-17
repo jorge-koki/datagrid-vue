@@ -1,5 +1,5 @@
 {
-  "name": "datagrid-vue",
+  "name": "@jorge-koki/datagrid-vue",
   "version": "0.1.0",
   "description": "High-performance virtualized data grid for Vue 3, with DOM node recycling, cell editing, custom renderers and persistent column layout.",
   "license": "MIT",
@@ -30,7 +30,8 @@
     "**/*.css"
   ],
   "files": [
-    "dist"
+    "dist",
+    "CHANGELOG.md"
   ],
   "main": "./dist/datagrid-vue.js",
   "module": "./dist/datagrid-vue.js",
@@ -42,6 +43,9 @@
     },
     "./style.css": "./dist/style.css",
     "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "dev": "vite",
@@ -55,7 +59,10 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "format": "oxfmt src/",
+    "format": "oxfmt src/ demo/",
+    "format:check": "oxfmt --check src/ demo/",
+    "verify": "run-s type-check test format:check build:lib",
+    "prepublishOnly": "run-s type-check test",
     "prepare": "npm run build:lib"
   },
   "peerDependencies": {

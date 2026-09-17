@@ -1,0 +1,36 @@
+// TSConfig del código que corre en el navegador: la librería y la demo que la
+// ejercita, verificadas dentro de UN SOLO programa.
+//
+// Que estén juntas no es comodidad, es el punto. La demo importa `@jorge-koki/datagrid-vue`,
+// que el `paths` de acá abajo resuelve a `src/index.ts` —el mismo alias que
+// resuelve Vite—, así que cualquier tipo que no sobreviva al borde público del
+// paquete aparece como un error acá y no en el proyecto de alguien más.
+//
+// `src/**/*` figura en `include` además de llegar por los imports de la demo.
+// Es a propósito: un archivo de la librería que hoy nadie importe seguiría
+// siendo parte de lo que se publica, y sin listarlo quedaría fuera del programa
+// y por lo tanto sin verificar.
+{
+  "extends": "@vue/tsconfig/tsconfig.dom.json",
+  "include": ["env.d.ts", "src/**/*", "demo/**/*"],
+  "exclude": ["src/__tests__/**"],
+  "compilerOptions": {
+    // Extra safety for array and object lookups, but may have false positives.
+    "noUncheckedIndexedAccess": true,
+
+    // La demo importa la librería por su nombre de paquete, igual que lo haría
+    // una aplicación consumidora. No hay alias `@/`: la librería usa solo
+    // imports relativos y la demo, solo el nombre público.
+    //
+    // `@jorge-koki/datagrid-vue/style.css` no necesita entrada acá. La clave es exacta, así
+    // que no la captura, y la resolución normal termina en la declaración
+    // ambiental `declare module '*.css'` que trae `vite/client` vía `env.d.ts`.
+    "paths": {
+      "@jorge-koki/datagrid-vue": ["./src/index.ts"]
+    },
+
+    // `vue-tsc --build` produces a .tsbuildinfo file for incremental type-checking.
+    // Specified here to keep it out of the root directory.
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.demo.tsbuildinfo"
+  }
+}

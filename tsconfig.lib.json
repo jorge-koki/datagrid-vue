@@ -4,26 +4,27 @@
 // propósito, para que `npm run type-check` siga siendo solo verificación y no
 // empiece a emitir archivos como efecto secundario.
 //
-// El alcance se limita al directorio del componente. El resto de `src/` es la
-// aplicación de demo y no forma parte de lo que se publica.
+// El alcance es `src/`, que es exactamente lo que se publica. La demo vive en
+// `demo/` y no entra acá ni por `include` ni por un import: la librería no
+// conoce a la demo.
 {
   "extends": "@vue/tsconfig/tsconfig.dom.json",
-  "include": ["src/components/ui/datatable/**/*.ts", "src/components/ui/datatable/**/*.vue"],
+  "include": ["src/**/*.ts", "src/**/*.vue"],
 
-  // Los tests viven dentro del directorio del componente para estar al lado de
+  // Los tests viven dentro del directorio de la librería para estar al lado de
   // lo que verifican, pero no forman parte de lo que se publica: sin esta
   // exclusión, `build:lib-types` emitiría declaraciones de la suite dentro de
   // `dist/types`.
-  "exclude": ["src/components/ui/datatable/__tests__/**"],
+  "exclude": ["src/__tests__/**"],
   "compilerOptions": {
-    // Mismo nivel de rigor que la aplicación: los tipos emitidos tienen que
-    // describir el código tal como fue verificado.
+    // Mismo nivel de rigor que la demo: los tipos emitidos tienen que describir
+    // el código tal como fue verificado.
     "noUncheckedIndexedAccess": true,
 
     // Los SFC importan su hoja de estilos por efecto secundario
     // (`import './styles/datatable.css'`). Sin las declaraciones ambientales de
     // Vite, TypeScript no reconoce ese módulo. Se declaran acá y no incluyendo
-    // `env.d.ts` para que este proyecto no salga del directorio del componente.
+    // `env.d.ts` para que este proyecto no salga de `src/`.
     "types": ["vite/client"],
 
     // Solo declaraciones. El JavaScript lo produce Vite en modo librería, que es
@@ -32,10 +33,9 @@
     "declaration": true,
     "emitDeclarationOnly": true,
 
-    // `rootDir` fija el directorio del componente como raíz para que la
-    // estructura emitida sea `dist/types/index.d.ts` y no repita la ruta
-    // completa `src/components/ui/datatable/`.
-    "rootDir": "src/components/ui/datatable",
+    // `rootDir` fija `src/` como raíz para que la estructura emitida sea
+    // `dist/types/index.d.ts` y no repita el prefijo `src/`.
+    "rootDir": "src",
     "declarationDir": "dist/types",
 
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.lib.tsbuildinfo"

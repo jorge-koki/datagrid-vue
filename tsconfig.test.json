@@ -1,35 +1,30 @@
 // TSConfig de la suite de tests.
 //
-// `tsconfig.app.json` excluye `src/**/__tests__/*` a propósito: los tests no
-// forman parte de la aplicación ni de lo que se publica. Pero excluirlos de la
-// verificación los dejaría sin tipar, y un test que no compila es un test que no
-// protege nada. Este proyecto los recupera y está referenciado desde
-// `tsconfig.json`, de modo que `npm run type-check` los verifica junto con el
-// resto.
+// `tsconfig.demo.json` excluye `src/__tests__/**` a propósito: los tests no
+// forman parte de lo que se publica. Pero excluirlos de la verificación los
+// dejaría sin tipar, y un test que no compila es un test que no protege nada.
+// Este proyecto los recupera y está referenciado desde `tsconfig.json`, de modo
+// que `npm run type-check` los verifica junto con el resto.
 //
-// El rigor es idéntico al de la aplicación —`noUncheckedIndexedAccess` incluido—
+// El rigor es idéntico al de la librería —`noUncheckedIndexedAccess` incluido—
 // porque los tests leen arrays de nodos del pool todo el tiempo y ahí es
 // justamente donde un índice fuera de rango pasaría desapercibido.
 {
   "extends": "@vue/tsconfig/tsconfig.dom.json",
-  "include": ["env.d.ts", "src/components/ui/datatable/__tests__/**/*"],
+  "include": ["env.d.ts", "src/__tests__/**/*"],
   "compilerOptions": {
     "noUncheckedIndexedAccess": true,
 
-    // `vite/client` declara los módulos `.css` que importan los SFC del
-    // componente, que los tests cargan al montar `DataTable.vue`.
+    // `vite/client` declara los módulos `.css` que importan los SFC de la
+    // librería, que los tests cargan al montar `DataTable.vue`.
     //
     // `node` NO está acá, y es deliberado: agregarlo redefine globales del DOM
     // —`setTimeout` pasaría a devolver un `Timeout` en lugar de un número— y esa
     // decisión ya está tomada y documentada en `useTablePersistence.ts`. Como los
-    // tests importan los módulos del componente, esos módulos se compilan también
+    // tests importan los módulos de la librería, esos módulos se compilan también
     // dentro de este proyecto y heredarían el cambio. El único test que necesita
     // leer un archivo declara por su cuenta lo que usa: ver `node-fs.d.ts`.
     "types": ["vite/client"],
-
-    "paths": {
-      "@/*": ["./src/*"]
-    },
 
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.test.tsbuildinfo"
   }
