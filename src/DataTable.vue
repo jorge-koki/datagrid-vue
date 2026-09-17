@@ -1788,6 +1788,51 @@ function paintFrame(): void {
   // Después del pool: `syncPosition` consulta si la celda editada sigue pintada,
   // y esa respuesta solo es válida una vez que el pool corrió.
   editor.syncPosition()
+
+  warnIfCollapsed()
+}
+
+/**
+ * Avisa una vez si la tabla se quedó sin alto donde pintar.
+ *
+ * ## Qué falla, y por qué falla en silencio
+ *
+ * `.dt-root` NO declara alto propio: lo toma del contenedor, y eso está
+ * documentado. Lo que no se ve venir es el modo en que falla cuando el
+ * contenedor no le da ninguno. La tabla no se rompe ni tira nada: pinta el
+ * encabezado, deja la barra de scroll —el canvas es absoluto y genera desborde
+ * igual— y muestra CERO filas. Parece un problema de datos y no de layout.
+ *
+ * Peor todavía, el síntoma depende de una prop que no tiene nada que ver: con
+ * `showRowNumbers` encendida la regleta va en flujo con el alto total escrito
+ * inline, así que le da alto de contenido al viewport y todo "anda". Apagarla
+ * hace desaparecer ese alto y la tabla se vacía. O sea que funcionaba de
+ * casualidad.
+ *
+ * ## Por qué esta condición y no otra
+ *
+ * `viewportWidth > 0` cumple dos funciones a la vez: prueba que el
+ * `ResizeObserver` ya midió —antes de eso el alto es cero de forma legítima y
+ * avisar sería un falso positivo— y descarta que la tabla esté simplemente
+ * oculta, porque un `display: none` o una pestaña cerrada dan ancho cero
+ * también. Sin ese testigo, cualquier tabla montada dentro de un acordeón
+ * cerrado avisaría sin motivo.
+ */
+let warnedAboutHeight = false
+
+function warnIfCollapsed(): void {
+  if (warnedAboutHeight) return
+  if (visibleRowCount.value === 0) return
+  if (rowViewportHeight.value > 0) return
+  if (scroll.state.value.viewportWidth === 0) return
+
+  warnedAboutHeight = true
+  console.warn(
+    '[DataTable] La tabla no tiene alto para pintar filas, así que no se ve ninguna. ' +
+      '`.dt-root` toma su alto del contenedor y el contenedor no le está dando ninguno. ' +
+      'Dale una altura al contenedor (`height: 600px`), o si está dentro de un flex, ' +
+      'poné `flex: 1; min-height: 0` en `.dt-root`.',
+  )
 }
 
 /**

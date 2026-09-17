@@ -22,7 +22,38 @@ devuelve el array original: ninguna fila se envuelve nunca en un Proxy. Un `ref(
 1. Conseguir el código: instalar el paquete, o copiar `src/` dentro del proyecto (las
    dos vías están en [Instalación](#instalación)).
 2. Importar el componente y, si se instaló el paquete, la hoja de estilos.
-3. Pasar `rows`, `columns` y `rowKey`. Darle una altura al contenedor.
+3. Pasar `rows`, `columns` y `rowKey`. **Darle una altura al contenedor** — ver abajo, es el paso
+   que más se olvida y el que peor falla.
+
+### El contenedor tiene que tener altura
+
+`.dt-root` **no declara altura propia**: la toma de su contenedor. Es deliberado —una tabla que se
+impone un alto pelea con cualquier layout— pero si nadie se la da, la tabla no protesta: pinta el
+encabezado, deja la barra de scroll y muestra una sola fila. Parece un problema de datos y no lo es.
+
+```css
+/* Altura fija. */
+.mi-contenedor {
+  height: 600px;
+}
+
+/* O dentro de un flex, que la tabla se quede con lo que sobra. */
+.mi-contenedor {
+  display: flex;
+  flex-direction: column;
+}
+.mi-contenedor .dt-root {
+  flex: 1;
+  min-height: 0;
+}
+```
+
+`min-height: 0` no es opcional en el segundo caso: sin eso, un item de flex no baja de su alto de
+contenido y la tabla desborda el contenedor en lugar de scrollear por dentro.
+
+Desde la versión 0.1.2 la tabla **avisa una vez por consola** cuando se queda sin altura, en lugar de
+quedarse vacía en silencio. El aviso no sale cuando la tabla simplemente está oculta —un acordeón
+cerrado, una pestaña inactiva—, que mide igual de cero y es perfectamente normal.
 
 ```vue
 <script setup lang="ts">
@@ -2467,6 +2498,42 @@ sola tabla sin tocar el tema global.
 }
 ```
 
+### Dónde se declaran los tokens
+
+**Sobre `.dt-root`, o como `--ui-*` en cualquier ancestro.** Declarar un `--dt-*` en un contenedor
+que envuelve a la tabla **no hace nada**, y es la trampa más fácil de esta hoja de estilos porque
+falla en silencio: no hay error, simplemente el color no cambia.
+
+```css
+/* ✗ No hace nada: la tabla se lo pisa. */
+.mi-contenedor {
+  --dt-primary: #8b5cf6;
+}
+
+/* ✓ Sobre la raíz de la tabla. */
+.mi-contenedor .dt-root {
+  --dt-primary: #8b5cf6;
+}
+
+/* ✓ O el token de la aplicación anfitriona, en cualquier ancestro. */
+.mi-app {
+  --ui-primary: #8b5cf6;
+}
+```
+
+El motivo es la cascada de custom properties: `.dt-root` declara `--dt-primary: var(--ui-primary,
+#00c16a)` **sobre sí mismo**, y una declaración en el elemento siempre le gana a un valor heredado de
+un ancestro. Medido sobre la tabla montada, con el token puesto en el contenedor padre:
+
+| Dónde se declara                      | `--dt-primary` resultante |
+| ------------------------------------- | ------------------------- |
+| `--dt-primary` en un contenedor padre | `#00c16a` — sin efecto    |
+| `--dt-primary` sobre `.dt-root`       | el valor puesto           |
+| `--ui-primary` en un contenedor padre | el valor puesto           |
+
+Por eso la columna **Adopta** de la tabla de abajo es la que importa cuando el estilo se define lejos
+de la tabla: esos son los tokens que sí se heredan.
+
 ### Tokens
 
 | Token                   | Por defecto en claro | Por defecto en oscuro | Adopta                                 |
@@ -3226,6 +3293,7 @@ explicar qué se compró a cambio.
 | `bulk-selection.test.ts`      | Los dos gestos en bloque: que el encabezado seleccione la columna entera y el número la fila entera, que lo que producen sea un rango —se copia, se extiende, se colapsa—, que el handle de redimensionado no dispare ninguno, y que los dos vengan apagados                                                                                                        |
 | `column-reorder.test.ts`      | Mover columnas arrastrando: dónde cae según el medio de cada columna, el umbral que separa el clic del arrastre, la línea que solo aparece si el gesto cambia algo, las columnas ocultas que no se corren de vecina, y una columna anclada que ni se agarra ni se deja cruzar                                                                                       |
 | `pinned-columns.test.ts`      | Columnas ancladas: el orden que imponen, que su posición NO dependa del scroll, el carril `sticky` del que cuelgan y el ancho de fila que lo sostiene, que se pinte UNA sola copia de cada una, que ninguna regla deje una fila transparente, que sigan siendo seleccionables, copiables y editables —con el editor acompañándolas— y que no cuesten nada por frame |
+| `host-layout.test.ts`         | Lo que la tabla necesita del contenedor: que avise —una sola vez— cuando se queda sin alto y muestra una fila de cincuenta, que NO avise cuando solo está oculta, y que la hoja de estilos siga respaldando lo que la documentación dice sobre dónde van los tokens                                                                                                 |
 | `server-rows.test.ts`         | El modo servidor: que sin `rowCount` no se pida ni una fila, que los tramos se alineen a `pageSize`, que una página no se pida dos veces, que vaciar `rows` y `refreshRows()` vuelvan a pedir, y que un hueco se pinte como marcador —con `aria-busy`, con barra por columna y sin el texto de la fila anterior—                                                    |
 | `sticky-layout.test.ts`       | Lo que no acompaña al scroll —encabezado, regleta, carriles anclados—: que nadie les escriba la posición a ninguna altura del scroll, que el encabezado viva dentro del scroller sin dejar de ser la fila 1 de la grilla, que su alto se descuente de una página de filas, y el contrato `sticky` de la hoja de estilos                                             |
 | `cell-layout.test.ts`         | Modo de maquetado: qué renderers lo declaran, que la clase se escriba solo al cambiar de renderer, que las tres alineaciones produzcan el mismo estado en los dos modos, y —leyendo el `.css`— que la celda de texto conserve su recorte con puntos suspensivos                                                                                                     |

@@ -7,6 +7,23 @@ Mientras la versión mayor sea `0`, un cambio incompatible sube la **minor**. La
 como pública es exactamente la que exporta [`src/index.ts`](./src/index.ts): lo que está bajo
 `internal/` y los composables pueden cambiar en cualquier versión sin aviso.
 
+## [0.1.2] — 2026-09-17
+
+### Arreglado
+
+- **La tabla avisa cuando el contenedor no le da altura.** `.dt-root` la toma del contenedor, y sin
+  ella no fallaba de forma visible: pintaba el encabezado, dejaba la barra de scroll y mostraba una
+  sola fila. Peor, el síntoma dependía de `showRowNumbers`: con la regleta encendida, su alto inline
+  le daba alto de contenido al viewport y la tabla "andaba" de casualidad; apagarla la vaciaba. Ahora
+  avisa una vez por consola, y no avisa cuando la tabla solo está oculta.
+
+### Documentación
+
+- **Dónde se declaran los tokens del tema.** El ejemplo anterior —`--dt-primary` sobre un contenedor
+  cualquiera— **no funciona**: `.dt-root` se declara esos tokens a sí misma y una declaración en el
+  elemento le gana a un valor heredado. Van sobre `.dt-root`, o como `--ui-*` en cualquier ancestro.
+- Sección propia sobre la altura del contenedor, con las dos formas de dársela.
+
 ## [0.1.1] — 2026-09-17
 
 ### Cambiado

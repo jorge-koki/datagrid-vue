@@ -43,7 +43,7 @@ const columnas: DataTableColumn<Empleado>[] = [
 - **Columnas anclables, redimensionables, ocultables y reordenables**, con el layout guardado.
 - **Datos del servidor**: pide los tramos que le faltan mientras scrolleás.
 - **Ocho tipos de celda**, temas claro / oscuro, y el color principal en una línea:
-  `--dt-primary: #8b5cf6`.
+  `.dt-root { --dt-primary: #8b5cf6 }`.
 
 ## Documentación
 
