@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { computed, shallowRef, useTemplateRef, watch, watchEffect } from 'vue'
 // Exactamente lo que escribiría una aplicación que instaló el paquete. Dentro de
-// este repositorio el alias de Vite resuelve `datatable-vue` a `src/index.ts`, de
+// este repositorio el alias de Vite resuelve `vue-tablekit` a `src/index.ts`, de
 // modo que la demo compila contra la API pública y nada más: si algo no está
 // exportado desde el `index.ts`, esta pantalla no compila.
-import { DataTable } from 'datatable-vue'
+import { DataTable } from 'vue-tablekit'
 import type {
   AfterEditEvent,
   BeforeEditEvent,
@@ -22,7 +22,7 @@ import type {
   RangeSelectEvent,
   RowsRequestEvent,
   SelectionMode,
-} from 'datatable-vue'
+} from 'vue-tablekit'
 import { createProjects, ROW_COUNTS } from './data'
 import type { ProjectRow } from './data'
 import { fetchRows } from './server'
@@ -73,7 +73,7 @@ const { entries: eventLog, push: logEvent } = useDemoLog()
  * `package.json`, así que hay una sola dirección que mantener, y el README de
  * ahí enlaza al del componente en su segunda línea.
  */
-const DOCS_URL = 'https://github.com/jorge-koki/datatable-vue#readme'
+const DOCS_URL = 'https://github.com/jorge-koki/vue-tablekit#readme'
 
 /* ------------------------------------------------------------------ Datos */
 
@@ -436,7 +436,7 @@ function onAfterEdit(event: AfterEditEvent<ProjectRow>): void {
   <div class="demo" :data-theme="theme" :style="{ '--ui-primary': primaryColor }">
     <header class="demo-topbar">
       <div class="demo-brand">
-        <h1 class="demo-title">datatable-vue</h1>
+        <h1 class="demo-title">vue-tablekit</h1>
         <p class="demo-tagline">
           Grilla virtualizada para Vue 3. Vue es dueño de la estructura y de la configuración; un
           pool de nodos DOM reciclados es dueño del camino caliente del scroll.

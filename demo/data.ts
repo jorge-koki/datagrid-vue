@@ -1,5 +1,5 @@
-import { COLOR_TOKENS } from 'datatable-vue'
-import type { CellOption } from 'datatable-vue'
+import { COLOR_TOKENS } from 'vue-tablekit'
+import type { CellOption } from 'vue-tablekit'
 
 /**
  * Generador determinista del dataset de la demo.

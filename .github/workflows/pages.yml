@@ -1,0 +1,61 @@
+name: Pages
+
+# Publica la demo en GitHub Pages en cada push a main, y a mano cuando haga
+# falta. Es la única forma de que alguien pruebe la tabla sin clonar el
+# repositorio: mil filas, scroll, selección y edición, sin instalar nada.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  # Pages verifica con OIDC que el despliegue viene de este workflow.
+  id-token: write
+
+# Un despliegue por vez. `cancel-in-progress: false` y no `true`: cancelar un
+# despliegue a mitad de camino puede dejar el sitio servido a medias, y eso es
+# peor que esperar a que termine el anterior.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      # `build:demo:pages` compila con `--base=/vue-tablekit/`, que es donde
+      # Pages sirve el sitio de un repositorio de proyecto. Sin eso, el HTML
+      # pide `/assets/...` desde la raíz del dominio y la página sale en blanco.
+      - name: Build
+        run: npm run build:demo:pages
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist-demo
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

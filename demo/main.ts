@@ -5,7 +5,7 @@ import { createApp } from 'vue'
  * en que hay que escribirlas.
  *
  * La demo importa la hoja de la librería por el nombre del paquete
- * —`datatable-vue/style.css`— y no por una ruta relativa. Dentro de este
+ * —`vue-tablekit/style.css`— y no por una ruta relativa. Dentro de este
  * repositorio el alias de Vite la resuelve al mismo archivo que los SFC importan
  * por efecto secundario, así que no se duplica una sola regla; lo que se gana es
  * que la línea que se lee acá es exactamente la que hay que copiar afuera.
@@ -15,7 +15,7 @@ import { createApp } from 'vue'
  * define una paleta propia con su propia media query de tema oscuro y pelearía
  * con el selector de tema de la demo.
  */
-import 'datatable-vue/style.css'
+import 'vue-tablekit/style.css'
 import './demo.css'
 
 import App from './App.vue'

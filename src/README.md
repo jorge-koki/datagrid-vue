@@ -27,9 +27,9 @@ devuelve el array original: ninguna fila se envuelve nunca en un Proxy. Un `ref(
 ```vue
 <script setup lang="ts">
 import { shallowRef } from 'vue'
-import { DataTable } from 'datatable-vue'
-import type { DataTableColumn } from 'datatable-vue'
-import 'datatable-vue/style.css'
+import { DataTable } from 'vue-tablekit'
+import type { DataTableColumn } from 'vue-tablekit'
+import 'vue-tablekit/style.css'
 
 type Invoice = { id: number; customer: string; total: number }
 
@@ -66,16 +66,16 @@ apagan con `selection-mode="none"`.
 ### Opción A — instalar el paquete
 
 ```sh
-npm install datatable-vue
+npm install vue-tablekit
 ```
 
 Mientras el paquete no esté publicado en npm, la misma línea contra el repositorio hace lo mismo:
-`npm install github:jorge-koki/datatable-vue`.
+`npm install github:jorge-koki/vue-tablekit`.
 
 ```ts
-import { DataTable, DataTableColumnToggle } from 'datatable-vue'
-import type { DataTableColumn } from 'datatable-vue'
-import 'datatable-vue/style.css' // obligatorio por esta vía
+import { DataTable, DataTableColumnToggle } from 'vue-tablekit'
+import type { DataTableColumn } from 'vue-tablekit'
+import 'vue-tablekit/style.css' // obligatorio por esta vía
 ```
 
 Por esta vía el CSS se **extrae a un archivo aparte**, nunca se inyecta dentro del JS. El CSS
@@ -120,7 +120,7 @@ Por esta vía no hace falta importar la hoja de estilos: `DataTable.vue` importa
 Dos ejemplos completos, sin recortes: se copian, se pegan y andan. El primero es una grilla
 virtualizada con edición; el segundo agrega agrupación, agregados y persistencia encima del primero.
 
-Los dos importan desde `datatable-vue`. Si el código se copió al proyecto (la [opción
+Los dos importan desde `vue-tablekit`. Si el código se copió al proyecto (la [opción
 B](#opción-b--copiar-el-directorio-estilo-shadcn)), el único cambio es el especificador del import
 —`@/components/ui/datatable`— y que la línea de la hoja de estilos sobra.
 
@@ -129,9 +129,9 @@ B](#opción-b--copiar-el-directorio-estilo-shadcn)), el único cambio es el espe
 ```vue
 <script setup lang="ts">
 import { shallowRef } from 'vue'
-import { COLOR_TOKENS, DataTable } from 'datatable-vue'
-import type { DataTableColumn, EditCommitEvent } from 'datatable-vue'
-import 'datatable-vue/style.css'
+import { COLOR_TOKENS, DataTable } from 'vue-tablekit'
+import type { DataTableColumn, EditCommitEvent } from 'vue-tablekit'
+import 'vue-tablekit/style.css'
 
 // `type` y no `interface`: ver la nota al final de la sección.
 type Invoice = {
@@ -223,9 +223,9 @@ el plegado bajo control del padre y el layout persistido entre sesiones.
 ```vue
 <script setup lang="ts">
 import { shallowRef } from 'vue'
-import { COLOR_TOKENS, DataTable, groupId } from 'datatable-vue'
-import type { DataTableColumn, EditCommitEvent, GroupToggleEvent } from 'datatable-vue'
-import 'datatable-vue/style.css'
+import { COLOR_TOKENS, DataTable, groupId } from 'vue-tablekit'
+import type { DataTableColumn, EditCommitEvent, GroupToggleEvent } from 'vue-tablekit'
+import 'vue-tablekit/style.css'
 
 type Invoice = {
   id: number
@@ -882,7 +882,7 @@ cada resize.
 ```vue
 <script setup lang="ts">
 import { shallowRef } from 'vue'
-import type { CellPosition, CellSelectEvent, SelectionMode } from 'datatable-vue'
+import type { CellPosition, CellSelectEvent, SelectionMode } from 'vue-tablekit'
 
 const selectionMode = shallowRef<SelectionMode>('cell')
 const activeCell = shallowRef<CellPosition | null>(null)
@@ -1330,7 +1330,7 @@ Ver [el copiado](#el-copiado).
 **Por columna (lo más simple: `TRow` es concreto):**
 
 ```ts
-import type { CellRenderContext, CellRenderer, CellRendererHandle } from 'datatable-vue'
+import type { CellRenderContext, CellRenderer, CellRendererHandle } from 'vue-tablekit'
 
 type BarState = { bar: HTMLElement; width: string }
 const barStates = new WeakMap<CellRendererHandle, BarState>()
@@ -1376,8 +1376,8 @@ const column: DataTableColumn<Invoice> = { key: 'total', renderer: barRenderer }
 **Registrado globalmente (usable por nombre desde cualquier tabla):**
 
 ```ts
-import { registerRenderer } from 'datatable-vue'
-import type { CellRenderContext, CellRendererHandle } from 'datatable-vue'
+import { registerRenderer } from 'vue-tablekit'
+import type { CellRenderContext, CellRendererHandle } from 'vue-tablekit'
 
 registerRenderer('bar', () => ({
   type: 'bar',
@@ -1573,7 +1573,7 @@ corre por celda visible y por frame.
 Un botón con el aspecto de un design system —sus clases, sin su componente—:
 
 ```ts
-import type { CellRenderContext, CellRenderer, CellRendererHandle } from 'datatable-vue'
+import type { CellRenderContext, CellRenderer, CellRendererHandle } from 'vue-tablekit'
 
 /**
  * Las clases del design system se escriben UNA vez, en `create`.
@@ -1638,7 +1638,7 @@ handler no necesita que el renderer escriba nada extra por frame:
 ```vue
 <script setup lang="ts">
 import { shallowRef, useTemplateRef } from 'vue'
-import { DataTable } from 'datatable-vue'
+import { DataTable } from 'vue-tablekit'
 import { actionRenderer } from './actionRenderer'
 
 const rows = shallowRef<readonly Invoice[]>([])
@@ -1706,9 +1706,9 @@ Se pide declarando `editor: 'slot'` en la columna y llenando el slot:
 ```vue
 <script setup lang="ts">
 import { shallowRef } from 'vue'
-import { DataTable } from 'datatable-vue'
-import type { CellOption, CellValue, DataTableColumn, EditCommitEvent } from 'datatable-vue'
-import 'datatable-vue/style.css'
+import { DataTable } from 'vue-tablekit'
+import type { CellOption, CellValue, DataTableColumn, EditCommitEvent } from 'vue-tablekit'
+import 'vue-tablekit/style.css'
 
 type Invoice = { id: number; customer: string; status: 'draft' | 'sent' | 'paid' }
 
@@ -1925,8 +1925,8 @@ se construye ningún árbol, no se aplana nada y el pool recorre el mismo camino
 ```vue
 <script setup lang="ts">
 import { shallowRef } from 'vue'
-import { DataTable } from 'datatable-vue'
-import type { DataTableColumn, GroupToggleEvent } from 'datatable-vue'
+import { DataTable } from 'vue-tablekit'
+import type { DataTableColumn, GroupToggleEvent } from 'vue-tablekit'
 
 type Invoice = { id: number; customer: string; region: string; total: number }
 
@@ -2036,7 +2036,7 @@ equivocado no produce ningún error ni ningún aviso**. El grupo se queda cerrad
 funcionando y no hay nada que mirar. Por eso el paquete exporta el constructor:
 
 ```ts
-import { groupId } from 'datatable-vue'
+import { groupId } from 'vue-tablekit'
 
 groupId(['region', 'LATAM']) // 'region:LATAM'
 groupId(['region', 'LATAM'], ['status', 'active']) // 'region:LATAM/status:active'
@@ -2124,7 +2124,7 @@ defecto que después nadie recuerda.
 clave de la columna:
 
 ```ts
-import type { AggregationFn, DataTableColumn } from 'datatable-vue'
+import type { AggregationFn, DataTableColumn } from 'vue-tablekit'
 
 type Invoice = { id: number; region: string; total: number; status: 'draft' | 'sent' | 'paid' }
 
@@ -2204,7 +2204,7 @@ padre lo agregue a la lista.
 ```vue
 <script setup lang="ts">
 import { shallowRef } from 'vue'
-import { groupId } from 'datatable-vue'
+import { groupId } from 'vue-tablekit'
 
 // Controlado: la tabla no cambia esto sola, solo emite lo que el padre debería adoptar.
 const expandedGroups = shallowRef<readonly string[]>([groupId(['region', 'LATAM'])])
@@ -2861,7 +2861,7 @@ const persist: DataTablePersistOptions = {
 Se implementan tres métodos. Pueden ser síncronos o asíncronos.
 
 ```ts
-import type { DataTableStorageAdapter, PersistedTableState } from 'datatable-vue'
+import type { DataTableStorageAdapter, PersistedTableState } from 'vue-tablekit'
 
 const remoteAdapter: DataTableStorageAdapter = {
   async load(key: string): Promise<PersistedTableState | null> {
@@ -2962,9 +2962,9 @@ huecos.
 ```vue
 <script setup lang="ts">
 import { shallowRef } from 'vue'
-import { DataTable } from 'datatable-vue'
-import type { RowsRequestEvent } from 'datatable-vue'
-import 'datatable-vue/style.css'
+import { DataTable } from 'vue-tablekit'
+import type { RowsRequestEvent } from 'vue-tablekit'
+import 'vue-tablekit/style.css'
 
 type Row = { id: number; name: string; total: number }
 
@@ -3275,10 +3275,14 @@ cuando cambia la configuración de columnas.
 
 Instalar desde GitHub ya funciona. Todo lo que sigue es lo que falta antes de empujar a **npm**.
 
-### Por qué el paquete se llama `datatable-vue` y no `datagrid-vue`
+### Por qué el paquete se llama `vue-tablekit`
 
-Porque `datagrid-vue` **no se puede usar**. El registro conserva un documento lápida: alguien publicó
-`0.0.1`, `0.0.2` y `0.0.3` el 2019-09-10 y las despublicó todas ese mismo día.
+Porque los dos nombres obvios están vetados, cada uno por una regla distinta de npm, y ninguna de las
+dos se puede consultar de antemano. Queda anotado acá porque volver a chocarse con ellas cuesta un
+intento de publicación cada vez.
+
+**`datagrid-vue` tiene una lápida.** Alguien publicó `0.0.1`, `0.0.2` y `0.0.3` el 2019-09-10 y las
+despublicó todas ese mismo día. El registro conserva el documento:
 
 ```sh
 curl -s https://registry.npmjs.org/datagrid-vue
@@ -3286,29 +3290,40 @@ curl -s https://registry.npmjs.org/datagrid-vue
 ```
 
 npm no reasigna un nombre despublicado: solo su dueño original podría volver a usarlo, y cualquier
-otra cuenta recibe un `403` al publicar. Es también la razón por la que **despublicar no es una
-opción** una vez que este paquete salga: deja el nombre inutilizable para siempre, para uno mismo
-incluido.
+otra cuenta recibe un `403`. Es también la razón por la que **despublicar no es una opción** una vez
+que una versión sale: deja el nombre inutilizable para siempre, para uno mismo incluido.
 
-`datatable-vue` está libre —`{"error":"Not found"}`, sin lápida— y encaja mejor con lo que hay
-adentro: el componente se llama `DataTable`, las clases CSS son `dt-*` y este documento habla del
-DataTable de punta a punta. El repositorio sigue llamándose `datagrid-vue`, que es solamente la URL
-de GitHub y no afecta a nadie que instale el paquete.
+**`datatable-vue` es "demasiado parecido" a `data-table-vue`.** npm compara los nombres después de
+quitarles guiones y puntos, y rechaza los que coinciden:
+
+```
+403 Forbidden - PUT https://registry.npmjs.org/datatable-vue
+Package name too similar to existing package data-table-vue
+```
+
+La comparación es por coincidencia EXACTA del nombre sin guiones, no por parecido general: lo que
+choca con `data-table-vue` es cualquier partición de `datatablevue`, y nada más. Un `404` del
+registro **no alcanza para saberlo**, porque la regla solo se evalúa al publicar. La forma de
+anticiparla es consultar todas las particiones con guion del candidato.
+
+`vue-tablekit` pasa las dos: libre y sin lápida en sus cuatro variantes —`vue-table-kit`,
+`vue-tablekit`, `vuetable-kit`, `vuetablekit`—. Y describe bien lo que hay adentro, que no es solo la
+tabla: vienen ocho tipos de celda, el selector de columnas y los composables.
 
 ### Lo demás
 
 Ya hecho, nada que tocar:
 
-- [x] **Nombre** `datatable-vue`, libre y sin lápida en el registro. Ver arriba.
+- [x] **Nombre** `vue-tablekit`, libre y sin lápida en el registro. Ver arriba.
 - [x] **Versión** `0.1.0`, **descripción** y **keywords**.
 - [x] **Licencia** MIT, declarada en `package.json` y presente como archivo `LICENSE`.
 - [x] **Autor** `jorge-koki`; **`repository`**, **`homepage`** y **`bugs`** apuntan todos a
-      `jorge-koki/datatable-vue`.
+      `jorge-koki/vue-tablekit`.
 - [x] **`private`** eliminado y **`publishConfig.access: "public"`** declarado, así `npm publish`
       funciona también si el nombre termina siendo scoped.
 - [x] **`files: ["dist"]`**, con el contenido exacto del tarball verificado en CI por
       `npm pack --dry-run`.
-- [x] Script **`prepare`**, para que `npm install github:jorge-koki/datatable-vue` construya `dist/` al
+- [x] Script **`prepare`**, para que `npm install github:jorge-koki/vue-tablekit` construya `dist/` al
       instalar, sin versionar la salida del build. Y **`prepublishOnly`**, que corre tipos y tests
       antes de que nada salga hacia el registro.
 - [x] **CHANGELOG**, con la regla de qué cuenta como API pública mientras la mayor sea `0`.

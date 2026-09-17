@@ -1,4 +1,4 @@
-# datatable-vue
+# vue-tablekit
 
 Una tabla de datos para Vue 3 que se maneja como una planilla de cálculo y no se pone lenta cuando
 hay muchas filas.
@@ -11,11 +11,15 @@ scrolleás.
 
 Sin dependencias: solo Vue.
 
+**→ [Probala en vivo](https://jorge-koki.github.io/vue-tablekit/)** — sin instalar nada. Subí las
+filas a 50.000 y mirá los contadores, arrastrá para seleccionar un bloque, editá una celda, cambiá el
+color principal.
+
 ```sh
-npm install datatable-vue
+npm install vue-tablekit
 ```
 
-> Mientras el paquete no esté publicado en npm, `npm install github:jorge-koki/datatable-vue` instala
+> Mientras el paquete no esté publicado en npm, `npm install github:jorge-koki/vue-tablekit` instala
 > desde el repositorio y funciona igual.
 
 ## Cómo se ve usarla
@@ -23,9 +27,9 @@ npm install datatable-vue
 ```vue
 <script setup lang="ts">
 import { shallowRef } from 'vue'
-import { DataTable } from 'datatable-vue'
-import type { DataTableColumn, EditCommitEvent } from 'datatable-vue'
-import 'datatable-vue/style.css'
+import { DataTable } from 'vue-tablekit'
+import type { DataTableColumn, EditCommitEvent } from 'vue-tablekit'
+import 'vue-tablekit/style.css'
 
 type Empleado = { id: number; nombre: string; area: string; sueldo: number }
 
@@ -145,6 +149,11 @@ decisión NO es la correcta.
 
 ## Probarla
 
+**[jorge-koki.github.io/vue-tablekit](https://jorge-koki.github.io/vue-tablekit/)** — la demo
+publicada, sin instalar nada. Se despliega sola en cada push a `main`.
+
+Y si querés tocarla con el código delante:
+
 ```sh
 npm install
 npm run dev      # http://localhost:5173
@@ -169,7 +178,7 @@ Abre con 100 filas. Desde ahí vale la pena:
 ## Qué hay acá adentro
 
 **`src/` es la librería y nada más que la librería** —exactamente lo que se publica— y `demo/` es la
-aplicación que la ejercita. La separación no es cosmética: la demo importa `datatable-vue`, igual que
+aplicación que la ejercita. La separación no es cosmética: la demo importa `vue-tablekit`, igual que
 lo haría cualquier proyecto que instale el paquete, así que si algo no sale del `index.ts`, la demo
 no compila.
 
@@ -189,6 +198,7 @@ no compila.
 | ---------------------- | --------------------------------------------------------------------------------------------------- |
 | `npm run dev`          | Servidor de desarrollo de la demo.                                                                  |
 | `npm run build`        | Verificación de tipos + build de la demo en `dist-demo/`.                                           |
+| `npm run build:demo:pages` | La demo con la ruta base de GitHub Pages. Es lo que corre el workflow de despliegue.            |
 | `npm run preview`      | Sirve la demo ya construida.                                                                        |
 | `npm run build:lib`    | Construye la librería distribuible en `dist/`: bundle ESM, `style.css` extraído y archivos `.d.ts`. |
 | `npm run type-check`   | `vue-tsc --build` sobre la librería, la demo y los tests. Tiene que salir con código 0.             |
@@ -206,11 +216,11 @@ GitHub, que es lo que hace innecesario versionar `dist/`.
 Dos vías, las dos documentadas en detalle en la
 [documentación del componente](./src/README.md#instalación):
 
-- **Instalar el paquete** (recomendado): `npm install datatable-vue`, y después:
+- **Instalar el paquete** (recomendado): `npm install vue-tablekit`, y después:
 
   ```ts
-  import { DataTable, DataTableColumnToggle } from 'datatable-vue'
-  import 'datatable-vue/style.css'
+  import { DataTable, DataTableColumnToggle } from 'vue-tablekit'
+  import 'vue-tablekit/style.css'
   ```
 
 - **Copiar el directorio** (estilo shadcn): llevar `src/` al proyecto, con el nombre que se quiera. No

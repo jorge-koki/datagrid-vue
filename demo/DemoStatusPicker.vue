@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { shallowRef, watch } from 'vue'
-import type { CellOption, CellValue } from 'datatable-vue'
+import type { CellOption, CellValue } from 'vue-tablekit'
 
 /**
  * Desplegable propio, montado desde el slot `#editor` de la tabla.

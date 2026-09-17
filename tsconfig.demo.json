@@ -1,7 +1,7 @@
 // TSConfig del código que corre en el navegador: la librería y la demo que la
 // ejercita, verificadas dentro de UN SOLO programa.
 //
-// Que estén juntas no es comodidad, es el punto. La demo importa `datatable-vue`,
+// Que estén juntas no es comodidad, es el punto. La demo importa `vue-tablekit`,
 // que el `paths` de acá abajo resuelve a `src/index.ts` —el mismo alias que
 // resuelve Vite—, así que cualquier tipo que no sobreviva al borde público del
 // paquete aparece como un error acá y no en el proyecto de alguien más.
@@ -22,11 +22,11 @@
     // una aplicación consumidora. No hay alias `@/`: la librería usa solo
     // imports relativos y la demo, solo el nombre público.
     //
-    // `datatable-vue/style.css` no necesita entrada acá. La clave es exacta, así
+    // `vue-tablekit/style.css` no necesita entrada acá. La clave es exacta, así
     // que no la captura, y la resolución normal termina en la declaración
     // ambiental `declare module '*.css'` que trae `vite/client` vía `env.d.ts`.
     "paths": {
-      "datatable-vue": ["./src/index.ts"]
+      "vue-tablekit": ["./src/index.ts"]
     },
 
     // `vue-tsc --build` produces a .tsbuildinfo file for incremental type-checking.

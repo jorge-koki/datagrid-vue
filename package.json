@@ -1,16 +1,16 @@
 {
-  "name": "datatable-vue",
+  "name": "vue-tablekit",
   "version": "0.1.0",
   "description": "High-performance virtualized data grid for Vue 3, with DOM node recycling, cell editing, custom renderers and persistent column layout.",
   "license": "MIT",
   "author": "jorge-koki",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/jorge-koki/datatable-vue.git"
+    "url": "git+https://github.com/jorge-koki/vue-tablekit.git"
   },
-  "homepage": "https://github.com/jorge-koki/datatable-vue#readme",
+  "homepage": "https://github.com/jorge-koki/vue-tablekit#readme",
   "bugs": {
-    "url": "https://github.com/jorge-koki/datatable-vue/issues"
+    "url": "https://github.com/jorge-koki/vue-tablekit/issues"
   },
   "keywords": [
     "vue",
@@ -33,13 +33,13 @@
     "dist",
     "CHANGELOG.md"
   ],
-  "main": "./dist/datatable-vue.js",
-  "module": "./dist/datatable-vue.js",
+  "main": "./dist/vue-tablekit.js",
+  "module": "./dist/vue-tablekit.js",
   "types": "./dist/types/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/types/index.d.ts",
-      "import": "./dist/datatable-vue.js"
+      "import": "./dist/vue-tablekit.js"
     },
     "./style.css": "./dist/style.css",
     "./package.json": "./package.json"
@@ -52,6 +52,7 @@
     "build": "run-p type-check \"build-only {@}\" --",
     "preview": "vite preview",
     "build-only": "vite build",
+    "build:demo:pages": "vite build --base=/vue-tablekit/",
     "build:lib": "run-s build:lib-bundle build:lib-types",
     "build:lib-bundle": "vite build --mode lib",
     "build:lib-types": "vue-tsc -p tsconfig.lib.json",

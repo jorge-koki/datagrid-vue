@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, shallowRef } from 'vue'
-import type { CellPosition } from 'datatable-vue'
+import type { CellPosition } from 'vue-tablekit'
 
 /**
  * Medidor de FPS y de nodos realmente presentes en el DOM.
