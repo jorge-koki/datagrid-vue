@@ -7,10 +7,21 @@ Mientras la versión mayor sea `0`, un cambio incompatible sube la **minor**. La
 como pública es exactamente la que exporta [`src/index.ts`](./src/index.ts): lo que está bajo
 `internal/` y los composables pueden cambiar en cualquier versión sin aviso.
 
-## [No publicado]
+## [0.1.1] — 2026-09-17
 
-Todavía no se publicó ninguna versión en npm, así que esta sección es el contenido de la primera.
-Al etiquetar `v0.1.0` pasa a ser `## [0.1.0]`.
+### Cambiado
+
+- La portada del repositorio se queda con lo indispensable: qué es, cómo se ve usarlo y dónde está la
+  documentación. Lo de contribuir —correr la demo, la estructura, los scripts, cómo publicar— se
+  muda a `CONTRIBUTING.md`.
+
+Nada de código cambia respecto de la `0.1.0`. La versión existe porque **el README que muestra npm es
+una foto del momento de publicar**: no se actualiza solo, y corregir la portada del registro solo
+llega con una versión nueva.
+
+## [0.1.0] — 2026-09-17
+
+Primera versión publicada.
 
 ### Agregado
 
