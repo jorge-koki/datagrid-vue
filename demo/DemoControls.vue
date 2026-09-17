@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { DataTableColumnToggle } from '@jorge-koki/datagrid-vue'
+import { DataTableColumnToggle } from 'datatable-vue'
 import type {
   ColumnVisibilityState,
   DataTableColumn,
@@ -7,7 +7,7 @@ import type {
   DataTableTheme,
   DataTableVariant,
   SelectionMode,
-} from '@jorge-koki/datagrid-vue'
+} from 'datatable-vue'
 import { ROW_COUNTS } from './data'
 import type { ProjectRow } from './data'
 import { SERVER_LATENCY } from './server'

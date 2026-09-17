@@ -1,4 +1,4 @@
-# datagrid-vue
+# datatable-vue
 
 Una tabla de datos para Vue 3 que se maneja como una planilla de cálculo y no se pone lenta cuando
 hay muchas filas.
@@ -12,7 +12,7 @@ scrolleás.
 Sin dependencias: solo Vue.
 
 ```sh
-npm install @jorge-koki/datagrid-vue
+npm install datatable-vue
 ```
 
 > Mientras el paquete no esté publicado en npm, `npm install github:jorge-koki/datagrid-vue` instala
@@ -23,9 +23,9 @@ npm install @jorge-koki/datagrid-vue
 ```vue
 <script setup lang="ts">
 import { shallowRef } from 'vue'
-import { DataTable } from '@jorge-koki/datagrid-vue'
-import type { DataTableColumn, EditCommitEvent } from '@jorge-koki/datagrid-vue'
-import '@jorge-koki/datagrid-vue/style.css'
+import { DataTable } from 'datatable-vue'
+import type { DataTableColumn, EditCommitEvent } from 'datatable-vue'
+import 'datatable-vue/style.css'
 
 type Empleado = { id: number; nombre: string; area: string; sueldo: number }
 
@@ -169,7 +169,7 @@ Abre con 100 filas. Desde ahí vale la pena:
 ## Qué hay acá adentro
 
 **`src/` es la librería y nada más que la librería** —exactamente lo que se publica— y `demo/` es la
-aplicación que la ejercita. La separación no es cosmética: la demo importa `@jorge-koki/datagrid-vue`, igual que
+aplicación que la ejercita. La separación no es cosmética: la demo importa `datatable-vue`, igual que
 lo haría cualquier proyecto que instale el paquete, así que si algo no sale del `index.ts`, la demo
 no compila.
 
@@ -206,11 +206,11 @@ GitHub, que es lo que hace innecesario versionar `dist/`.
 Dos vías, las dos documentadas en detalle en la
 [documentación del componente](./src/README.md#instalación):
 
-- **Instalar el paquete** (recomendado): `npm install @jorge-koki/datagrid-vue`, y después:
+- **Instalar el paquete** (recomendado): `npm install datatable-vue`, y después:
 
   ```ts
-  import { DataTable, DataTableColumnToggle } from '@jorge-koki/datagrid-vue'
-  import '@jorge-koki/datagrid-vue/style.css'
+  import { DataTable, DataTableColumnToggle } from 'datatable-vue'
+  import 'datatable-vue/style.css'
   ```
 
 - **Copiar el directorio** (estilo shadcn): llevar `src/` al proyecto, con el nombre que se quiera. No

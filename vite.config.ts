@@ -30,7 +30,7 @@ const LIB_ENTRY = fileURLToPath(new URL('./src/index.ts', import.meta.url))
  * Hoja de estilos de la librería, tal como la resuelve el consumidor.
  *
  * Es el mismo archivo que importan los SFC por efecto secundario, así que el
- * `import '@jorge-koki/datagrid-vue/style.css'` de la demo resuelve al módulo que ya estaba
+ * `import 'datatable-vue/style.css'` de la demo resuelve al módulo que ya estaba
  * cargado y no duplica una sola regla.
  */
 const LIB_STYLE = fileURLToPath(new URL('./src/styles/datatable.css', import.meta.url))
@@ -62,13 +62,13 @@ export default defineConfig(({ mode }) => {
        *
        * El orden importa. Vite hace coincidir una clave de texto cuando el
        * import es igual a la clave o empieza con la clave más `/`, y se queda
-       * con la primera que coincide: `'@jorge-koki/datagrid-vue'` puesto antes se tragaría
-       * `@jorge-koki/datagrid-vue/style.css` y lo reescribiría como `<index.ts>/style.css`.
+       * con la primera que coincide: `'datatable-vue'` puesto antes se tragaría
+       * `datatable-vue/style.css` y lo reescribiría como `<index.ts>/style.css`.
        * La entrada más específica va primero.
        */
       alias: {
-        '@jorge-koki/datagrid-vue/style.css': LIB_STYLE,
-        '@jorge-koki/datagrid-vue': LIB_ENTRY,
+        'datatable-vue/style.css': LIB_STYLE,
+        'datatable-vue': LIB_ENTRY,
       },
     },
 
@@ -93,7 +93,7 @@ export default defineConfig(({ mode }) => {
             // inventar un nombre global y obligaría a mantener un mapeo `globals`
             // para algo que nadie va a importar.
             formats: ['es'],
-            fileName: () => 'datagrid-vue.js',
+            fileName: () => 'datatable-vue.js',
             // El CSS se emite aparte como `dist/style.css`, nunca inyectado en el
             // JS. Inyectarlo rompe SSR —el bundle tocaría `document` al importarse—
             // y le quita al consumidor la posibilidad de redefinir los tokens

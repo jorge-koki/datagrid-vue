@@ -1,5 +1,5 @@
 {
-  "name": "@jorge-koki/datagrid-vue",
+  "name": "datatable-vue",
   "version": "0.1.0",
   "description": "High-performance virtualized data grid for Vue 3, with DOM node recycling, cell editing, custom renderers and persistent column layout.",
   "license": "MIT",
@@ -33,13 +33,13 @@
     "dist",
     "CHANGELOG.md"
   ],
-  "main": "./dist/datagrid-vue.js",
-  "module": "./dist/datagrid-vue.js",
+  "main": "./dist/datatable-vue.js",
+  "module": "./dist/datatable-vue.js",
   "types": "./dist/types/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/types/index.d.ts",
-      "import": "./dist/datagrid-vue.js"
+      "import": "./dist/datatable-vue.js"
     },
     "./style.css": "./dist/style.css",
     "./package.json": "./package.json"

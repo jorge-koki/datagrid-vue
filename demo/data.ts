@@ -1,5 +1,5 @@
-import { COLOR_TOKENS } from '@jorge-koki/datagrid-vue'
-import type { CellOption } from '@jorge-koki/datagrid-vue'
+import { COLOR_TOKENS } from 'datatable-vue'
+import type { CellOption } from 'datatable-vue'
 
 /**
  * Generador determinista del dataset de la demo.

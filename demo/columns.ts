@@ -1,4 +1,4 @@
-import type { CellValue, DataTableColumn } from '@jorge-koki/datagrid-vue'
+import type { CellValue, DataTableColumn } from 'datatable-vue'
 import { PRIORITY_OPTIONS, STATUS_OPTIONS, TAG_OPTIONS } from './data'
 import type { ProjectRow } from './data'
 

@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { computed, shallowRef, useTemplateRef, watch, watchEffect } from 'vue'
 // Exactamente lo que escribiría una aplicación que instaló el paquete. Dentro de
-// este repositorio el alias de Vite resuelve `@jorge-koki/datagrid-vue` a `src/index.ts`, de
+// este repositorio el alias de Vite resuelve `datatable-vue` a `src/index.ts`, de
 // modo que la demo compila contra la API pública y nada más: si algo no está
 // exportado desde el `index.ts`, esta pantalla no compila.
-import { DataTable } from '@jorge-koki/datagrid-vue'
+import { DataTable } from 'datatable-vue'
 import type {
   AfterEditEvent,
   BeforeEditEvent,
@@ -22,7 +22,7 @@ import type {
   RangeSelectEvent,
   RowsRequestEvent,
   SelectionMode,
-} from '@jorge-koki/datagrid-vue'
+} from 'datatable-vue'
 import { createProjects, ROW_COUNTS } from './data'
 import type { ProjectRow } from './data'
 import { fetchRows } from './server'
@@ -436,7 +436,7 @@ function onAfterEdit(event: AfterEditEvent<ProjectRow>): void {
   <div class="demo" :data-theme="theme" :style="{ '--ui-primary': primaryColor }">
     <header class="demo-topbar">
       <div class="demo-brand">
-        <h1 class="demo-title">datagrid-vue</h1>
+        <h1 class="demo-title">datatable-vue</h1>
         <p class="demo-tagline">
           Grilla virtualizada para Vue 3. Vue es dueño de la estructura y de la configuración; un
           pool de nodos DOM reciclados es dueño del camino caliente del scroll.
