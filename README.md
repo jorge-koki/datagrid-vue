@@ -15,7 +15,7 @@ Sin dependencias: solo Vue.
 npm install datatable-vue
 ```
 
-> Mientras el paquete no esté publicado en npm, `npm install github:jorge-koki/datagrid-vue` instala
+> Mientras el paquete no esté publicado en npm, `npm install github:jorge-koki/datatable-vue` instala
 > desde el repositorio y funciona igual.
 
 ## Cómo se ve usarla

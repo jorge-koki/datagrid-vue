@@ -6,11 +6,11 @@
   "author": "jorge-koki",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/jorge-koki/datagrid-vue.git"
+    "url": "git+https://github.com/jorge-koki/datatable-vue.git"
   },
-  "homepage": "https://github.com/jorge-koki/datagrid-vue#readme",
+  "homepage": "https://github.com/jorge-koki/datatable-vue#readme",
   "bugs": {
-    "url": "https://github.com/jorge-koki/datagrid-vue/issues"
+    "url": "https://github.com/jorge-koki/datatable-vue/issues"
   },
   "keywords": [
     "vue",

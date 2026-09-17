@@ -73,7 +73,7 @@ const { entries: eventLog, push: logEvent } = useDemoLog()
  * `package.json`, así que hay una sola dirección que mantener, y el README de
  * ahí enlaza al del componente en su segunda línea.
  */
-const DOCS_URL = 'https://github.com/jorge-koki/datagrid-vue#readme'
+const DOCS_URL = 'https://github.com/jorge-koki/datatable-vue#readme'
 
 /* ------------------------------------------------------------------ Datos */
 

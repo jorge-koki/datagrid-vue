@@ -70,7 +70,7 @@ npm install datatable-vue
 ```
 
 Mientras el paquete no esté publicado en npm, la misma línea contra el repositorio hace lo mismo:
-`npm install github:jorge-koki/datagrid-vue`.
+`npm install github:jorge-koki/datatable-vue`.
 
 ```ts
 import { DataTable, DataTableColumnToggle } from 'datatable-vue'
@@ -3303,12 +3303,12 @@ Ya hecho, nada que tocar:
 - [x] **Versión** `0.1.0`, **descripción** y **keywords**.
 - [x] **Licencia** MIT, declarada en `package.json` y presente como archivo `LICENSE`.
 - [x] **Autor** `jorge-koki`; **`repository`**, **`homepage`** y **`bugs`** apuntan todos a
-      `jorge-koki/datagrid-vue`.
+      `jorge-koki/datatable-vue`.
 - [x] **`private`** eliminado y **`publishConfig.access: "public"`** declarado, así `npm publish`
       funciona también si el nombre termina siendo scoped.
 - [x] **`files: ["dist"]`**, con el contenido exacto del tarball verificado en CI por
       `npm pack --dry-run`.
-- [x] Script **`prepare`**, para que `npm install github:jorge-koki/datagrid-vue` construya `dist/` al
+- [x] Script **`prepare`**, para que `npm install github:jorge-koki/datatable-vue` construya `dist/` al
       instalar, sin versionar la salida del build. Y **`prepublishOnly`**, que corre tipos y tests
       antes de que nada salga hacia el registro.
 - [x] **CHANGELOG**, con la regla de qué cuenta como API pública mientras la mayor sea `0`.
