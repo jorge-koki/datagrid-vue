@@ -20,6 +20,8 @@ import DataTable from '../DataTable.vue'
 import { useRowPool } from '../composables/useRowPool'
 import type { RowPool, RowPoolCallbacks, RowPoolPaintState } from '../composables/useRowPool'
 import type { ResolvedColumn } from '../composables/useColumnLayout'
+import { useRowMetrics } from '../composables/useRowMetrics'
+import type { RowMetrics } from '../composables/useRowMetrics'
 import type {
   AfterEditEvent,
   BeforeEditEvent,
@@ -111,6 +113,8 @@ export function resolveColumns(
       resizable: column.resizable ?? false,
       reorderable: column.reorderable ?? true,
       pinned: column.pinned ?? null,
+      pinnable: null,
+      sortable: column.sortable ?? false,
     })
     offset += width
   }
@@ -124,6 +128,8 @@ export interface PaintOverrides {
   start?: number
   end?: number
   rowHeight?: number
+  /** Alto por fila. Null o ausente = todas iguales a `rowHeight`. */
+  heightAt?: ((index: number) => number) | null
   active?: CellPosition | null
   editing?: CellPosition | null
   selectionMode?: SelectionMode
@@ -161,11 +167,39 @@ export interface PoolFixture {
   destroy(): void
 }
 
+/**
+ * Arma la geometría vertical que el pool espera recibir.
+ *
+ * Llama al composable REAL en lugar de fabricar un objeto a mano: si la
+ * aritmética de offsets cambiara, los tests del pool tienen que moverse con
+ * ella. Un doble escrito acá seguiría dando verde mientras la tabla se rompe.
+ *
+ * La cantidad de filas se toma por lo alto —el dataset, la secuencia aplanada y
+ * el final del tramo pedido— porque `offsetOf` acota fuera de rango: con un
+ * conteo corto, pintar una cabecera de grupo más allá del largo de `rows`
+ * devolvería el offset del último y apilaría las filas una sobre otra.
+ */
+function metricsFor(
+  rowHeight: number,
+  heightAt: ((index: number) => number) | null,
+  // `(DemoRow | undefined)[]` y no `DemoRow[]`: en modo servidor el dataset
+  // tiene huecos, y acá solo se mira el largo.
+  rows: readonly (DemoRow | undefined)[],
+  flatRows: readonly FlatRow<DemoRow>[] | null,
+  end: number,
+): RowMetrics {
+  const rowCount = Math.max(rows.length, flatRows?.length ?? 0, end, 0)
+  return useRowMetrics({ rowCount, rowHeight, heightAt, viewportSize: 0, scrollOffset: 0 }).metrics
+    .value
+}
+
 /** Opciones de {@link createPoolFixture}. */
 export interface PoolFixtureOptions {
   rows?: readonly DemoRow[]
   columns?: readonly DataTableColumn<DemoRow>[]
   rowHeight?: number
+  /** Alto por fila. Null o ausente = todas iguales a `rowHeight`. */
+  heightAt?: ((index: number) => number) | null
   visibleRows?: number
   callbacks?: RowPoolCallbacks
   /** Secuencia aplanada inicial. `null` o ausente pinta sin agrupación. */
@@ -205,6 +239,12 @@ export function createPoolFixture(options: PoolFixtureOptions = {}): PoolFixture
   const columns = resolveColumns(options.columns ?? [{ key: 'name' }, { key: 'amount' }])
   const visibleRows = options.visibleRows ?? 10
 
+  // El alto base y el resolutor viven fuera del estado porque el estado ya no
+  // los guarda: guarda la geometría YA RESUELTA. Un `paint` que cambie uno de
+  // los dos tiene que poder reconstruirla, y para eso necesita el otro.
+  let baseHeight = options.rowHeight ?? FIXTURE_ROW_HEIGHT
+  let heightAt = options.heightAt ?? null
+
   let state: RowPoolPaintState<DemoRow> = {
     rows,
     flatRows: options.flatRows ?? null,
@@ -215,7 +255,7 @@ export function createPoolFixture(options: PoolFixtureOptions = {}): PoolFixture
     // El andamiaje no virtualiza columnas: las que pinta son todas las que hay,
     // así que su ancho total es la suma de las que se le pasaron.
     totalWidth: columns.reduce((sum, column) => sum + column.width, 0),
-    rowHeight: options.rowHeight ?? FIXTURE_ROW_HEIGHT,
+    rowMetrics: metricsFor(baseHeight, heightAt, rows, options.flatRows ?? null, visibleRows),
     editing: null,
     active: null,
     selectionMode: 'cell',
@@ -236,6 +276,13 @@ export function createPoolFixture(options: PoolFixtureOptions = {}): PoolFixture
           ? state.rowRange.end
           : overrides.start + (state.rowRange.end - state.rowRange.start))
 
+      if (overrides.rowHeight !== undefined) baseHeight = overrides.rowHeight
+      if (overrides.heightAt !== undefined) heightAt = overrides.heightAt
+
+      const nextRows = overrides.rows ?? state.rows
+      const nextFlat = overrides.flatRows === undefined ? state.flatRows : overrides.flatRows
+      const metrics = metricsFor(baseHeight, heightAt, nextRows, nextFlat ?? null, end)
+
       state = {
         rows: overrides.rows ?? state.rows,
         // `null` es un valor con significado —"sin agrupación"—, así que la
@@ -244,9 +291,9 @@ export function createPoolFixture(options: PoolFixtureOptions = {}): PoolFixture
         flatRows: overrides.flatRows === undefined ? state.flatRows : overrides.flatRows,
         groupDepth: overrides.groupDepth ?? state.groupDepth,
         showGroupCount: overrides.showGroupCount ?? state.showGroupCount,
-        rowRange: { start, end, offset: start * (overrides.rowHeight ?? state.rowHeight) },
+        rowRange: { start, end, offset: metrics.offsetOf(start) },
         columns: overrides.columns ?? state.columns,
-        rowHeight: overrides.rowHeight ?? state.rowHeight,
+        rowMetrics: metrics,
         editing: overrides.editing === undefined ? state.editing : overrides.editing,
         active: overrides.active === undefined ? state.active : overrides.active,
         selectionMode: overrides.selectionMode ?? state.selectionMode,

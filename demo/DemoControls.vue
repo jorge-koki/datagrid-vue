@@ -90,6 +90,15 @@ const variant = defineModel<DataTableVariant>('variant', { required: true })
 const radiusBorder = defineModel<DataTableRadius>('radiusBorder', { required: true })
 const dense = defineModel<boolean>('dense', { required: true })
 
+/**
+ * Alto de fila: el mismo para todas, o uno por fila según la prioridad.
+ *
+ * Es el control de las alturas variables. Por dentro es la misma prop de
+ * siempre, `rowHeight`, con una función en lugar de un número: la tabla no tiene
+ * un modo aparte para esto.
+ */
+const rowHeightMode = defineModel<'fija' | 'prioridad'>('rowHeightMode', { required: true })
+
 /* -------------------------------------------------------------- Agrupación */
 
 const groupingPreset = defineModel<GroupingPresetId>('groupingPreset', { required: true })
@@ -100,6 +109,15 @@ const selectionMode = defineModel<SelectionMode>('selectionMode', { required: tr
 const columnSelection = defineModel<boolean>('columnSelection', { required: true })
 const rowSelection = defineModel<boolean>('rowSelection', { required: true })
 const focusRing = defineModel<boolean>('focusRing', { required: true })
+
+/**
+ * La cruz de la celda activa, apagada igual que en el componente.
+ *
+ * Se expone como control porque lo que aporta solo se entiende con la tabla
+ * scrolleada: encendida, marcá una celda y andá hasta el otro extremo: el
+ * encabezado y la regleta siguen diciendo en qué columna y en qué fila estabas.
+ */
+const crosshair = defineModel<boolean>('crosshair', { required: true })
 
 /* ---------------------------------------------------------------- Columnas */
 
@@ -204,6 +222,19 @@ const columnVisibility = defineModel<ColumnVisibilityState>('columnVisibility', 
         <input v-model="dense" type="checkbox" />
         <span>Compacta</span>
       </label>
+
+      <label class="demo-field">
+        <span>Alto de fila</span>
+        <select v-model="rowHeightMode">
+          <option value="fija">Igual para todas</option>
+          <option value="prioridad">Según la prioridad</option>
+        </select>
+      </label>
+
+      <p v-if="rowHeightMode === 'prioridad'" class="demo-field-note">
+        Crítica <strong>88px</strong>, alta <strong>64px</strong>, el resto el alto normal. Mirá que
+        la selección, el editor y la regleta acompañan cada alto.
+      </p>
     </fieldset>
 
     <fieldset class="demo-group">
@@ -259,6 +290,16 @@ const columnVisibility = defineModel<ColumnVisibilityState>('columnVisibility', 
         <input v-model="focusRing" type="checkbox" />
         <span>Anillo de foco</span>
       </label>
+
+      <label class="demo-field demo-field--inline">
+        <input v-model="crosshair" type="checkbox" />
+        <span>Cruz de la celda activa</span>
+      </label>
+
+      <p v-if="crosshair" class="demo-field-note">
+        Una línea bajo el encabezado de la columna y otra al costado del número de fila. Marcá una
+        celda y scrolleá lejos: las dos siguen a la vista.
+      </p>
     </fieldset>
 
     <fieldset class="demo-group">

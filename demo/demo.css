@@ -168,6 +168,34 @@ body {
   grid-area: table;
 }
 
+/*
+ * Doble clase a propósito: `.demo-panel` se declara MÁS ABAJO en este archivo y
+ * con la misma especificidad, así que un `.demo-panel--table` suelto perdía por
+ * orden y el `overflow: hidden` del panel seguía recortando la tabla.
+ */
+.demo-panel.demo-panel--table {
+  /*
+   * El único panel SIN marco propio, y es lo que deja lucir `radiusBorder`.
+   *
+   * Los otros dos son cajas: borde, fondo y esquinas redondeadas con el radio
+   * del tema. Este, con el título fuera, ya no envuelve nada más que la tabla, y
+   * el marco se convertía en un problema: el `overflow: hidden` del panel
+   * recorta sus hijos contra SU radio, así que poner la tabla en `xl` no se veía
+   * —las esquinas de la tabla quedaban cortadas por las del panel, unos píxeles
+   * más cerradas—. Dos radios distintos a pocos píxeles uno del otro se leen
+   * como un error de alineación, que es justamente lo que la documentación del
+   * componente advierte.
+   *
+   * Sin marco, el borde que se ve ES el de la tabla y su redondeo es el que
+   * elige la prop. La barra de atajos pasa a ser una caja aparte, abajo.
+   */
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  overflow: visible;
+  gap: 0.75rem;
+}
+
 .demo-panel--state {
   grid-area: state;
 }
@@ -202,6 +230,17 @@ body {
  * de la ventana y cada panel se desplaza por su cuenta. Es lo que permite
  * cambiar un control y ver el efecto en la tabla y en los contadores sin mover
  * la página.
+ *
+ * ## Por qué el estado va ABAJO y no en una tercera columna
+ *
+ * Lo que la demo tiene que dejar ver es la tabla, y una tercera columna le
+ * comía 23rem de ancho justo donde se mira el efecto de todo: cuántas columnas
+ * entran, cómo se corta el bloque anclado, qué pasa al scrollear en horizontal.
+ * El estado ocupa toda la fila de abajo, que es una franja baja: los contadores
+ * y la bitácora caben al lado uno del otro y el ancho sobrante lo gana la tabla.
+ *
+ * Es además el mismo reparto que el paso intermedio de arriba, así que los dos
+ * ensanchamientos cuentan la misma historia y solo cambia quién fija la altura.
  */
 @media (min-width: 90rem) {
   .demo {
@@ -214,11 +253,122 @@ body {
     /* Sin esto, una grilla dentro de un flex item no baja de su alto de
        contenido y los paneles desbordan la ventana en lugar de scrollear. */
     min-height: 0;
-    grid-template-columns: minmax(0, 17rem) minmax(0, 1fr) minmax(0, 23rem);
-    grid-template-areas: 'controls table state';
-    /* Acá la fila SÍ está acotada —mide lo que la ventana—, así que estirar es
-       seguro y es lo que hace que los tres paneles terminen a la misma altura. */
+    grid-template-columns: minmax(0, 17rem) minmax(0, 1fr);
+    /*
+     * La fila de arriba se lleva lo que sobre y la de abajo mide lo suyo, con
+     * tope. El `minmax(0, …)` de las dos es lo que las deja encogerse por debajo
+     * de su contenido: sin él, una bitácora larga empujaría a la tabla fuera de
+     * la ventana en lugar de scrollear adentro de su panel.
+     */
+    /*
+     * La franja mide lo justo: los contadores entran en una fila y a la bitácora
+     * le quedan dos o tres entradas a la vista, que es lo que hace falta para
+     * ver el efecto de lo que se acaba de tocar. Más alto era espacio muerto
+     * debajo de los números; menos dejaba la bitácora en una sola línea.
+     */
+    grid-template-rows: minmax(0, 1fr) minmax(0, 11rem);
+    grid-template-areas:
+      'controls table'
+      'state    state';
+    /* Acá las filas SÍ están acotadas —miden lo que la ventana—, así que estirar
+       es seguro y es lo que hace que los paneles llenen su fila. */
     align-items: stretch;
+  }
+
+  /*
+   * En franja ancha y baja, los contadores y la bitácora van uno al lado del
+   * otro. Apilados desperdiciarían todo el ancho y obligarían a scrollear el
+   * panel para llegar a la bitácora, que es justo lo que hay que ver mientras se
+   * toca la tabla.
+   */
+  .demo-panel--state .demo-panel-body {
+    display: grid;
+    /*
+     * Los contadores piden lo que miden y la bitácora se queda con el resto.
+     *
+     * Con una fracción fija —`3fr 2fr`— la columna quedaba mucho más ancha que
+     * su contenido y el aire sobrante caía en el medio de la franja, entre los
+     * números y la bitácora. `max-content` la ata a lo que de verdad ocupa.
+     */
+    grid-template-columns: minmax(0, max-content) minmax(0, 1fr);
+    gap: 1.25rem;
+    /*
+     * `stretch` y no `start`: las dos columnas miden el alto de la franja, que
+     * es lo que le permite a la bitácora scrollear adentro de la suya.
+     */
+    align-items: stretch;
+    /*
+     * El panel deja de scrollear ÉL.
+     *
+     * Con el scroll acá, una bitácora larga se llevaba los contadores fuera de
+     * la vista: para leer un evento había que perder de vista los números, que
+     * son la mitad del punto de mirar este panel mientras se toca la tabla. El
+     * scroll baja a la lista y nada más que a la lista.
+     */
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .demo-panel--state .demo-log-block {
+    display: flex;
+    flex-direction: column;
+    /* Un flex item no baja de su alto de contenido sin esto, y la lista de
+       adentro nunca llegaría a desbordar: desbordaría el panel. */
+    min-height: 0;
+  }
+
+  .demo-panel--state .demo-log {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+  }
+
+  /*
+   * En la franja los contadores van en FILA, no en grilla.
+   *
+   * La grilla reparte columnas iguales, así que el más ancho —"selección
+   * (arrastrar, o Shift + flechas)"— le imponía su medida a "fps", y el sobrante
+   * quedaba como aire adentro de cada celda. En fila cada uno ocupa lo suyo y la
+   * separación es pareja.
+   *
+   * Con esto `grid-column: 1 / -1` de los contadores de texto deja de aplicar
+   * —no hay grilla— y los dos se acomodan en la misma línea que el resto, que es
+   * lo que hace que la franja entre en una sola fila.
+   */
+  .demo-panel--state .demo-stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem 1.75rem;
+    align-content: start;
+  }
+
+  /* Sin esto, "celdas en el DOM" se parte en tres líneas y desalinea toda la
+     fila contra sus vecinos, que son de una sola. */
+  .demo-panel--state .demo-stat-label {
+    white-space: nowrap;
+  }
+
+  /*
+   * Los atajos abiertos, en dos columnas.
+   *
+   * En una línea de 1.400px el `max-width: 100ch` de los párrafos los dejaba
+   * apretados contra el borde izquierdo con media barra vacía al lado, y encima
+   * la hacía el doble de alta de lo necesario. Con dos columnas el bloque llena
+   * el ancho y ocupa la mitad del alto, que es el espacio que le estamos
+   * sacando a la tabla.
+   *
+   * Grilla y no `columns`: son cuatro párrafos y se quieren dos y dos, no un
+   * reparto por altura que pueda partir uno al medio.
+   */
+  .demo-shortcuts-body {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0 2.5rem;
+    align-content: start;
+  }
+
+  .demo-shortcuts-body p {
+    max-width: none;
   }
 }
 
@@ -251,15 +401,6 @@ body {
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-}
-
-/* Dato acompañante del título —el conteo de filas—: se lee como número, no como rótulo. */
-.demo-panel-note {
-  color: var(--dt-text-dimmed);
-  font-weight: 500;
-  letter-spacing: 0;
-  text-transform: none;
-  font-variant-numeric: tabular-nums;
 }
 
 .demo-panel-body {
@@ -517,7 +658,11 @@ body {
 
 .demo-shortcuts {
   flex: none;
-  border-top: 1px solid var(--dt-border);
+  /* Caja propia, ahora que el panel de la tabla dejó de ser una: antes le
+     alcanzaba con un borde superior porque el marco del panel le cerraba los
+     otros tres lados. */
+  border: 1px solid var(--dt-border);
+  border-radius: var(--dt-radius);
   background: var(--dt-bg-elevated);
   color: var(--dt-text-muted);
   font-size: 0.8125rem;

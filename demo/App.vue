@@ -4,7 +4,7 @@ import { computed, shallowRef, useTemplateRef, watch, watchEffect } from 'vue'
 // este repositorio el alias de Vite resuelve `vue-tablekit` a `src/index.ts`, de
 // modo que la demo compila contra la API pública y nada más: si algo no está
 // exportado desde el `index.ts`, esta pantalla no compila.
-import { DataTable } from 'vue-tablekit'
+import { DataTable, sortRows } from 'vue-tablekit'
 import type {
   AfterEditEvent,
   BeforeEditEvent,
@@ -20,11 +20,13 @@ import type {
   GroupToggleEvent,
   RangeCopyEvent,
   RangeSelectEvent,
+  RowHeightResolver,
   RowsRequestEvent,
   SelectionMode,
+  SortState,
 } from 'vue-tablekit'
 import { createProjects, ROW_COUNTS } from './data'
-import type { ProjectRow } from './data'
+import type { ProjectPriority, ProjectRow } from './data'
 import { fetchRows } from './server'
 import { projectColumns } from './columns'
 import { groupByOf, presetIdOf } from './grouping'
@@ -112,9 +114,56 @@ const serverRows = shallowRef<(ProjectRow | undefined)[]>([])
 /** Páginas que se pidieron, para mostrar el conteo en el panel de estado. */
 const requestedPages = shallowRef(0)
 
+/* ------------------------------------------------------------ Ordenamiento */
+
+/**
+ * Los criterios de orden, que la tabla administra y acá se aplican.
+ *
+ * La tabla NO ordena `rows`: escribe el estado y lo anuncia. Esto es el otro
+ * lado de ese trato, y son dos líneas.
+ */
+const sort = shallowRef<SortState>([])
+
+/**
+ * El dataset ya ordenado.
+ *
+ * `sortRows` devuelve el MISMO array cuando no hay criterios, así que mientras
+ * nadie ordene esto no cuesta nada ni le cambia la identidad a `rows`.
+ *
+ * En modo servidor este array hace de "tabla del servidor": es de donde
+ * `fetchRows` corta las páginas, que es lo que hace una base de datos con un
+ * `ORDER BY`. Por eso el orden se aplica acá y no después de recibir la página:
+ * ordenar las 50 filas que llegaron daría un orden correcto adentro de la página
+ * y absurdo respecto de las 100.000 que hay.
+ */
+const sortedRows = computed<readonly ProjectRow[]>(() =>
+  sortRows(rows.value, sort.value, projectColumns),
+)
+
+/**
+ * Un orden nuevo invalida todo lo que el servidor ya había mandado.
+ *
+ * Es el punto donde el modo servidor se comporta distinto, y se resuelve con lo
+ * que ya existía: vaciar `rows` y dejar que la tabla vuelva a pedir desde donde
+ * esté. No hay una API de caché que aprender.
+ */
+watch(sort, (next) => {
+  const descripcion =
+    next.length === 0
+      ? 'sin ordenar'
+      : next.map((entry) => `${entry.columnKey} ${entry.direction}`).join(', ')
+
+  if (dataSource.value === 'server') {
+    resetServerRows()
+    logEvent('info', `Orden: ${descripcion} — se descarta lo cargado y se vuelve a pedir`)
+    return
+  }
+  logEvent('info', `Orden: ${descripcion}`)
+})
+
 /** Lo que se le pasa a la tabla como `rows`. */
 const tableRows = computed<readonly (ProjectRow | undefined)[]>(() =>
-  dataSource.value === 'server' ? serverRows.value : rows.value,
+  dataSource.value === 'server' ? serverRows.value : sortedRows.value,
 )
 
 /**
@@ -149,7 +198,9 @@ async function onRowsRequest(event: RowsRequestEvent): Promise<void> {
   requestedPages.value += 1
   logEvent('info', `Pidiendo filas ${event.start}–${event.end - 1} al servidor`)
 
-  const page = await fetchRows(rows.value, event.start, event.end)
+  // Del dataset ORDENADO: el servidor simulado hace lo que haría uno real, que
+  // es aplicar el `ORDER BY` antes de cortar la página.
+  const page = await fetchRows(sortedRows.value, event.start, event.end)
 
   // El origen pudo cambiar mientras la respuesta viajaba. Escribir igual
   // metería filas de una consulta vieja en un dataset nuevo.
@@ -186,7 +237,17 @@ const theme = shallowRef<DataTableTheme>('auto')
 const primaryColor = shallowRef('#00c16a')
 
 const variant = shallowRef<DataTableVariant>('default')
-const radiusBorder = shallowRef<DataTableRadius>('none')
+/**
+ * La demo abre REDONDEADA, aunque el componente venga recto por defecto.
+ *
+ * Es de las pocas cosas donde la demo no espeja el default del componente, y a
+ * propósito: el default recto existe porque una grilla suele ir adentro de un
+ * panel que ya tiene su propio redondeo, y ahí dos radios distintos se leen como
+ * un error de alineación. Acá la tabla NO va adentro de ningún panel —su panel
+ * no dibuja marco justamente para que esto se vea—, así que mostrarla recta
+ * escondería una prop que existe y se ve bien.
+ */
+const radiusBorder = shallowRef<DataTableRadius>('lg')
 const showRowNumbers = shallowRef(true)
 
 /**
@@ -204,6 +265,41 @@ const columnReorder = shallowRef(true)
 const dense = shallowRef(false)
 
 /**
+ * Alto de fila: fijo, o uno por fila según la prioridad.
+ *
+ * ## Por qué el resolutor está acá afuera y no en una función anónima
+ *
+ * `rowHeight` como función es una DEPENDENCIA de la geometría de la tabla: si la
+ * identidad de la función cambia, la tabla rehace los offsets de todas las
+ * filas. Escrita inline en el template —`:row-height="(row) => …"`— sería una
+ * función nueva en cada render del padre, o sea una pasada sobre el dataset
+ * entero cada vez que se toca cualquier otro control.
+ *
+ * Definida como `computed`, la identidad cambia solo cuando cambia el modo, que
+ * es exactamente cuando las alturas cambian de verdad. Es la forma correcta de
+ * pasar esta prop, y por eso la demo la usa así.
+ */
+const rowHeightMode = shallowRef<'fija' | 'prioridad'>('fija')
+
+/** Cuánto mide una fila según su prioridad. El resto usa el alto por defecto. */
+const ALTO_POR_PRIORIDAD: Partial<Record<ProjectPriority, number>> = {
+  critical: 88,
+  high: 64,
+}
+
+const rowHeight = computed<number | RowHeightResolver<ProjectRow> | undefined>(() => {
+  if (rowHeightMode.value === 'fija') return undefined
+
+  return (row) => {
+    // `undefined` es una cabecera de grupo o una fila que el servidor todavía no
+    // mandó. Las cabeceras van más bajas a propósito: se leen como separador y
+    // no como una fila más.
+    if (row === undefined) return dense.value ? 26 : 32
+    return ALTO_POR_PRIORIDAD[row.priority] ?? (dense.value ? 30 : 40)
+  }
+})
+
+/**
  * Anillo de foco del viewport, apagado igual que en el componente.
  *
  * Se expone como control porque la diferencia es puramente visual y solo se
@@ -212,6 +308,9 @@ const dense = shallowRef(false)
  * desaparece y la marca queda únicamente en la celda.
  */
 const focusRing = shallowRef(false)
+
+/** La cruz de la celda activa, apagada igual que en el componente. */
+const crosshair = shallowRef(false)
 
 /**
  * Visibilidad de columnas, controlada por el padre.
@@ -467,11 +566,13 @@ function onAfterEdit(event: AfterEditEvent<ProjectRow>): void {
             v-model:variant="variant"
             v-model:radius-border="radiusBorder"
             v-model:dense="dense"
+            v-model:row-height-mode="rowHeightMode"
             v-model:grouping-preset="groupingPreset"
             v-model:selection-mode="selectionMode"
             v-model:column-selection="columnSelection"
             v-model:row-selection="rowSelection"
             v-model:focus-ring="focusRing"
+            v-model:crosshair="crosshair"
             v-model:show-row-numbers="showRowNumbers"
             v-model:column-reorder="columnReorder"
             v-model:column-visibility="columnVisibility"
@@ -484,20 +585,25 @@ function onAfterEdit(event: AfterEditEvent<ProjectRow>): void {
         </div>
       </section>
 
-      <section class="demo-panel demo-panel--table" aria-labelledby="demo-title-table">
-        <h2 id="demo-title-table" class="demo-panel-title">
-          Tabla
-          <span class="demo-panel-note">
-            {{ rows.length.toLocaleString('es-AR') }} filas en los datos
-          </span>
-        </h2>
+      <!--
+        Sin barra de título, al revés que los otros dos paneles.
 
+        Es el panel que hay que mirar, y la barra le comía alto sin decir nada
+        que no estuviera ya en otro lado: el nombre lo da el contexto —es la
+        única tabla de la pantalla— y el conteo de filas lo repite el panel de
+        estado, que además lo cuenta bien cuando cambia el origen de los datos.
+
+        El nombre accesible pasa a `aria-label`: la región sigue anunciándose
+        como "Tabla" aunque ya no haya un encabezado visible que la titule.
+      -->
+      <section class="demo-panel demo-panel--table" aria-label="Tabla">
         <div ref="tableHost" class="demo-table">
           <DataTable
             ref="table"
             v-model:column-visibility="columnVisibility"
             v-model:active-cell="activeCell"
             v-model:group-by="groupBy"
+            v-model:sort="sort"
             :rows="tableRows"
             :row-count="tableRowCount"
             :columns="projectColumns"
@@ -510,8 +616,23 @@ function onAfterEdit(event: AfterEditEvent<ProjectRow>): void {
             :column-selection="columnSelection"
             :row-selection="rowSelection"
             :dense="dense"
+            :row-height="rowHeight"
             :selection-mode="selectionMode"
             :focus-ring="focusRing"
+            :crosshair="crosshair"
+            column-menu
+            :labels="{
+              pin: 'Anclar columna',
+              unpin: 'Desanclar columna',
+              menu: 'Menú de la columna',
+              sortAsc: 'Ordenar ascendente',
+              sortDesc: 'Ordenar descendente',
+              clearSort: 'Quitar el orden',
+              pinStart: 'Anclar al inicio',
+              pinEnd: 'Anclar al final',
+              hideColumn: 'Ocultar columna',
+              resetColumns: 'Restablecer columnas',
+            }"
             table-id="demo-projects"
             persist
             bordered
@@ -557,8 +678,16 @@ function onAfterEdit(event: AfterEditEvent<ProjectRow>): void {
             :requested-pages="dataSource === 'server' ? requestedPages : null"
           />
 
-          <h3 class="demo-subtitle">Bitácora de eventos</h3>
-          <DemoEventLog :entries="eventLog" />
+          <!--
+            El título y la bitácora van envueltos para poder ponerlos AL LADO de
+            los contadores cuando el panel es una franja ancha y baja. Sueltos no
+            se puede: son dos hermanos y tendrían que caer en la misma celda de
+            la grilla.
+          -->
+          <div class="demo-log-block">
+            <h3 class="demo-subtitle">Bitácora de eventos</h3>
+            <DemoEventLog :entries="eventLog" />
+          </div>
         </div>
       </section>
     </div>

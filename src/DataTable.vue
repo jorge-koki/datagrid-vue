@@ -8,8 +8,12 @@ import type {
   CellRange,
   CellSelectEvent,
   CellValue,
+  ColumnPin,
+  ColumnPinState,
   ColumnResizeEvent,
+  ColumnSort,
   ColumnVisibilityState,
+  DataTableLabels,
   ColumnWidthState,
   DataTableColumn,
   DataTableProps,
@@ -21,8 +25,12 @@ import type {
   RangeCopyEvent,
   RangeSelectEvent,
   RowsRequestEvent,
+  SortChangeEvent,
+  SortDirection,
+  SortState,
 } from './types'
-import { useVirtualWindow } from './composables/useVirtualWindow'
+import { nextSortState } from './internal/sorting'
+import { useRowMetrics } from './composables/useRowMetrics'
 import { useRemoteRows } from './composables/useRemoteRows'
 import { useColumnLayout } from './composables/useColumnLayout'
 import type { ResolvedColumn } from './composables/useColumnLayout'
@@ -105,6 +113,7 @@ const props = withDefaults(defineProps<DataTableProps<TRow>>(), {
   columnSelection: false,
   rowSelection: false,
   emptyText: 'No data',
+  columnMenu: false,
   stripe: false,
   bordered: false,
   selectionMode: 'cell',
@@ -114,6 +123,11 @@ const props = withDefaults(defineProps<DataTableProps<TRow>>(), {
   // color. El costo de accesibilidad de este default está documentado en el
   // README, junto con el caso en el que conviene encenderlo.
   focusRing: false,
+  // Apagada por defecto por la misma razón que el anillo del viewport: la celda
+  // activa ya tiene su marca, y en una tabla que entra entera en pantalla las
+  // dos líneas de la cruz son ruido. Se enciende cuando la tabla es lo bastante
+  // grande como para que la celda activa se vaya de la vista.
+  crosshair: false,
   // `columnVisibility`, `columnOrder`, `columnWidths`, `activeCell`, `groupBy` y
   // `expandedGroups` quedan deliberadamente sin default: `undefined` es lo que
   // distingue el modo no controlado del controlado, y darles un default borraría
@@ -143,6 +157,9 @@ const emit = defineEmits<{
   'update:columnVisibility': [ColumnVisibilityState]
   'update:columnOrder': [string[]]
   'update:columnWidths': [ColumnWidthState]
+  'update:columnPinning': [ColumnPinState]
+  'update:sort': [ColumnSort[]]
+  sortChange: [SortChangeEvent]
   'update:groupBy': [string[]]
   'update:expandedGroups': [string[]]
 }>()
@@ -186,12 +203,16 @@ defineSlots<{
 const internalVisibility = shallowRef<Record<string, boolean>>({})
 const internalOrder = shallowRef<string[]>([])
 const internalWidths = shallowRef<Record<string, number>>({})
+const internalPinning = shallowRef<Record<string, ColumnPin | null>>({})
+const internalSort = shallowRef<ColumnSort[]>([])
 
 const columnVisibility = computed<ColumnVisibilityState>(
   () => props.columnVisibility ?? internalVisibility.value,
 )
 const columnOrder = computed<readonly string[]>(() => props.columnOrder ?? internalOrder.value)
 const columnWidths = computed<ColumnWidthState>(() => props.columnWidths ?? internalWidths.value)
+const columnPinning = computed<ColumnPinState>(() => props.columnPinning ?? internalPinning.value)
+const sort = computed<SortState>(() => props.sort ?? internalSort.value)
 
 function setColumnVisibility(next: Record<string, boolean>): void {
   if (props.columnVisibility === undefined) internalVisibility.value = next
@@ -206,6 +227,96 @@ function setColumnOrder(next: string[]): void {
 function setColumnWidths(next: Record<string, number>): void {
   if (props.columnWidths === undefined) internalWidths.value = next
   emit('update:columnWidths', next)
+}
+
+function setColumnPinning(next: Record<string, ColumnPin | null>): void {
+  if (props.columnPinning === undefined) internalPinning.value = next
+  emit('update:columnPinning', next)
+}
+
+/**
+ * Los textos de la librería, ya completados con los valores por defecto.
+ *
+ * Se resuelven en un `computed` y no al usarlos para que el `??` de cada cadena
+ * ocurra una vez por cambio de prop y no una por encabezado y por render.
+ */
+const labels = computed<Required<DataTableLabels>>(() => {
+  const declared = props.labels ?? {}
+  return {
+    pin: declared.pin ?? 'Pin column',
+    unpin: declared.unpin ?? 'Unpin column',
+    menu: declared.menu ?? 'Column menu',
+    sortAsc: declared.sortAsc ?? 'Sort ascending',
+    sortDesc: declared.sortDesc ?? 'Sort descending',
+    clearSort: declared.clearSort ?? 'Clear sort',
+    pinStart: declared.pinStart ?? 'Pin to start',
+    pinEnd: declared.pinEnd ?? 'Pin to end',
+    hideColumn: declared.hideColumn ?? 'Hide column',
+    resetColumns: declared.resetColumns ?? 'Reset columns',
+  }
+})
+
+/**
+ * Escribe los criterios de ordenamiento y los anuncia.
+ *
+ * Emite DOS eventos y no uno: `update:sort` es el v-model, para quien quiera
+ * poseer el estado; `sortChange` es el aviso, para quien solo quiera reaccionar
+ * —volver a consultarle al servidor, típicamente— sin tomar posesión de nada.
+ * Es la misma pareja que ya tienen la edición y la agrupación.
+ */
+function setSort(next: ColumnSort[], columnKey: string): void {
+  if (props.sort === undefined) internalSort.value = next
+  emit('update:sort', next)
+  emit('sortChange', { sort: next, columnKey })
+}
+
+/**
+ * Valor de `aria-sort` del encabezado.
+ *
+ * Solo lo llevan las columnas ordenables: en una que no lo es, `aria-sort="none"`
+ * le anunciaría a un lector de pantalla que se puede ordenar y no se puede.
+ */
+function ariaSortFor(
+  column: ResolvedColumn<TRow>,
+): 'ascending' | 'descending' | 'none' | undefined {
+  if (!column.sortable) return undefined
+  const entry = sortFor(column.key)
+  if (entry === null) return 'none'
+  return entry.direction === 'asc' ? 'ascending' : 'descending'
+}
+
+/** Criterio vigente de una columna, o `null` si no participa del orden. */
+function sortFor(columnKey: string): ColumnSort | null {
+  return sort.value.find((entry) => entry.columnKey === columnKey) ?? null
+}
+
+/**
+ * Posición del criterio de una columna, en base 1, o `0` si no ordena.
+ *
+ * Solo se muestra cuando hay MÁS DE UN criterio: con uno solo, un "1" al lado de
+ * la flecha no dice nada que la flecha no diga ya.
+ */
+function sortRankFor(columnKey: string): number {
+  if (sort.value.length < 2) return 0
+  const index = sort.value.findIndex((entry) => entry.columnKey === columnKey)
+  return index + 1
+}
+
+/**
+ * Avanza el orden de una columna: ascendente → descendente → sin orden.
+ *
+ * `Shift` suma un criterio en lugar de reemplazar los que había, que es lo que
+ * permite "por estado, y dentro de cada estado por fecha".
+ *
+ * Volver al principio del dataset no es cosmético: con el orden cambiado, la
+ * fila 50.000 es otra fila, así que quedarse donde estaba deja al usuario mirando
+ * un tramo que no pidió. Solo se scrollea si el orden realmente cambió.
+ */
+function toggleSort(column: ResolvedColumn<TRow>, additive = false): void {
+  if (!column.sortable) return
+
+  setSort(nextSortState(sort.value, column.key, additive), column.key)
+  scroll.scrollTo({ top: 0 })
 }
 
 /* ------------------------------------------------------- Estado de agrupación */
@@ -230,6 +341,7 @@ function setGroupBy(next: string[]): void {
 
 /* ------------------------------------------------------------ Referencias DOM */
 
+const rootEl = shallowRef<HTMLElement | null>(null)
 const viewportEl = shallowRef<HTMLElement | null>(null)
 const canvasEl = shallowRef<HTMLElement | null>(null)
 const gutterEl = shallowRef<HTMLElement | null>(null)
@@ -239,14 +351,20 @@ const slotEditorHostEl = shallowRef<HTMLElement | null>(null)
 /* -------------------------------------------------------------- Métricas base */
 
 /**
- * Altura de fila efectiva.
+ * Altura de fila BASE, en px.
  *
- * Es un número en px y no un valor CSS porque el virtualizador divide por él en
- * cada frame. Se replica a `--dt-row-height` para que la presentación coincida.
+ * Es un número y no un valor CSS porque el virtualizador hace cuentas con él. Se
+ * replica a `--dt-row-height` para que la presentación coincida.
+ *
+ * Con `rowHeight` declarado como función, esto NO es el alto de ninguna fila en
+ * particular: es el valor por defecto —el de las cabeceras de grupo si el
+ * resolutor no dice otra cosa, el respaldo cuando devuelve algo que no sirve— y
+ * el que viaja a la hoja de estilos. El alto de cada fila sale de
+ * {@link rowVirtual}`.metrics`.
  */
 const rowHeight = computed(() => {
   const declared = props.rowHeight
-  if (declared !== undefined && Number.isFinite(declared) && declared > 0) return declared
+  if (typeof declared === 'number' && Number.isFinite(declared) && declared > 0) return declared
   return props.dense ? DENSE_ROW_HEIGHT : DEFAULT_ROW_HEIGHT
 })
 
@@ -377,6 +495,7 @@ const layout = useColumnLayout<TRow>({
   visibility: columnVisibility,
   order: columnOrder,
   widths: columnWidths,
+  pinning: columnPinning,
   leadingOffset: () => rowNumberWidth.value,
   // El arrastre pide el ancho, el componente lo guarda. El layout no almacena
   // nada: así el ancho puede venir de un v-model o de un layout restaurado sin
@@ -474,6 +593,16 @@ const persistedState = computed<PersistedTableState>(() => {
     columnOrder: layout.orderedColumns.value.map((column) => column.key),
   }
 
+  // Mismo criterio que el corte de agrupación: la clave solo aparece si el
+  // usuario tocó algún ancla. Una tabla donde nadie apretó el botón escribe el
+  // payload de siempre, así que los layouts guardados antes de que esto
+  // existiera siguen valiendo y no hizo falta subir la versión del esquema.
+  const pinning = columnPinning.value
+  if (Object.keys(pinning).length > 0) state.columnPinning = { ...pinning }
+
+  const criterios = sort.value
+  if (criterios.length > 0) state.sort = criterios.map((entry) => ({ ...entry }))
+
   // El corte de agrupación solo aparece si hay algo que decir. Una tabla que
   // nunca agrupó escribe exactamente el mismo payload que antes de que esta
   // función existiera, que es lo que permitió sumarla sin subir la versión del
@@ -500,6 +629,15 @@ const persistence = useTablePersistence<TRow>({
     setColumnVisibility(loaded.columnVisibility)
     setColumnWidths(loaded.columnWidths)
     setColumnOrder(loaded.columnOrder)
+    if (loaded.columnPinning !== undefined) setColumnPinning({ ...loaded.columnPinning })
+    // Se aplica en silencio: restaurar un layout no es que el usuario haya
+    // apretado un encabezado, y emitir `sortChange` acá le dispararía una
+    // consulta al servidor a cada montaje. El v-model sí se emite, que es lo que
+    // un padre controlado necesita para quedar en sincronía.
+    if (loaded.sort !== undefined) {
+      if (props.sort === undefined) internalSort.value = [...loaded.sort]
+      emit('update:sort', [...loaded.sort])
+    }
     // El orden importa: `useRowGrouping` reconstruye su árbol de forma síncrona
     // al cambiar `groupBy`, y el conjunto colapsado se resuelve contra los grupos
     // que ese árbol tiene. Aplicarlo al revés lo resolvería contra el árbol viejo.
@@ -531,13 +669,42 @@ function liveRowViewportHeight(): number {
   return Math.max(0, scroll.live.viewportHeight - headerHeight.value)
 }
 
-const rowVirtual = useVirtualWindow({
-  itemCount: visibleRowCount,
-  itemSize: rowHeight,
+/**
+ * El resolutor de alturas, ya envuelto para el composable de geometría.
+ *
+ * Traduce la posición visible a la fila que le toca, que es lo que el consumidor
+ * espera recibir. `rowAt` devuelve `undefined` para una cabecera de grupo y para
+ * una fila que el servidor todavía no mandó, y eso se pasa tal cual: son los dos
+ * casos que el resolutor tiene documentado que puede recibir.
+ *
+ * Las dos lecturas sueltas de abajo son la SUSCRIPCIÓN y no un dato. Sin ellas
+ * este `computed` solo dependería de `props.rowHeight`, así que reemplazar
+ * `rows` por otro array del mismo largo —o plegar un grupo— devolvería el mismo
+ * resolutor, y la geometría se quedaría con las alturas viejas sin que nada
+ * avisara. Es el único lugar donde una dependencia tiene que declararse a mano,
+ * porque la función del consumidor lee datos que el `computed` no toca.
+ */
+const rowHeightAt = computed<((index: number) => number) | null>(() => {
+  const declared = props.rowHeight
+  if (typeof declared !== 'function') return null
+
+  void props.rows
+  void grouping.flatRows.value
+
+  return (index) => declared(grouping.rowAt(index), index)
+})
+
+const rowVirtual = useRowMetrics({
+  rowCount: visibleRowCount,
+  rowHeight,
+  heightAt: rowHeightAt,
   viewportSize: () => rowViewportHeight.value,
   scrollOffset: () => scroll.state.value.scrollTop,
   overscan: () => props.overscan,
 })
+
+/** Atajo: la geometría vertical vigente. La leen el pool, el editor y el teclado. */
+const rowMetrics = computed(() => rowVirtual.metrics.value)
 
 /**
  * Los pedidos al consumidor cuando `rows` no tiene lo que la ventana necesita.
@@ -744,11 +911,17 @@ function boxStyleFor(rect: RangeRect): Record<string, string> | null {
   const left = columnCanvasX(first)
   const right = columnCanvasX(last) + last.width
 
-  const height = rowHeight.value
+  // El alto del recuadro es la distancia entre el borde de arriba de la primera
+  // fila y el de abajo de la última, no la cantidad de filas por el alto: con
+  // alturas distintas esas dos cuentas dejan de coincidir.
+  const geometry = rowMetrics.value
+  const top = geometry.offsetOf(rect.rowStart)
+  const bottom = geometry.offsetOf(rect.rowEnd) + geometry.sizeOf(rect.rowEnd)
+
   return {
-    transform: `translate3d(${left}px, ${rect.rowStart * height}px, 0)`,
+    transform: `translate3d(${left}px, ${top}px, 0)`,
     width: `${Math.max(0, right - left)}px`,
-    height: `${(rect.rowEnd - rect.rowStart + 1) * height}px`,
+    height: `${Math.max(0, bottom - top)}px`,
   }
 }
 
@@ -917,15 +1090,89 @@ function selectWholeRow(rowIndex: number): void {
  * —es un hijo del encabezado y tiene su propio gesto—, porque terminar un
  * arrastre de ancho seleccionando la columna sería una sorpresa en cada resize.
  */
+/**
+ * Clic que hay que ignorar porque el gesto terminó siendo un arrastre.
+ *
+ * El navegador emite `click` después de un `pointerup`, también cuando entre los
+ * dos hubo un arrastre completo. Sin esta bandera, mover una columna la ordenaba
+ * de paso.
+ */
+let headerClickWasDrag = false
+
+/**
+ * Si el gesto sobre un encabezado quiere SELECCIONAR la columna en vez de
+ * ordenarla.
+ *
+ * ## Quién se queda con el clic pelado
+ *
+ * Sobre el encabezado conviven dos acciones cuando `columnSelection` está
+ * encendida, y no caben en el mismo gesto. **Se la queda ordenar**, por dos
+ * razones:
+ *
+ * - Apretar un encabezado para ordenar es la interacción más común que existe en
+ *   una grilla; seleccionar la columna entera para copiarla es ocasional. La
+ *   acción frecuente tiene que llevarse el gesto frecuente.
+ * - Al revés quedaba un agujero: con `columnSelection` encendida y sin
+ *   `columnMenu`, una columna con `sortable: true` no hacía absolutamente nada.
+ *   Una prop que se enciende y no pasa nada es peor que una que falla.
+ *
+ * Seleccionar pasa entonces a `Ctrl`/`Cmd`+clic, que no es una convención nueva:
+ * es el mismo modificador de `Ctrl`/`Cmd`+`A`, `Ctrl`/`Cmd`+`C` y
+ * `Ctrl`/`Cmd`+`Home`. `Shift` no servía —lo usa el orden multinivel—.
+ *
+ * En una columna que NO ordena no hay conflicto, y el clic pelado la selecciona
+ * como siempre.
+ */
+function headerGestureIsSelection(event: MouseEvent, column: ResolvedColumn<TRow>): boolean {
+  if (!props.columnSelection) return false
+  if (!column.sortable) return true
+  return event.ctrlKey || event.metaKey
+}
+
+/**
+ * Clic sobre el encabezado: cambia el orden de la columna.
+ *
+ * Va en `click` y no en `pointerdown` —al revés que la selección de columna—
+ * porque sobre el mismo encabezado empieza el arrastre de reordenamiento, y
+ * ordenar al apretar dejaría la tabla reordenada cada vez que alguien intenta
+ * mover una columna.
+ */
+function onHeaderClick(event: MouseEvent, column: ResolvedColumn<TRow>): void {
+  const target = event.target
+  if (
+    target instanceof Element &&
+    target.closest('.dt-resize-handle, .dt-pin-button, .dt-menu-button')
+  )
+    return
+
+  if (headerClickWasDrag) {
+    headerClickWasDrag = false
+    return
+  }
+  // El `pointerdown` ya seleccionó la columna: este `click` es la cola del mismo
+  // gesto y no tiene que ordenar además.
+  if (headerGestureIsSelection(event, column)) return
+
+  toggleSort(column, event.shiftKey)
+}
+
 function onHeaderPointerDown(event: PointerEvent, column: ResolvedColumn<TRow>): void {
   const target = event.target
-  // El handle de redimensionado vive adentro del encabezado y tiene su propio
-  // gesto: ni selecciona la columna ni la mueve.
-  if (target instanceof Element && target.closest('.dt-resize-handle')) return
+  // Los tres controles que viven adentro del encabezado —redimensionar, anclar
+  // y el menú— tienen su propio gesto: ninguno selecciona la columna, la mueve
+  // ni la ordena. Sin esta línea, apretar el botón de anclar arrancaría además
+  // un arrastre, y abrir el menú ordenaría la columna de paso.
+  if (
+    target instanceof Element &&
+    target.closest('.dt-resize-handle, .dt-pin-button, .dt-menu-button')
+  )
+    return
   if (event.button !== 0) return
 
   if (props.columnReorder && column.reorderable) startColumnDrag(event, column)
-  if (!props.columnSelection) return
+  // Con una columna ordenable, el clic pelado es para ordenar y la selección
+  // pide `Ctrl`/`Cmd`. Ver `headerGestureIsSelection`.
+  if (!headerGestureIsSelection(event, column)) return
 
   /*
    * `preventDefault` acá no es ceremonia: sin él, el copiado no funciona.
@@ -1079,17 +1326,22 @@ function selectCell(position: CellPosition | null): void {
  * pide con un número, y acotarlo es lo que convierte un índice fuera de rango en
  * el borde más cercano en vez de en una posición vacía. `scrollToCell` recibe
  * una posición de celda que en el camino interno YA viene acotada por
- * `moveActiveTo`, así que volver a acotarla sería trabajo repetido en cada
- * flecha. Fuera de rango, el navegador acota la escritura de `scrollTop` contra
- * la altura real del canvas, de modo que la consecuencia observable es la misma:
- * la vista se queda en el extremo.
+ * `moveActiveTo`, así que volver a acotarla acá sería trabajo repetido en cada
+ * flecha.
+ *
+ * Lo que SÍ está acotado es la geometría: preguntarle dónde empieza una fila que
+ * no existe devuelve el final del contenido, no un píxel inventado. Es
+ * inevitable —con alturas variables, más allá de la última fila no hay nada que
+ * sumar— y no cambia nada de lo que se ve: el navegador acota la escritura de
+ * `scrollTop` contra la altura real del canvas, así que la vista se queda en el
+ * extremo igual que antes.
  */
 function scrollToCell(position: CellPosition): void {
   const metrics = scroll.live
-  const height = rowHeight.value
+  const geometry = rowMetrics.value
 
-  const rowTop = position.rowIndex * height
-  const rowBottom = rowTop + height
+  const rowTop = geometry.offsetOf(position.rowIndex)
+  const rowBottom = rowTop + geometry.sizeOf(position.rowIndex)
   // El encabezado tapa la franja de arriba, igual que la regleta tapa la de la
   // izquierda: el alto visible para filas es el del viewport menos el suyo.
   const visibleHeight = liveRowViewportHeight()
@@ -1117,10 +1369,22 @@ function scrollToCell(position: CellPosition): void {
 
 /* ---------------------------------------------- Navegación con el teclado */
 
-/** Cantidad de filas que entran enteras en el viewport. Mínimo 1. */
+/**
+ * Cantidad de filas que entran enteras en el viewport. Mínimo 1.
+ *
+ * Con alturas uniformes es una división y da lo mismo dónde esté el scroll. Con
+ * alturas mezcladas no existe "la cantidad de filas que entran" como número
+ * único: entran las que entren DESDE DONDE UNO ESTÁ, y por eso la cuenta parte
+ * del scroll vivo. Un `Av Pág` sobre un tramo de filas altas avanza menos filas
+ * que sobre uno de filas bajas, que es exactamente lo que el usuario ve.
+ */
 function pageSize(): number {
-  const rows = Math.floor(liveRowViewportHeight() / rowHeight.value)
-  return Math.max(1, rows)
+  const visible = liveRowViewportHeight()
+  const geometry = rowMetrics.value
+  if (!geometry.variable) return Math.max(1, Math.floor(visible / rowHeight.value))
+
+  const top = scroll.live.scrollTop
+  return Math.max(1, geometry.indexAt(top + visible) - geometry.indexAt(top))
 }
 
 /**
@@ -1563,11 +1827,12 @@ function getColumnDefinition(columnKey: string): DataTableColumn<TRow> | undefin
 function getCellGeometry(position: CellPosition): CellGeometry | null {
   const resolved = layout.getResolvedColumn(position.columnKey)
   if (!resolved) return null
+  const geometry = rowMetrics.value
   return {
     x: columnCanvasX(resolved),
-    y: position.rowIndex * rowHeight.value,
+    y: geometry.offsetOf(position.rowIndex),
     width: resolved.width,
-    height: rowHeight.value,
+    height: geometry.sizeOf(position.rowIndex),
   }
 }
 
@@ -1777,7 +2042,7 @@ function paintFrame(): void {
     placeholders: serverMode.value,
     rowRange: rowVirtual.window.value,
     columns: visibleColumns.value,
-    rowHeight: rowHeight.value,
+    rowMetrics: rowMetrics.value,
     editing: editor.editing.value,
     active: activeCell.value,
     range: rangeRect.value,
@@ -1848,7 +2113,12 @@ watch(
     () => props.columns,
     () => props.stripe,
     () => props.virtualizeColumns,
-    rowHeight,
+    // La geometría vertical entera de una sola vez: es un objeto nuevo cada vez
+    // que cambia el alto base, el resolutor de alturas o la cantidad de filas.
+    // Cubre el caso que no se ve venir: un cambio de altura que NO mueve el
+    // tramo visible igual tiene que repintarlo, porque cada fila se posiciona
+    // por su offset propio.
+    rowMetrics,
     // `resolvedColumns` cubre visibilidad, orden y anchos de una sola vez: es un
     // array nuevo en cada recálculo. `totalWidth` por sí solo no alcanzaría,
     // porque intercambiar dos columnas del mismo ancho no lo mueve.
@@ -1878,7 +2148,13 @@ watch(
  * destruiría los nodos que el frame siguiente va a volver a pedir.
  */
 watch(rowViewportHeight, (height) => {
-  pool.trim(Math.ceil(height / rowHeight.value) + props.overscan * 2 + 1)
+  // La cota es la fila MÁS BAJA, no el alto base: con alturas mezcladas, un
+  // tramo de puras filas bajas mete más filas en la misma pantalla, y recortar
+  // el pool contra el alto base lo dejaría corto justo ahí —obligando a crear
+  // nodos en mitad del scroll, que es lo que el pool existe para evitar—.
+  const minimo = rowMetrics.value.minSize
+  if (minimo <= 0) return
+  pool.trim(Math.ceil(height / minimo) + props.overscan * 2 + 1)
 })
 
 /* ------------------------------------------ Redimensionado de columnas */
@@ -1950,6 +2226,18 @@ const columnDrag = shallowRef<{
   key: string
   /** Índice —entre las VISIBLES— donde caería ahora mismo. */
   dropIndex: number
+  /**
+   * Esquina superior izquierda del fantasma, en coordenadas de `.dt-root`.
+   *
+   * Ya resueltas acá y no en un `computed`: el arrastre las produce a partir del
+   * puntero, y traducirlas después obligaría a guardar además el rectángulo de
+   * la raíz y el punto donde se agarró. Ver {@link startColumnDrag}.
+   */
+  ghostX: number
+  ghostY: number
+  /** Título y ancho de la columna, congelados al empezar el gesto. */
+  label: string
+  width: number
 } | null>(null)
 
 /**
@@ -1975,6 +2263,34 @@ const dropIndicatorX = computed<number | null>(() => {
   // Más allá de la última: la línea va contra su borde derecho.
   const last = columns[columns.length - 1]
   return last ? last.offset + last.width : null
+})
+
+/**
+ * Ancho máximo del fantasma, en px.
+ *
+ * Una columna ancha arrastrada a tamaño real tapa media tabla, y justo lo que
+ * hay que ver mientras se arrastra es dónde va a caer. Recortarlo conserva la
+ * idea —"esto es lo que estoy moviendo"— sin esconder la respuesta.
+ */
+const GHOST_MAX_WIDTH = 260
+
+/**
+ * Estilo del fantasma que sigue al puntero, o `null` si no hay arrastre.
+ *
+ * Es la pieza que convierte el gesto en un objeto: sin ella, arrastrar una
+ * columna atenúa su encabezado y dibuja una línea a lo lejos, y entre esas dos
+ * cosas no hay NADA agarrado al cursor. El fantasma aparece exactamente encima
+ * del encabezado en el momento en que el gesto pasa a ser arrastre, así que se
+ * lee como si el encabezado se hubiera despegado.
+ */
+const columnGhostStyle = computed<Record<string, string> | null>(() => {
+  const drag = columnDrag.value
+  if (!drag) return null
+  return {
+    transform: `translate3d(${drag.ghostX}px, ${drag.ghostY}px, 0)`,
+    width: `${Math.min(drag.width, GHOST_MAX_WIDTH)}px`,
+    height: `${headerHeight.value}px`,
+  }
 })
 
 /**
@@ -2098,6 +2414,18 @@ function startColumnDrag(event: PointerEvent, column: ResolvedColumn<TRow>): voi
   const startX = event.clientX
   let dragging = false
 
+  // Los dos rectángulos se leen UNA vez, al empezar. La raíz no se mueve
+  // mientras el puntero está capturado, y el encabezado tampoco: leerlos en cada
+  // `pointermove` sería forzar layout sesenta veces por segundo para obtener el
+  // mismo número.
+  const rootBox = rootEl.value?.getBoundingClientRect()
+  const headerBox = header.getBoundingClientRect()
+  // Dónde AGARRÓ el usuario dentro del encabezado. Conservarlo es lo que hace
+  // que el fantasma no salte al aparecer: nace justo encima del encabezado, en
+  // la misma posición relativa al dedo, y recién desde ahí se mueve.
+  const grabX = event.clientX - headerBox.left
+  const grabY = event.clientY - headerBox.top
+
   header.setPointerCapture(event.pointerId)
 
   const onPointerMove = (moveEvent: PointerEvent): void => {
@@ -2108,6 +2436,10 @@ function startColumnDrag(event: PointerEvent, column: ResolvedColumn<TRow>): voi
     columnDrag.value = {
       key: column.key,
       dropIndex: dropIndexAt(moveEvent.clientX, column.key),
+      ghostX: moveEvent.clientX - grabX - (rootBox?.left ?? 0),
+      ghostY: moveEvent.clientY - grabY - (rootBox?.top ?? 0),
+      label: column.label,
+      width: column.width,
     }
   }
 
@@ -2121,6 +2453,9 @@ function startColumnDrag(event: PointerEvent, column: ResolvedColumn<TRow>): voi
 
     const drag = columnDrag.value
     columnDrag.value = null
+    // El `click` que viene después de esto no es un clic: es el final de un
+    // arrastre, y no tiene que ordenar la columna.
+    if (dragging) headerClickWasDrag = true
     if (drop && drag) moveColumn(drag.key, drag.dropIndex)
   }
 
@@ -2131,6 +2466,321 @@ function startColumnDrag(event: PointerEvent, column: ResolvedColumn<TRow>): voi
   header.addEventListener('pointermove', onPointerMove)
   header.addEventListener('pointerup', onPointerUp)
   header.addEventListener('pointercancel', onPointerCancel)
+}
+
+/**
+ * Alterna el anclaje de una columna desde su encabezado.
+ *
+ * ## Qué escribe, y por qué `null` en vez de borrar la clave
+ *
+ * Anclada pasa a suelta y suelta pasa a anclada, al borde que declaró
+ * `pinnable`. Soltar escribe `null` y NO borra la clave: borrarla devolvería el
+ * mando a `column.pinned`, así que una columna declarada anclada se habría
+ * vuelto a anclar sola en el mismo tick. `null` es "el usuario la soltó" y tiene
+ * que sobrevivir.
+ *
+ * ## Por qué avisa de los agregados
+ *
+ * `aggregate` sobre una columna anclada se ignora, y está documentado: el
+ * agregado se dibuja en el offset de SU columna, así que anclado al inicio
+ * caería encima del chevron y la etiqueta del grupo. Mientras el anclaje era
+ * solo declarativo eso se descubría al escribir la columna; con un botón lo
+ * dispara cualquiera en caliente, y lo que se ve es una cifra que desaparece sin
+ * motivo aparente. Se avisa una vez por columna, y solo si hay agrupación
+ * activa: sin grupos no hay ningún agregado que perder.
+ */
+const warnedAboutPinnedAggregate = new Set<string>()
+
+function toggleColumnPinned(column: ResolvedColumn<TRow>): void {
+  const side = column.pinnable
+  if (side === null) return
+
+  const next = column.pinned === null ? side : null
+
+  if (
+    next !== null &&
+    column.column.aggregate !== undefined &&
+    effectiveGroupBy.value.length > 0 &&
+    !warnedAboutPinnedAggregate.has(column.key)
+  ) {
+    warnedAboutPinnedAggregate.add(column.key)
+    console.warn(
+      `[DataTable] La columna "${column.key}" tiene \`aggregate\` y se acaba de anclar, ` +
+        'así que su cifra de grupo deja de mostrarse. Un agregado se dibuja en el offset de su ' +
+        'columna, y anclado caería encima de la etiqueta del grupo. Desanclala para recuperarlo.',
+    )
+  }
+
+  setColumnPinning({ ...columnPinning.value, [column.key]: next })
+}
+
+/* --------------------------------------------------- Menú de la columna */
+
+/**
+ * Los dibujos del menú, como listas de trazados sobre un lienzo de 16×16.
+ *
+ * Todos de LÍNEA y ninguno relleno: mezclar las dos cosas en una misma lista
+ * hace que unos pesen más que otros aunque midan igual. El trazo, el redondeo de
+ * las puntas y el tamaño salen de la hoja de estilos, así que acá solo vive la
+ * forma.
+ *
+ * Son genéricos a propósito —flechas, una barra, un ojo, un círculo— y no
+ * ilustraciones: un ícono de menú se lee de reojo, al lado de su texto, y lo
+ * único que tiene que hacer es distinguir una fila de la siguiente.
+ *
+ * Anclar al inicio y al final NO comparten dibujo. Son la misma acción hacia
+ * lados opuestos, y esa diferencia es justamente lo que el usuario está
+ * eligiendo: una flecha que entra contra una barra dice a cuál de los dos bordes
+ * va, cosa que una chinche no puede decir.
+ */
+const MENU_ICONS: Record<string, readonly string[]> = {
+  sortAsc: ['M8 13V3.5', 'M4.5 7 8 3.5 11.5 7'],
+  sortDesc: ['M8 3v9.5', 'M4.5 9 8 12.5 11.5 9'],
+  // Una cruz, y no una flecha tachada.
+  //
+  // Se probaron las dos versiones con dibujo: dos galones con una diagonal
+  // encima, y después una flecha de dos puntas tachada. Las dos terminan en un
+  // borrón a 14px, que es el tamaño al que esto se ve de verdad. La cruz es la
+  // marca universal de "quitar", sobrevive a cualquier tamaño y acá no se puede
+  // confundir con cerrar: el menú no tiene botón de cerrar.
+  sortClear: ['M4.5 4.5 11.5 11.5', 'M11.5 4.5 4.5 11.5'],
+  pinStart: ['M3 2.5v11', 'M13 8H6.5', 'M9 5 6 8l3 3'],
+  pinEnd: ['M13 2.5v11', 'M3 8h6.5', 'M7 5l3 3-3 3'],
+  unpin: ['M3 2.5v11', 'M6.5 8H13', 'M10 5l3 3-3 3'],
+  // El ojo con curvas cúbicas explícitas: con `S` las puntas quedaban en pico y
+  // el conjunto se leía como una hoja, no como un ojo.
+  hide: ['M2 8c2-2.4 4-3.6 6-3.6s4 1.2 6 3.6c-2 2.4-4 3.6-6 3.6S4 10.4 2 8Z', 'M2.5 13.5 13.5 2.5'],
+  // Casi una vuelta completa, con la punta al llegar arriba. El hueco arriba a
+  // la derecha es lo que la distingue de un círculo: sin él no se lee como un
+  // giro.
+  reset: ['M11.2 4.8A4.5 4.5 0 1 1 8 3.5', 'M6.5 2.2 8 3.5 6.5 4.8'],
+}
+
+/** Una entrada del menú, ya resuelta a su texto, su dibujo y su acción. */
+interface ColumnMenuItem {
+  id: string
+  label: string
+  /** Clave dentro de {@link MENU_ICONS}. */
+  icon: string
+  /** Separador por encima. Agrupa sin necesidad de un nodo aparte. */
+  separated?: boolean
+  run: () => void
+}
+
+/**
+ * El menú abierto, o `null`.
+ *
+ * Guarda la posición YA resuelta en coordenadas de `.dt-root`, calculada al
+ * abrir. No se recalcula después: el menú se cierra ante cualquier cosa que lo
+ * movería —scroll, resize, una acción— en lugar de seguir al botón frame a
+ * frame, que sería trabajo por frame para algo que dura dos segundos.
+ */
+const columnMenu = shallowRef<{ key: string; x: number; y: number } | null>(null)
+const columnMenuEl = shallowRef<HTMLElement | null>(null)
+
+/** Ancho estimado del panel, para decidir si abre hacia la izquierda. */
+const COLUMN_MENU_WIDTH = 208
+
+/** Si una columna muestra el botón del menú. */
+function hasColumnMenu(column: ResolvedColumn<TRow>): boolean {
+  return props.columnMenu && column.column.menu !== false
+}
+
+/**
+ * Las entradas del menú de la columna abierta.
+ *
+ * Se arman a partir de lo que la columna PUEDE hacer: una columna que no ordena
+ * no muestra las de ordenar, y una que no se puede anclar no muestra las de
+ * anclar. Un menú con la mitad de las opciones deshabilitadas obliga a leerlo
+ * entero para descubrir que no servían.
+ */
+const columnMenuItems = computed<ColumnMenuItem[]>(() => {
+  const open = columnMenu.value
+  if (!open) return []
+  const column = layout.getResolvedColumn(open.key)
+  if (!column) return []
+
+  const items: ColumnMenuItem[] = []
+  const text = labels.value
+  const current = sortFor(column.key)
+
+  if (column.sortable) {
+    if (current?.direction !== 'asc') {
+      items.push({
+        id: 'sort-asc',
+        label: text.sortAsc,
+        icon: 'sortAsc',
+        run: () => setSortDirection(column, 'asc'),
+      })
+    }
+    if (current?.direction !== 'desc') {
+      items.push({
+        id: 'sort-desc',
+        label: text.sortDesc,
+        icon: 'sortDesc',
+        run: () => setSortDirection(column, 'desc'),
+      })
+    }
+    if (current !== null) {
+      items.push({
+        id: 'sort-clear',
+        label: text.clearSort,
+        icon: 'sortClear',
+        run: () => setSortDirection(column, null),
+      })
+    }
+  }
+
+  if (column.pinnable !== null) {
+    const side = column.pinnable
+    if (column.pinned !== side) {
+      items.push({
+        id: 'pin',
+        label: side === 'start' ? text.pinStart : text.pinEnd,
+        icon: side === 'start' ? 'pinStart' : 'pinEnd',
+        separated: items.length > 0,
+        run: () => pinColumnTo(column, side),
+      })
+    }
+    if (column.pinned !== null) {
+      items.push({
+        id: 'unpin',
+        label: text.unpin,
+        icon: 'unpin',
+        separated: items.length > 0 && column.pinned === side,
+        run: () => pinColumnTo(column, null),
+      })
+    }
+  }
+
+  if (column.column.hideable !== false) {
+    items.push({
+      id: 'hide',
+      label: text.hideColumn,
+      icon: 'hide',
+      separated: items.length > 0,
+      run: () => hideColumn(column.key),
+    })
+  }
+
+  items.push({
+    id: 'reset',
+    label: text.resetColumns,
+    icon: 'reset',
+    separated: items.length > 0,
+    run: () => resetLayout(),
+  })
+
+  return items
+})
+
+/** Fija el sentido de una columna sin pasar por el ciclo del clic. */
+function setSortDirection(column: ResolvedColumn<TRow>, direction: SortDirection | null): void {
+  const otros = sort.value.filter((entry) => entry.columnKey !== column.key)
+  const next = direction === null ? otros : [...otros, { columnKey: column.key, direction }]
+  setSort(next, column.key)
+  scroll.scrollTo({ top: 0 })
+}
+
+/** Ancla o suelta desde el menú, sin el ciclo de alternar del botón. */
+function pinColumnTo(column: ResolvedColumn<TRow>, pin: ColumnPin | null): void {
+  setColumnPinning({ ...columnPinning.value, [column.key]: pin })
+}
+
+/**
+ * Oculta una columna desde su menú.
+ *
+ * Se niega a ocultar la última visible: una tabla sin columnas no tiene forma de
+ * volver, porque el menú desde el que se recupera vive justamente en un
+ * encabezado. Es la misma regla que ya aplica `DataTableColumnToggle`.
+ */
+function hideColumn(columnKey: string): void {
+  if (resolvedColumns.value.length <= 1) return
+  setColumnVisibility({ ...columnVisibility.value, [columnKey]: false })
+}
+
+function openColumnMenu(event: MouseEvent, column: ResolvedColumn<TRow>): void {
+  const button = event.currentTarget
+  const root = rootEl.value
+  if (!(button instanceof HTMLElement) || !root) return
+
+  if (columnMenu.value?.key === column.key) {
+    closeColumnMenu()
+    return
+  }
+
+  const boton = button.getBoundingClientRect()
+  const caja = root.getBoundingClientRect()
+  // Si abrir hacia la derecha se sale de la tabla, se abre hacia la izquierda.
+  // `.dt-root` recorta, así que un panel fuera de su caja no se vería.
+  const derecha = boton.left - caja.left
+  const x =
+    derecha + COLUMN_MENU_WIDTH > caja.width
+      ? Math.max(0, derecha + boton.width - COLUMN_MENU_WIDTH)
+      : derecha
+
+  columnMenu.value = { key: column.key, x, y: boton.bottom - caja.top + 2 }
+  void nextTick(() => columnMenuEl.value?.querySelector('button')?.focus())
+}
+
+function closeColumnMenu(restoreFocus = false): void {
+  const open = columnMenu.value
+  columnMenu.value = null
+  if (!open || !restoreFocus) return
+  // El foco vuelve al botón que lo abrió: sin esto queda en el `body` y quien
+  // navega con teclado pierde el lugar.
+  void nextTick(() => {
+    const selector = `.dt-header-cell[data-column-key="${CSS.escape(open.key)}"] .dt-menu-button`
+    const button = rootEl.value?.querySelector(selector)
+    if (button instanceof HTMLElement) button.focus()
+  })
+}
+
+function runColumnMenuItem(item: ColumnMenuItem): void {
+  closeColumnMenu(true)
+  item.run()
+}
+
+/**
+ * Cierra al apretar fuera del menú.
+ *
+ * En `pointerdown` y no en `click`: si esperara al `click`, apretar sobre una
+ * celda cerraría el menú DESPUÉS de que la celda ya procesó el gesto, y el
+ * usuario vería la selección moverse con el menú todavía abierto.
+ */
+function onDocumentPointerDown(event: PointerEvent): void {
+  if (!columnMenu.value) return
+  const target = event.target
+  if (target instanceof Element && target.closest('.dt-column-menu, .dt-menu-button')) return
+  closeColumnMenu()
+}
+
+/** Flechas para recorrer, `Escape` para salir. Mismo teclado que el selector. */
+function onColumnMenuKeyDown(event: KeyboardEvent): void {
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    closeColumnMenu(true)
+    return
+  }
+  if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
+
+  const panel = columnMenuEl.value
+  if (!panel) return
+  const buttons = [...panel.querySelectorAll('button')].filter(
+    (node): node is HTMLButtonElement => node instanceof HTMLButtonElement,
+  )
+  if (buttons.length === 0) return
+
+  event.preventDefault()
+  const current = buttons.findIndex((node) => node === document.activeElement)
+  const delta = event.key === 'ArrowDown' ? 1 : -1
+  const next =
+    current === -1
+      ? delta === 1
+        ? 0
+        : buttons.length - 1
+      : (current + delta + buttons.length) % buttons.length
+  buttons[next]?.focus()
 }
 
 /* ------------------------------------------------------------ API imperativa */
@@ -2145,7 +2795,7 @@ function startColumnDrag(event: PointerEvent, column: ResolvedColumn<TRow>): voi
 function scrollToRow(index: number): void {
   const maxIndex = Math.max(0, visibleRowCount.value - 1)
   const clamped = Math.min(Math.max(Math.floor(index), 0), maxIndex)
-  scroll.scrollTo({ top: clamped * rowHeight.value })
+  scroll.scrollTo({ top: rowMetrics.value.offsetOf(clamped) })
 }
 
 /**
@@ -2207,6 +2857,11 @@ function resetLayout(): void {
   setColumnVisibility({})
   setColumnWidths({})
   setColumnOrder([])
+  // Vacío y no "todo en null": el mapa vacío devuelve el mando a lo que declaran
+  // las columnas, que es lo que significa restablecer. Un mapa lleno de `null`
+  // soltaría además las que el consumidor declaró ancladas.
+  setColumnPinning({})
+  setSort([], '')
   setGroupBy([])
   grouping.setCollapsedGroups([])
 }
@@ -2271,7 +2926,23 @@ onMounted(() => {
   const canvas = canvasEl.value
   if (canvas) pool.mount(canvas, gutterEl.value)
   scroll.requestFrame()
+  document.addEventListener('pointerdown', onDocumentPointerDown)
 })
+
+/**
+ * El menú se cierra al scrollear, en lugar de seguir a su encabezado.
+ *
+ * Su posición se resuelve UNA vez, al abrir. Recalcularla por frame sería
+ * trabajo en el camino caliente del scroll para algo que dura dos segundos, y
+ * dejarla quieta lo mostraría flotando lejos de la columna a la que pertenece.
+ * Cerrar es la tercera opción y la única que no miente.
+ */
+watch(
+  () => scroll.state.value.scrollLeft,
+  () => {
+    if (columnMenu.value) closeColumnMenu()
+  },
+)
 
 /**
  * Encender o apagar la numeración reconstruye el pool.
@@ -2295,6 +2966,7 @@ watch(
 )
 
 onBeforeUnmount(() => {
+  document.removeEventListener('pointerdown', onDocumentPointerDown)
   // `useScrollSync` y `useCellEditor` limpian lo suyo con sus propios hooks; el
   // pool no es un composable de Vue, así que se desmonta explícitamente.
   pool.unmount()
@@ -2407,6 +3079,7 @@ function headerAlignClass(column: ResolvedColumn<TRow>): string | undefined {
     más, y por eso cada fila de datos anuncia su posición corrida en uno.
   -->
   <div
+    ref="rootEl"
     class="dt-root"
     :style="rootStyle"
     :role="gridRole"
@@ -2419,6 +3092,7 @@ function headerAlignClass(column: ResolvedColumn<TRow>): string | undefined {
     :data-bordered="bordered ? 'true' : 'false'"
     :data-selection="selectionMode"
     :data-focus-ring="focusRing ? 'true' : 'false'"
+    :data-crosshair="crosshair ? 'true' : 'false'"
     :data-active-cell="hasActiveCell"
     :data-range="rangeRect ? 'true' : 'false'"
     :data-select-columns="columnSelection ? 'true' : 'false'"
@@ -2484,15 +3158,95 @@ function headerAlignClass(column: ResolvedColumn<TRow>): string | undefined {
                 { 'dt-header-cell--dragging': columnDrag?.key === column.key },
                 { 'dt-header-cell--fixed': columnReorder && !column.reorderable },
                 { 'dt-header-cell--pinned': column.pinned !== null },
+                { 'dt-header-cell--pinnable': column.pinnable !== null },
+                { 'dt-header-cell--menu': hasColumnMenu(column) },
+                { 'dt-header-cell--sortable': column.sortable && !columnSelection },
+                { 'dt-header-cell--sorted': sortFor(column.key) !== null },
               ]"
               :style="{
                 transform: `translate3d(${column.offset - strip.origin}px, 0, 0)`,
                 width: `${column.width}px`,
               }"
+              :data-column-key="column.key"
+              :aria-sort="ariaSortFor(column)"
               :title="column.label"
               @pointerdown="onHeaderPointerDown($event, column)"
+              @click="onHeaderClick($event, column)"
             >
               <span class="dt-header-label">{{ column.label }}</span>
+              <!--
+                Indicador del orden. Solo existe mientras la columna ordena, así
+                que una tabla sin ordenamiento no paga un nodo por encabezado.
+
+                `aria-hidden` porque lo que dice ya lo dice `aria-sort` sobre el
+                encabezado, que es el atributo que un lector de pantalla anuncia
+                al recorrer la fila de títulos. La flecha es para los ojos.
+              -->
+              <span v-if="sortFor(column.key)" class="dt-sort-indicator" aria-hidden="true">
+                <svg viewBox="0 0 16 16" focusable="false">
+                  <path
+                    :d="
+                      sortFor(column.key)?.direction === 'asc'
+                        ? 'M8 3.5 12.5 9h-9z'
+                        : 'M8 12.5 3.5 7h9z'
+                    "
+                    fill="currentColor"
+                  />
+                </svg>
+                <!-- La posición solo aparece con más de un criterio: con uno, no
+                     agrega nada a la flecha. -->
+                <span v-if="sortRankFor(column.key) > 0" class="dt-sort-rank">
+                  {{ sortRankFor(column.key) }}
+                </span>
+              </span>
+              <!--
+                Botón de anclar. Solo existe si la columna declara `pinnable`, y
+                por eso una tabla que no use la función no paga ni un nodo.
+
+                `aria-pressed` y no dos botones distintos: es UN control con dos
+                estados, y es lo que hace que un lector de pantalla anuncie el
+                cambio en vez de leer un botón nuevo.
+              -->
+              <button
+                v-if="column.pinnable"
+                type="button"
+                class="dt-pin-button"
+                :class="{ 'dt-pin-button--on': column.pinned !== null }"
+                :aria-pressed="column.pinned !== null"
+                :aria-label="column.pinned !== null ? labels.unpin : labels.pin"
+                :title="column.pinned !== null ? labels.unpin : labels.pin"
+                tabindex="-1"
+                @click="toggleColumnPinned(column)"
+              >
+                <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                  <path
+                    d="M10.3 1.7a1 1 0 0 1 1.4 0l2.6 2.6a1 1 0 0 1 0 1.4l-.4.4a2 2 0 0 1-2.3.4L10 8.1l.3 2.6a1 1 0 0 1-.3.8l-.6.6a1 1 0 0 1-1.4 0L5.6 9.6l-3.2 3.2a.6.6 0 0 1-.9-.9l3.2-3.2-2.5-2.4a1 1 0 0 1 0-1.4l.6-.6a1 1 0 0 1 .8-.3L6.2 4l1.2-1.6a2 2 0 0 1 .4-2.3z"
+                    fill="currentColor"
+                  />
+                </svg>
+              </button>
+              <!--
+                Botón del menú. Va DESPUÉS del de anclar y antes del handle, que
+                es el orden en que están sobre el borde derecho.
+              -->
+              <button
+                v-if="hasColumnMenu(column)"
+                type="button"
+                class="dt-menu-button"
+                :class="{ 'dt-menu-button--on': columnMenu?.key === column.key }"
+                :aria-label="labels.menu"
+                :title="labels.menu"
+                :aria-expanded="columnMenu?.key === column.key"
+                aria-haspopup="menu"
+                tabindex="-1"
+                @click="openColumnMenu($event, column)"
+              >
+                <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                  <circle cx="8" cy="3.5" r="1.4" fill="currentColor" />
+                  <circle cx="8" cy="8" r="1.4" fill="currentColor" />
+                  <circle cx="8" cy="12.5" r="1.4" fill="currentColor" />
+                </svg>
+              </button>
               <span
                 v-if="column.resizable"
                 class="dt-resize-handle"
@@ -2604,5 +3358,55 @@ function headerAlignClass(column: ResolvedColumn<TRow>): string | undefined {
       :style="dropIndicatorStyle"
       aria-hidden="true"
     />
+    <!--
+      El fantasma de la columna que se arrastra.
+
+      Va en la raíz por lo mismo que la línea de caída: la raíz no scrollea, así
+      que el fantasma sigue al puntero por toda la tabla sin que el scroll lo
+      corra. Y queda recortado por ella, que es lo correcto: soltar fuera de la
+      tabla no mueve nada, y el fantasma desapareciendo en el borde lo anticipa.
+
+      `aria-hidden` porque no es información: el título que muestra ya está en el
+      encabezado, y ese sigue en el documento mientras dura el gesto.
+    -->
+    <!--
+      Menú de la columna.
+
+      Vive en la raíz y no adentro del encabezado por dos razones: la tira de
+      encabezados scrollea en horizontal y se llevaría el panel con ella, y
+      además recorta, así que un panel más alto que el encabezado quedaría
+      cortado. Acá queda recortado por la tabla entera, que es lo correcto.
+    -->
+    <div
+      v-if="columnMenu"
+      ref="columnMenuEl"
+      class="dt-column-menu"
+      role="menu"
+      :style="{ transform: `translate3d(${columnMenu.x}px, ${columnMenu.y}px, 0)` }"
+      @keydown="onColumnMenuKeyDown"
+    >
+      <button
+        v-for="item in columnMenuItems"
+        :key="item.id"
+        type="button"
+        class="dt-column-menu-item"
+        :class="{ 'dt-column-menu-item--separated': item.separated }"
+        role="menuitem"
+        @click="runColumnMenuItem(item)"
+      >
+        <svg class="dt-column-menu-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+          <path v-for="d in MENU_ICONS[item.icon]" :key="d" :d="d" />
+        </svg>
+        <span>{{ item.label }}</span>
+      </button>
+    </div>
+    <div
+      v-if="columnGhostStyle"
+      class="dt-column-ghost"
+      :style="columnGhostStyle"
+      aria-hidden="true"
+    >
+      {{ columnDrag?.label }}
+    </div>
   </div>
 </template>

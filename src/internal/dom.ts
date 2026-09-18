@@ -49,6 +49,15 @@ export interface PooledRowElement extends HTMLDivElement {
   __dtSourceRowIndex: number
   /** Última traslación vertical aplicada, en px. Evita reescribir `transform`. */
   __dtTranslateY: number
+  /**
+   * Último alto aplicado, en px, o `NaN` si la fila no tiene alto propio.
+   *
+   * `NaN` es el estado NORMAL: significa que el alto lo pone la hoja de estilos
+   * y que este nodo no escribió nada. Solo deja de serlo cuando las alturas son
+   * variables, que es cuando el alto pasa a ser un dato de la fila. Ver
+   * {@link setRowHeight}.
+   */
+  __dtRowSize: number
   /** Último valor escrito en `data-row-key`. */
   __dtRowKey: string
   /** Última decisión de fila rayada aplicada mediante `classList`. */
@@ -329,6 +338,7 @@ export function createRowElement(): PooledRowElement {
     __dtRowIndex: UNPAINTED_ROW_INDEX,
     __dtSourceRowIndex: UNPAINTED_ROW_INDEX,
     __dtTranslateY: Number.NaN,
+    __dtRowSize: Number.NaN,
     __dtRowKey: '',
     __dtStripe: false,
     __dtActiveRow: false,
@@ -524,6 +534,51 @@ export function setRowOffset(node: PooledRowElement, y: number): void {
   if (node.__dtTranslateY === y) return
   node.__dtTranslateY = y
   node.style.transform = `translate3d(0, ${y}px, 0)`
+}
+
+/**
+ * Le da a la fila su alto propio, cuando no es el de todas las demás.
+ *
+ * ## Una sola escritura, y la hoja de estilos hace el resto
+ *
+ * Escribe la custom property `--dt-row-h` y nada más. No escribe `height` sobre
+ * la fila, ni sobre sus celdas, ni sobre su número: todos esos altos ya salen de
+ * `--dt-row-h` en la hoja de estilos, y las celdas la HEREDAN de la fila. Un
+ * `setProperty` reemplaza lo que de otro modo sería una escritura por celda en
+ * cada fila de cada frame.
+ *
+ * Es la única pieza del pintado que usa la herencia de custom properties en
+ * lugar de escribir el valor final, y la razón es esa: el alto lo necesitan
+ * cinco reglas distintas —la fila, la celda, su altura de línea, la cabecera de
+ * grupo, el agregado— y todas cuelgan del mismo nodo.
+ *
+ * ## `variable` en `false` BORRA la propiedad
+ *
+ * No la escribe con el alto base: la borra. Sin eso, una tabla que deja de tener
+ * alturas variables —se apagó la fila expandida, cambió el dataset— se quedaría
+ * con el último alto escrito inline, y ese valor le gana a la hoja de estilos
+ * para siempre. La fila vuelve a no tener alto propio, que es su estado normal.
+ *
+ * El nodo del número va aparte porque no es hijo de la fila: vive en la regleta,
+ * que es un contenedor `sticky` propio, así que no puede heredar nada de ella.
+ */
+export function setRowHeight(node: PooledRowElement, height: number, variable: boolean): void {
+  const target = variable ? height : Number.NaN
+  // Comparación de `NaN` consigo mismo: `NaN !== NaN`, así que la guarda de
+  // abajo no puede memoizar el estado "sin alto propio". Se chequea aparte.
+  if (Number.isNaN(target) && Number.isNaN(node.__dtRowSize)) return
+  if (node.__dtRowSize === target) return
+
+  node.__dtRowSize = target
+  if (Number.isNaN(target)) {
+    node.style.removeProperty('--dt-row-h')
+    node.__dtNumber?.style.removeProperty('--dt-row-h')
+    return
+  }
+
+  const value = `${target}px`
+  node.style.setProperty('--dt-row-h', value)
+  node.__dtNumber?.style.setProperty('--dt-row-h', value)
 }
 
 /**

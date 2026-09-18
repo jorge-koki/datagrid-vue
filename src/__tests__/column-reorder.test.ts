@@ -119,6 +119,20 @@ function indicator(harness: TableHarness): HTMLElement | null {
   return node instanceof HTMLElement ? node : null
 }
 
+/** El fantasma que sigue al puntero, o `null`. */
+function ghost(harness: TableHarness): HTMLElement | null {
+  const node = harness.wrapper.element.querySelector('.dt-column-ghost')
+  return node instanceof HTMLElement ? node : null
+}
+
+/** La `x` que el fantasma tiene escrita en su `transform`. */
+function ghostX(harness: TableHarness): number {
+  const node = ghost(harness)
+  if (!node) throw new Error('[test] no hay fantasma')
+  const match = /translate3d\((-?\d+(?:\.\d+)?)px/.exec(node.style.transform)
+  return match ? Number(match[1]) : Number.NaN
+}
+
 /* ------------------------------------------------------------- El gesto */
 
 describe('column reorder — dragging a header', () => {
@@ -390,6 +404,125 @@ describe('column reorder — it writes the state that already existed', () => {
     const cell = harness.cell(0, 'id')
     const headerCell = header(harness, 'id')
     expect(cell?.style.transform).toBe(headerCell.style.transform)
+    harness.unmount()
+  })
+})
+
+/* ------------------------------------------------------ El fantasma */
+
+/**
+ * La caja que sigue al cursor mientras se arrastra.
+ *
+ * Es lo único del gesto que está agarrado al puntero: el encabezado atenuado
+ * dice de dónde sale la columna y la línea dice dónde va a caer, pero entre esas
+ * dos cosas no había nada que se moviera con la mano. Lo que estos tests fijan
+ * es su ciclo de vida, que es donde un nodo que sigue al cursor se convierte en
+ * un nodo que se quedó pegado en la pantalla.
+ */
+describe('column reorder — the drag ghost', () => {
+  it('does not exist before a drag starts', async () => {
+    const harness = await mountGrid()
+
+    expect(ghost(harness)).toBeNull()
+    harness.unmount()
+  })
+
+  it('does not appear on a click that stays under the threshold', async () => {
+    const harness = await mountGrid()
+    const node = header(harness, 'id')
+
+    node.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, button: 0, clientX: 100 }))
+    node.dispatchEvent(new MouseEvent('pointermove', { bubbles: true, clientX: 103 }))
+    await harness.flush()
+
+    // Mismo umbral que el resto del gesto: apretar y temblar es un clic, y un
+    // clic no puede hacer aparecer una caja flotando.
+    expect(ghost(harness)).toBeNull()
+
+    node.dispatchEvent(new MouseEvent('pointerup', { bubbles: true, clientX: 103 }))
+    await harness.flush()
+    harness.unmount()
+  })
+
+  it('carries the label of the column being dragged', async () => {
+    const harness = await mountGrid()
+
+    await dragHeader(harness, 'name', 3 * COLUMN_WIDTH, { drop: false })
+
+    expect(ghost(harness)?.textContent?.trim()).toBe('name')
+    harness.unmount()
+  })
+
+  it('follows the pointer', async () => {
+    const harness = await mountGrid()
+    const node = header(harness, 'id')
+
+    node.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, button: 0, clientX: 0 }))
+    node.dispatchEvent(new MouseEvent('pointermove', { bubbles: true, clientX: 120 }))
+    await harness.flush()
+    const primera = ghostX(harness)
+
+    node.dispatchEvent(new MouseEvent('pointermove', { bubbles: true, clientX: 260 }))
+    await harness.flush()
+
+    // El desplazamiento del fantasma es el del puntero, ni más ni menos: es lo
+    // que hace que se sienta agarrado a la mano y no arrastrado con retraso.
+    expect(ghostX(harness) - primera).toBe(140)
+    harness.unmount()
+  })
+
+  it('disappears when the column is dropped', async () => {
+    const harness = await mountGrid()
+
+    await dragHeader(harness, 'id', 2 * COLUMN_WIDTH + 70)
+
+    // La columna ya está en su lugar nuevo: un fantasma que sobreviva al soltar
+    // la muestra todavía en vuelo cuando ya llegó.
+    expect(ghost(harness)).toBeNull()
+    expect(lastOrder(harness)).toEqual(['name', 'amount', 'id', 'city'])
+    harness.unmount()
+  })
+
+  it('disappears when the gesture is cancelled', async () => {
+    const harness = await mountGrid()
+    const node = header(harness, 'id')
+
+    node.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, button: 0, clientX: 0 }))
+    node.dispatchEvent(new MouseEvent('pointermove', { bubbles: true, clientX: 300 }))
+    await harness.flush()
+    expect(ghost(harness)).not.toBeNull()
+
+    node.dispatchEvent(new MouseEvent('pointercancel', { bubbles: true, clientX: 300 }))
+    await harness.flush()
+
+    // Cancelar deja todo como estaba, y "todo" incluye no dejar una caja
+    // flotando en el medio de la tabla.
+    expect(ghost(harness)).toBeNull()
+    expect(lastOrder(harness)).toBeNull()
+    harness.unmount()
+  })
+
+  it('stays out of the accessibility tree', async () => {
+    const harness = await mountGrid()
+
+    await dragHeader(harness, 'name', 3 * COLUMN_WIDTH, { drop: false })
+
+    // El título que muestra ya está en el encabezado, que sigue en el documento
+    // durante todo el gesto: anunciarlo dos veces no agrega nada y desordena el
+    // recorrido.
+    expect(ghost(harness)?.getAttribute('aria-hidden')).toBe('true')
+    harness.unmount()
+  })
+
+  it('does not appear when the column cannot be moved', async () => {
+    const harness = await mountGrid({ columnReorder: false })
+    const node = header(harness, 'id')
+
+    node.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, button: 0, clientX: 0 }))
+    node.dispatchEvent(new MouseEvent('pointermove', { bubbles: true, clientX: 300 }))
+    await harness.flush()
+
+    expect(ghost(harness)).toBeNull()
     harness.unmount()
   })
 })

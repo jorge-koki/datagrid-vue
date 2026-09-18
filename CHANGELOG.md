@@ -7,6 +7,108 @@ Mientras la versión mayor sea `0`, un cambio incompatible sube la **minor**. La
 como pública es exactamente la que exporta [`src/index.ts`](./src/index.ts): lo que está bajo
 `internal/` y los composables pueden cambiar en cualquier versión sin aviso.
 
+## [0.2.0] — 2026-09-17
+
+### Agregado
+
+- **Alturas de fila distintas.** `rowHeight` acepta ahora una función `(row, index) => number` además
+  de un número, y cada fila puede medir lo suyo. La acompañan todas las piezas que se ubican sobre
+  las filas: el recuadro de la selección abarca el alto real del bloque, el editor se abre del tamaño
+  de su celda, la regleta de numeración sigue cada fila, `Av Pág` avanza las que entren de verdad
+  desde donde uno esté, y la barra de scroll mide la suma.
+
+  La función recibe `undefined` en lugar de la fila cuando la posición es una **cabecera de grupo** o
+  una fila que el **servidor todavía no mandó**, que es la vía para darle a las cabeceras un alto
+  propio. Corre una vez por fila del dataset cuando cambian las filas, las columnas o la función
+  misma; **scrollear no la llama ni una vez**. De ahí la única regla: pasarla como `computed` y no
+  inline en el template, o cada render del padre cuesta una pasada sobre el dataset entero.
+
+- **Ordenamiento.** `column.sortable` hace que el encabezado responda al clic —ascendente,
+  descendente y de vuelta a sin orden— y muestre la flecha del sentido; `Shift`+clic suma un criterio
+  en lugar de reemplazarlo, y con más de uno cada flecha lleva su número de prioridad. El estado vive
+  en **`v-model:sort`**, se anuncia también por `sortChange` y se persiste.
+
+  **La tabla no ordena `rows`**: administra los criterios y los anuncia. Es lo único que funciona en
+  los dos modos —en servidor solo tiene una ventana del dataset, y ordenarla daría un orden falso—.
+  Para el caso en memoria se exporta **`sortRows(rows, sort, columns)`**: no muta, es estable,
+  devuelve el mismo array cuando no hay nada que ordenar, compara el valor crudo y no el texto, y
+  manda los vacíos al final en los dos sentidos. `column.comparator` cubre los órdenes que no son los
+  naturales del valor.
+
+  Al cambiar el orden la tabla vuelve al principio del dataset.
+- **Menú de columna.** `columnMenu` pone un botón de tres puntos en cada encabezado con lo que la
+  columna puede hacer: ordenar, anclar, ocultarse y restablecer el layout. No agrega capacidades —es
+  otra vía al mismo estado— y muestra solo lo aplicable. Se cierra con `Escape`, al apretar afuera, al
+  elegir y al scrollear. Una columna se queda afuera con `column.menu: false`.
+
+  Es además el único lugar donde viven juntas las cuatro operaciones de una columna.
+
+  Su redondeo lo decide `radiusBorder`, igual que el de la tabla, y el de sus opciones se deriva
+  restándole el padding para que las dos curvas sean concéntricas. Con el preset `cells` se
+  cuadricula: una línea entre todas las opciones, no solo entre los grupos. Cada entrada lleva un
+  ícono de línea genérico, y anclar al inicio y al final no comparten dibujo: una flecha que entra
+  contra una barra dice a qué borde va, cosa que una chinche no puede decir.
+- **`labels`**: los textos de los controles de la librería en un solo objeto parcial, para traducirlos.
+- **Anclar y desanclar columnas desde el encabezado.** `column.pinnable` pone un botón de alfiler en
+  el encabezado, y su valor dice a qué borde lleva: `true` y `'start'` al izquierdo, `'end'` al
+  derecho. **Por defecto no hay ningún botón**, así que una tabla que no use la función no paga ni un
+  nodo de más por columna. `pinned` pasa a ser el estado inicial y `pinnable` es el permiso.
+
+  Lo elegido vive en **`columnPinning`**, el cuarto v-model del juego de columnas: se reconcilia
+  contra las columnas declaradas y se persiste con el resto del layout. Una clave en `null` significa
+  "el usuario la soltó" y no es lo mismo que la clave ausente, que deja mandar a `column.pinned`; sin
+  esa distinción, soltar una columna declarada anclada sería imposible.
+
+  `resetLayout()` vacía el mapa, que es volver a lo que declaran las columnas. `labels.pin` y
+  `labels.unpin` traducen el botón, y la tabla **avisa una vez** si se ancla una columna con
+  `aggregate` y hay grupos activos, porque ese agregado deja de mostrarse.
+- **La columna que se arrastra ahora tiene un cuerpo.** Al mover un encabezado, una caja con su
+  título se despega de él y sigue al puntero hasta que se suelta. Aparece exactamente encima del
+  encabezado y conserva el punto donde se agarró, así que no salta al aparecer. Antes el gesto
+  mostraba de dónde salía la columna —el encabezado atenuado— y dónde iba a caer —la línea—, pero
+  nada agarrado a la mano.
+- **`crosshair`**: una línea bajo el encabezado de la columna activa y otra al costado de su número
+  de fila, que se cruzan en la celda donde está el usuario. Sirven cuando la tabla es grande y la
+  celda activa se va de la pantalla al scrollear: el encabezado y la regleta son los dos bloques que
+  no scrollean. Apagada por defecto. El grosor sale de `--dt-crosshair-width` (`2px`).
+
+### Cambiado
+
+- **Con `columnSelection` encendida, el clic del encabezado pasa a ordenar** y seleccionar la columna
+  entera se hace con `Ctrl`/`Cmd`+clic. Antes se la quedaba la selección, y eso dejaba un agujero:
+  sin `columnMenu`, una columna con `sortable: true` no hacía nada. Sobre una columna que no ordena
+  no cambia nada, y con `columnSelection` apagada —el valor por defecto— tampoco.
+- **El encabezado pasa a ser un contenedor flex.** Era un bloque con el título en flujo, y eso dejaba
+  a la flecha del orden en una segunda línea que el recorte escondía: existía en el documento y no se
+  veía. El recorte con puntos suspensivos del título no cambia —lo hace `.dt-header-label`, que tiene
+  el suyo—, y la alineación de las columnas centradas y a la derecha ahora sale de `justify-content`
+  además de `text-align`.
+
+- **Sin función de altura no cambia nada.** El camino uniforme sigue siendo la misma división `O(1)`,
+  sin reservar un solo byte, y el pool no escribe ninguna propiedad de alto. La tabla vuelve sola a
+  ese camino si la función termina devolviendo el alto por defecto para todas.
+- `scrollToCell` con un índice de fila fuera de rango pide ahora el final del contenido en lugar de
+  una posición inventada más allá. Lo que se ve es lo mismo —el navegador acotaba esa escritura
+  igual—, pero el número que la tabla pide cambió.
+- La celda toma su alto de `--dt-row-h`, el alto de SU fila, en lugar de `--dt-row-height`. Los
+  tamaños decorativos que se derivan de `--dt-row-height` con `calc()` —píldoras, casillas,
+  avatares— siguen colgando del alto base y no crecen con una fila alta.
+- **Las marcas de selección adelgazaron de 2px a 1px**, que es el grosor de las líneas de la grilla
+  de `bordered` y del preset `cells`: con 2px la selección se leía como una capa dibujada encima en
+  lugar de como parte de la tabla. Alcanza a las tres —el anillo de la celda activa, el recuadro del
+  rango y el destello del copiado—, que ahora salen del token nuevo `--dt-selection-width` y no de
+  tres valores sueltos. Subirlo a `2px` recupera el aspecto anterior. El corte del bloque anclado
+  sigue siendo de 2px: ahí el grosor es la información.
+- **La línea bajo el encabezado de la columna activa ahora es opcional, y viene apagada.** Estaba
+  puesta de fábrica y no tenía pareja del lado de la regleta, así que la mitad de la cruz se dibujaba
+  y la otra no. Ahora las dos salen de `crosshair`, y sin él no se pinta ninguna. El fondo acentuado
+  del encabezado no cambia: sigue marcando la columna activa siempre.
+- **El editor de celda dejó de ser redondeado** y su borde acompaña a `--dt-selection-width`. El
+  redondeo dejaba las cuatro esquinas de la celda sin tapar —el editor se posiciona con la caja
+  exacta de la celda, que es recta— y por esos huecos se veía la grilla de abajo. Se notaba poco con
+  el borde grueso y quedó a la vista al adelgazarlo. `--dt-radius` sigue valiendo para las píldoras y
+  el panel del selector de columnas.
+
 ## [0.1.2] — 2026-09-17
 
 ### Arreglado

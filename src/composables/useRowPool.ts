@@ -1,6 +1,7 @@
 import type { CellPosition, FlatRow, GroupRow, SelectionMode, VirtualWindow } from '../types'
 import type { ResolvedColumn } from './useColumnLayout'
 import type { RangeRect } from './useCellRange'
+import type { RowMetrics } from './useRowMetrics'
 import type {
   PooledAggregateElement,
   PooledCellElement,
@@ -53,6 +54,7 @@ import {
   setRowNumberOffset,
   setRowNumberRange,
   setRowNumberStripe,
+  setRowHeight,
   setRowOffset,
   setRowStripe,
   setRowWidth,
@@ -299,8 +301,15 @@ export interface RowPoolPaintState<TRow> {
    * de la fila y por lo tanto las mide desde ahí hacia atrás.
    */
   totalWidth: number
-  /** Altura de fila en px. */
-  rowHeight: number
+  /**
+   * La geometría vertical ya resuelta: dónde empieza cada fila y cuánto mide.
+   *
+   * Reemplaza al alto suelto que había antes porque con alturas variables la
+   * posición de una fila ya no se deduce de su índice. Con alturas uniformes las
+   * dos consultas siguen siendo las mismas dos multiplicaciones de siempre, así
+   * que el cambio no le cuesta nada al caso mayoritario.
+   */
+  rowMetrics: RowMetrics
   /** Celda con el editor abierto, o `null`. */
   editing: CellPosition | null
   /** Celda activa, o `null`. */
@@ -609,7 +618,7 @@ export function useRowPool<TRow extends Record<string, unknown>>(
   function paint(state: RowPoolPaintState<TRow>): void {
     if (!container) return
 
-    const { rowRange, columns, rowHeight, editing, active, selectionMode, stripe, totalWidth } =
+    const { rowRange, columns, rowMetrics, editing, active, selectionMode, stripe, totalWidth } =
       state
     // Se resuelven una vez por pintado. Con `flatRows` en `null` el bucle de
     // filas ni siquiera mira la agrupación: es una comparación contra `null` por
@@ -723,13 +732,13 @@ export function useRowPool<TRow extends Record<string, unknown>>(
           continue
         }
         if (entry.kind === 'group') {
-          paintGroupRow(rowNode, entry, rowIndex, columns, rowHeight, frame, showGroupCount)
+          paintGroupRow(rowNode, entry, rowIndex, columns, rowMetrics, frame, showGroupCount)
           // La regleta acompaña a la cabecera con su casilla vacía: una cabecera
           // ocupa una posición visible pero no es una fila del dataset, y
           // numerarla haría que el usuario contara filas que no existen.
           paintRowNumber(
             rowNode,
-            rowIndex * rowHeight,
+            rowMetrics.offsetOf(rowIndex),
             '',
             false,
             rowIndex === activeRowIndex,
@@ -750,7 +759,7 @@ export function useRowPool<TRow extends Record<string, unknown>>(
       // un estado normal y tiene que verse como tal.
       if (row === undefined) {
         if (placeholders) {
-          paintPlaceholderRow(rowNode, rowIndex, columns, pinnedColumns, rowHeight, frame)
+          paintPlaceholderRow(rowNode, rowIndex, columns, pinnedColumns, rowMetrics, frame)
         } else {
           retireRow(rowNode)
         }
@@ -761,8 +770,10 @@ export function useRowPool<TRow extends Record<string, unknown>>(
       setRowPlaceholder(rowNode, false)
 
       const striped = stripe && rowIndex % 2 === 1
+      const rowTop = rowMetrics.offsetOf(rowIndex)
       setHidden(rowNode, false)
-      setRowOffset(rowNode, rowIndex * rowHeight)
+      setRowOffset(rowNode, rowTop)
+      setRowHeight(rowNode, rowMetrics.sizeOf(rowIndex), rowMetrics.variable)
       setRowStripe(rowNode, striped)
       // La identidad de una fila pintada son sus DOS índices. Sin grupos el
       // segundo es redundante; con grupos, expandir o colapsar corre las filas de
@@ -788,7 +799,7 @@ export function useRowPool<TRow extends Record<string, unknown>>(
       // grupos activos ni siquiera es contiguo.
       paintRowNumber(
         rowNode,
-        rowIndex * rowHeight,
+        rowTop,
         String(rowIndex + 1),
         striped,
         rowIsActive,
@@ -856,14 +867,16 @@ export function useRowPool<TRow extends Record<string, unknown>>(
     rowIndex: number,
     columns: readonly ResolvedColumn<TRow>[],
     pinnedColumns: readonly ResolvedColumn<TRow>[],
-    rowHeight: number,
+    rowMetrics: RowMetrics,
     frame: PaintFrame,
   ): void {
     ensureRowKind(rowNode, ROW_KIND_DATA)
     setRowPlaceholder(rowNode, true)
 
+    const rowTop = rowMetrics.offsetOf(rowIndex)
     setHidden(rowNode, false)
-    setRowOffset(rowNode, rowIndex * rowHeight)
+    setRowOffset(rowNode, rowTop)
+    setRowHeight(rowNode, rowMetrics.sizeOf(rowIndex), rowMetrics.variable)
     setRowWidth(rowNode, frame.totalWidth)
     setRowStripe(rowNode, false)
     setRowActive(rowNode, false)
@@ -879,7 +892,7 @@ export function useRowPool<TRow extends Record<string, unknown>>(
     }
 
     // El número SÍ se sabe: es la posición, no el dato.
-    paintRowNumber(rowNode, rowIndex * rowHeight, String(rowIndex + 1), false, false, false)
+    paintRowNumber(rowNode, rowTop, String(rowIndex + 1), false, false, false)
 
     growCells(rowNode, columns.length)
     const cells = rowNode.__dtCells
@@ -1148,7 +1161,7 @@ export function useRowPool<TRow extends Record<string, unknown>>(
     entry: GroupRow,
     rowIndex: number,
     columns: readonly ResolvedColumn<TRow>[],
-    rowHeight: number,
+    rowMetrics: RowMetrics,
     frame: PaintFrame,
     showGroupCount: boolean,
   ): void {
@@ -1157,7 +1170,8 @@ export function useRowPool<TRow extends Record<string, unknown>>(
 
     setHidden(rowNode, false)
     setHidden(parts.header, false)
-    setRowOffset(rowNode, rowIndex * rowHeight)
+    setRowOffset(rowNode, rowMetrics.offsetOf(rowIndex))
+    setRowHeight(rowNode, rowMetrics.sizeOf(rowIndex), rowMetrics.variable)
     // Una cabecera de grupo nunca se raya: su fondo es el que la separa de las
     // filas de datos, y alternarlo haría que una de cada dos se confundiera.
     setRowStripe(rowNode, false)

@@ -93,6 +93,77 @@ export type DataTableRadius = 'none' | 'sm' | 'md' | 'lg' | 'xl'
 export type ColumnPin = 'start' | 'end'
 
 /**
+ * Textos de los controles que pone la librería.
+ *
+ * Existe porque la librería dibuja botones y menús con texto propio, y una
+ * aplicación que no está en inglés no puede quedarse sin forma de traducirlos.
+ * Es **un objeto y no una prop por cadena**: son nueve, y nueve props sueltas
+ * para lo mismo serían nueve cosas que recordar en vez de una.
+ *
+ * Se pasa parcial y se completa con los valores por defecto, así que traducir
+ * solo lo que se usa es una línea.
+ *
+ * `emptyText` queda afuera a propósito: no es el rótulo de un control sino
+ * contenido de la tabla, y se cambia mucho más seguido que estos.
+ */
+export interface DataTableLabels {
+  /** Botón de anclar, con la columna suelta. `'Pin column'`. */
+  pin?: string
+  /** Botón de anclar, con la columna ya anclada. `'Unpin column'`. */
+  unpin?: string
+  /** Botón que abre el menú de la columna. `'Column menu'`. */
+  menu?: string
+  /** `'Sort ascending'`. */
+  sortAsc?: string
+  /** `'Sort descending'`. */
+  sortDesc?: string
+  /** `'Clear sort'`. */
+  clearSort?: string
+  /** `'Pin to start'`. */
+  pinStart?: string
+  /** `'Pin to end'`. */
+  pinEnd?: string
+  /** `'Hide column'`. */
+  hideColumn?: string
+  /** `'Reset columns'`. */
+  resetColumns?: string
+}
+
+/** Sentido de un criterio de ordenamiento. */
+export type SortDirection = 'asc' | 'desc'
+
+/** Un criterio de ordenamiento: una columna y un sentido. */
+export interface ColumnSort {
+  /** Clave de la columna por la que se ordena. */
+  columnKey: string
+  /** Sentido. */
+  direction: SortDirection
+}
+
+/**
+ * Los criterios de ordenamiento vigentes, en orden de prioridad.
+ *
+ * Es una LISTA y no un criterio suelto por lo mismo que `groupBy`: ordenar por
+ * estado y después por fecha es un caso normal, y empezar con un solo criterio
+ * habría obligado a un cambio incompatible para admitirlo. Una lista vacía
+ * significa "sin ordenar".
+ *
+ * **La tabla no ordena nada con esto.** Es estado que la tabla administra y
+ * anuncia —igual que el orden, el ancho o el anclaje de las columnas—, y el
+ * array `rows` lo sigue construyendo el consumidor. Ver {@link sortRows} para el
+ * caso en memoria, y el README para el de servidor.
+ */
+export type SortState = readonly ColumnSort[]
+
+/** Payload de `sortChange`. */
+export interface SortChangeEvent {
+  /** Los criterios que quedaron vigentes. Vacío significa "sin ordenar". */
+  sort: SortState
+  /** La columna que el usuario acaba de tocar. */
+  columnKey: string
+}
+
+/**
  * Descripción declarativa de una columna.
  *
  * Una columna es configuración, no estado: se lee en cada pintado, así que los
@@ -116,6 +187,32 @@ export interface DataTableColumn<TRow> {
   /** Si la columna se puede redimensionar arrastrando el borde de su header. */
   resizable?: boolean
   /**
+   * Si la columna se puede ordenar. Por defecto `false`.
+   *
+   * Encendida, el encabezado muestra la flecha del sentido vigente y responde al
+   * clic: ascendente, descendente y de vuelta a sin orden. **La tabla no ordena
+   * `rows`**: escribe el estado en `sort` y lo anuncia; quién reordena el array
+   * —o consulta al servidor— sigue siendo el consumidor.
+   *
+   * Con `columnSelection` encendida el clic pelado sigue siendo para ordenar, y
+   * seleccionar la columna entera pasa a `Ctrl`/`Cmd`+clic. Ver
+   * {@link DataTableProps.columnSelection}.
+   */
+  sortable?: boolean
+  /**
+   * Comparador propio para esta columna, en sentido ASCENDENTE.
+   *
+   * Solo lo usa {@link sortRows}: la tabla nunca compara nada por su cuenta. El
+   * sentido descendente lo resuelve el helper invirtiendo el resultado, así que
+   * acá alcanza con describir el ascendente.
+   *
+   * Hace falta cuando el orden natural del valor no es el que el usuario espera:
+   * una prioridad que va `baja < media < alta` y no alfabéticamente, un texto
+   * que tiene que ordenarse ignorando acentos, un objeto del que se compara un
+   * campo interno.
+   */
+  comparator?: (a: TRow, b: TRow) => number
+  /**
    * Ancla la columna a un borde de la tabla. Por defecto ninguno.
    *
    * Una columna anclada no scrollea: se queda a la vista mientras el resto pasa
@@ -128,6 +225,35 @@ export interface DataTableColumn<TRow> {
    * significaría desanclarla.
    */
   pinned?: ColumnPin
+  /**
+   * Si el usuario puede anclar y desanclar la columna desde su encabezado.
+   * Por defecto `false`: **sin esto no aparece ningún botón**.
+   *
+   * El valor dice a qué BORDE la lleva el botón, no si empieza anclada —eso
+   * sigue siendo {@link DataTableColumn.pinned}—:
+   *
+   * - `true` y `'start'` son lo mismo: la ancla al borde izquierdo.
+   * - `'end'` la ancla al derecho.
+   *
+   * El lado se declara y no se elige en caliente porque en la práctica es una
+   * propiedad de la columna: una de identificación va a la izquierda y una de
+   * acciones a la derecha, y nadie ancla "Nombre" al borde derecho. Un menú de
+   * tres opciones por columna resolvería un caso que casi no existe a cambio de
+   * un gesto más en el caso que sí.
+   *
+   * El botón alterna: si la columna está suelta la ancla a ese borde, y si está
+   * anclada —a cualquiera de los dos— la suelta.
+   */
+  pinnable?: boolean | ColumnPin
+  /**
+   * Si esta columna muestra el menú de tres puntos. Por defecto `true`, pero
+   * solo cuenta con {@link DataTableProps.columnMenu} encendido.
+   *
+   * En `false` la columna queda sin menú aunque la tabla lo tenga: sirve para
+   * una columna de acciones o un indicador donde ordenar, anclar y ocultar no
+   * significan nada.
+   */
+  menu?: boolean
   /**
    * Si la columna se puede mover arrastrando su encabezado. Por defecto `true`.
    *
@@ -467,6 +593,16 @@ export type ColumnVisibilityState = Readonly<Record<string, boolean>>
 export type ColumnWidthState = Readonly<Record<string, number>>
 
 /**
+ * Anclaje elegido por el usuario, por clave de columna.
+ *
+ * Pisa a {@link DataTableColumn.pinned}, que pasa a ser el valor inicial. `null`
+ * es un valor con significado —"el usuario la soltó"— y por eso se distingue de
+ * la clave ausente, que significa "el usuario no la tocó" y deja mandar a la
+ * declaración.
+ */
+export type ColumnPinState = Readonly<Record<string, ColumnPin | null>>
+
+/**
  * Estado de la tabla que se persiste entre sesiones.
  *
  * Se guarda plano y sin referencias a los objetos de columna: lo que sobrevive a
@@ -483,6 +619,23 @@ export interface PersistedTableState {
   columnWidths: Record<string, number>
   /** Claves de columna en el orden elegido por el usuario. */
   columnOrder: string[]
+  /**
+   * Anclaje elegido por el usuario, por clave de columna.
+   *
+   * Opcional por la misma razón que {@link PersistedTableState.groupBy}: un
+   * payload escrito antes de que el anclaje desde la UI existiera no trae la
+   * clave, y eso no tiene por qué invalidar un layout guardado. Ausente
+   * significa "sin anclaje persistido", y manda lo que declaren las columnas.
+   */
+  columnPinning?: Record<string, ColumnPin | null>
+  /**
+   * Criterios de ordenamiento vigentes.
+   *
+   * Opcional por lo mismo que el anclaje y la agrupación: un payload escrito
+   * antes de que el ordenamiento existiera no la trae, y eso no tiene por qué
+   * invalidar un layout guardado.
+   */
+  sort?: ColumnSort[]
   /**
    * Claves por las que se agrupa, en orden de anidamiento.
    *
@@ -533,7 +686,14 @@ export interface DataTablePersistOptions {
    * —que es lo más parecido— le cambiaría el comportamiento sin que haya tocado
    * nada.
    */
-  include?: { visibility?: boolean; widths?: boolean; order?: boolean; grouping?: boolean }
+  include?: {
+    visibility?: boolean
+    widths?: boolean
+    order?: boolean
+    grouping?: boolean
+    pinning?: boolean
+    sort?: boolean
+  }
   /** Ms de espera antes de escribir. Evita escribir en cada frame del drag de resize. */
   debounce?: number
   /**
@@ -659,6 +819,56 @@ export interface CellRenderer<TRow> {
 }
 
 /**
+ * Resuelve el alto en px de una fila.
+ *
+ * ## Qué recibe
+ *
+ * `row` es `undefined` en dos situaciones, y las dos son normales:
+ *
+ * - La posición es una **cabecera de grupo**, que no corresponde a ninguna fila
+ *   del dataset.
+ * - La tabla está en **modo servidor** y esa fila todavía no llegó.
+ *
+ * Devolver el alto que quieras para ese caso es la forma de darle a las
+ * cabeceras de grupo un alto propio.
+ *
+ * `index` es la posición **visible**: la que se ve en la regleta de numeración
+ * menos uno. Sin agrupación coincide con el índice dentro de `rows`; con
+ * agrupación no, porque las cabeceras ocupan lugar. Es el único índice que
+ * existe siempre, que es la razón de que sea el que se pasa.
+ *
+ * ## Qué tiene que devolver
+ *
+ * Un número finito y positivo de píxeles. Cualquier otra cosa —`NaN` por una
+ * cuenta con un campo que no llegó, un cero, un negativo— se descarta en
+ * silencio y se usa el alto por defecto, porque una geometría rota se
+ * manifestaría como filas superpuestas y no como un error.
+ *
+ * ## Qué cuesta
+ *
+ * Se la llama **una vez por fila del dataset entero** cada vez que cambian las
+ * filas, las columnas o la función misma. No en cada frame: scrollear no la
+ * llama ni una sola vez. Aun así tiene que ser barata y no puede leer el DOM:
+ * con 100.000 filas, es una pasada de 100.000 llamadas.
+ *
+ * Tiene que ser **pura y estable**: la tabla la usa para calcular dónde empieza
+ * cada fila, y dos respuestas distintas para la misma fila dejarían la
+ * geometría y lo pintado en desacuerdo. Si el alto depende de algo que cambia
+ * —una fila expandida, por ejemplo—, ese algo tiene que estar en los datos, y
+ * cambiarlo tiene que producir una función nueva o un `rows` nuevo.
+ *
+ * @example
+ * ```ts
+ * // Una fila abierta muestra el detalle; una cabecera de grupo va más baja.
+ * const rowHeight = (row: Persona | undefined) => {
+ *   if (row === undefined) return 32
+ *   return abiertas.has(row.id) ? 160 : 40
+ * }
+ * ```
+ */
+export type RowHeightResolver<TRow> = (row: TRow | undefined, index: number) => number
+
+/**
  * Props que acepta el componente `DataTable`.
  *
  * `rows` y `columns` son `readonly` a propósito: la tabla es **controlada** y
@@ -744,17 +954,39 @@ export interface DataTableProps<TRow> {
    */
   rowKey: keyof TRow | ((row: TRow, index: number) => string | number)
   /**
-   * Altura de fila en px. Por defecto 40, o 30 con `dense` encendido.
+   * Altura de fila en px, fija para todas o resuelta fila por fila.
    *
-   * Es un número y no un valor CSS porque el virtualizador divide por él en
-   * cada frame. El componente lo replica en la custom property
-   * `--dt-row-height` para que CSS y JS nunca puedan discrepar.
+   * Por defecto 40, o 30 con `dense` encendido.
+   *
+   * Es un número y no un valor CSS porque el virtualizador hace cuentas con él
+   * en cada frame. El componente replica el valor fijo —o el de respaldo, si es
+   * una función— en la custom property `--dt-row-height`, para que CSS y JS
+   * nunca puedan discrepar.
+   *
+   * Con una {@link RowHeightResolver} cada fila puede medir distinto. Ver ahí
+   * qué recibe, qué tiene que devolver y qué cuesta.
    */
-  rowHeight?: number
+  rowHeight?: number | RowHeightResolver<TRow>
   /** Altura del header en px. Por defecto 44, o 34 con `dense` encendido. */
   headerHeight?: number
   /** Preset compacto: filas más bajas, tipografía menor, padding más ajustado. */
   dense?: boolean
+  /**
+   * La cruz de la celda activa: una línea bajo el encabezado de su columna y
+   * otra al costado de su número de fila. Por defecto `false`.
+   *
+   * Las dos son la misma marca vista desde los dos bordes que NO scrollean, y
+   * por eso se encienden juntas: sirven para saber dónde está uno cuando la
+   * celda activa se fue de la pantalla, que es lo que pasa en una tabla grande.
+   * En una tabla que entra entera son dos señales de más para una posición que
+   * ya tiene la suya, y de ahí que vengan apagadas.
+   *
+   * No afecta al fondo acentuado del encabezado ni al del número, que van
+   * siempre: esto enciende y apaga **las líneas de color**, nada más.
+   *
+   * El grosor sale de `--dt-crosshair-width` (`2px`).
+   */
+  crosshair?: boolean
   /**
    * Filas y columnas extra pintadas fuera de la ventana visible.
    *
@@ -859,6 +1091,49 @@ export interface DataTableProps<TRow> {
    * que actualiza el arrastre del handle de redimensionado.
    */
   columnWidths?: ColumnWidthState
+  /**
+   * Anclaje por clave de columna. `v-model:column-pinning`.
+   *
+   * Pisa a `column.pinned`, que pasa a ser el valor inicial. Es lo que escribe
+   * el botón de anclar del encabezado, que a su vez solo aparece en las columnas
+   * con {@link DataTableColumn.pinnable}.
+   *
+   * Una clave en `null` significa "el usuario la soltó" y NO es lo mismo que la
+   * clave ausente, que significa "el usuario no la tocó" y deja mandar a la
+   * declaración. Sin esa distinción, soltar una columna declarada como anclada
+   * sería imposible: volvería a anclarse sola.
+   */
+  columnPinning?: ColumnPinState
+  /**
+   * Criterios de ordenamiento vigentes. `v-model:sort`.
+   *
+   * La tabla los administra —los escribe el clic en el encabezado y el menú de
+   * columna— y los **anuncia**, pero no toca `rows`: ordenar es del consumidor.
+   * Es la misma disciplina que con la edición, y por el mismo motivo: la tabla
+   * no puede ordenar un dataset que vive en el servidor ni uno del que solo
+   * tiene una ventana.
+   */
+  sort?: SortState
+  /**
+   * Textos de los controles que pone la librería. Ver {@link DataTableLabels}.
+   *
+   * Se pasa parcial: lo que no se declare usa el valor en inglés por defecto.
+   */
+  labels?: DataTableLabels
+  /**
+   * Menú de tres puntos en cada encabezado. Por defecto `false`.
+   *
+   * Reúne en un solo lugar lo que ya existía suelto: ordenar, anclar, ocultar la
+   * columna y restablecer el layout. **No agrega ninguna capacidad nueva**; es
+   * otra forma de llegar al mismo estado, pensada para quien no quiere poner
+   * controles propios alrededor de la tabla.
+   *
+   * Una columna puede quedarse afuera con `column.menu: false`.
+   *
+   * Es también la única vía para ordenar cuando `columnSelection` está
+   * encendida, porque ahí el clic del encabezado ya está tomado.
+   */
+  columnMenu?: boolean
   /**
    * Identificador único de esta tabla dentro de la aplicación.
    *

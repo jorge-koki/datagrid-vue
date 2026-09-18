@@ -92,11 +92,39 @@
   --dt-group-indent: 16px;
 
   /*
+   * Grosor de las tres marcas de selección: el anillo de la celda activa, el
+   * recuadro del rango y el destello del copiado.
+   *
+   * Un token y no tres valores sueltos porque las tres tienen que medir lo
+   * mismo: el destello se dibuja EXACTAMENTE encima del recuadro y cualquier
+   * diferencia se ve como un salto al copiar, y el anillo de la celda activa es
+   * la misma marca cuando el rango es de una sola celda.
+   *
+   * `1px` para que la línea de la selección tenga el mismo grosor que las de la
+   * grilla —las de `bordered` y las del preset `cells`— y no se lea como una
+   * capa aparte dibujada encima. La excepción sigue siendo el corte del bloque
+   * anclado, que son 2px a propósito: ahí el grosor ES la información.
+   */
+  --dt-selection-width: 1px;
+
+  /*
+   * Grosor de la cruz de la celda activa: la línea bajo el encabezado de su
+   * columna y la del costado de su número de fila.
+   *
+   * Separado de `--dt-selection-width` a propósito. Aquella es el contorno de lo
+   * seleccionado y tiene que confundirse con la grilla; esta es una marca de
+   * ubicación sobre dos franjas que no scrollean, y ahí un píxel se pierde: lo
+   * que tiene que hacer es saltar a la vista desde el otro extremo de la tabla.
+   */
+  --dt-crosshair-width: 2px;
+
+  /*
    * Radio de la caja exterior, separado de `--dt-radius`.
    *
    * Son dos cosas distintas: `--dt-radius` es el radio del TEMA, el que llevan
-   * los controles de edición, las píldoras y el panel del selector; este es el
-   * de la tabla como caja. Compartirlos obligaba a elegir entre una tabla
+   * las píldoras y el panel del selector con sus controles; este es el de la
+   * tabla como caja. El editor de celda queda afuera de los dos: es recto
+   * porque tiene que tapar la celda exacta. Ver `.dt-editor`. Compartirlos obligaba a elegir entre una tabla
    * cuadrada con píldoras cuadradas o ninguna de las dos.
    *
    * Recto por defecto: una grilla casi siempre va adentro de un panel que ya
@@ -347,14 +375,26 @@
   top: 0;
   left: 0;
   box-sizing: border-box;
+  /*
+   * Flex, al revés que la celda del cuerpo.
+   *
+   * En el cuerpo el flex está prohibido porque rompe el recorte con puntos
+   * suspensivos del texto anónimo. Acá no hay texto anónimo: el título vive en
+   * `.dt-header-label`, que recorta por su cuenta, y al lado puede haber una
+   * flecha de orden que tiene que quedar a la vista.
+   *
+   * Sin flex el título es un bloque, ocupa la línea entera y empuja a la flecha
+   * a una segunda línea que el `overflow: hidden` recorta. O sea: la flecha
+   * existía en el documento y no se veía.
+   */
+  display: flex;
+  align-items: center;
   height: 100%;
   padding: 0 var(--dt-cell-px);
   overflow: hidden;
   color: var(--dt-text);
   font-weight: 600;
-  line-height: var(--dt-header-height);
   white-space: nowrap;
-  text-overflow: ellipsis;
 }
 
 /*
@@ -381,11 +421,44 @@
  * Existe para que el usuario sepa en qué columna está sin tener que apartar la
  * vista de la fila donde está trabajando. En una tabla ancha, con el header
  * fijo, es la única referencia que queda.
+ *
+ * El fondo acentuado va siempre; la LÍNEA de color es aparte y la enciende
+ * `crosshair`. Ver `--dt-crosshair-width`.
  */
 .dt-header-cell--active {
   background: var(--dt-bg-accented);
   color: var(--dt-text);
-  box-shadow: inset 0 -2px 0 0 var(--dt-primary);
+}
+
+/*
+ * La cruz: dónde estás parado, leído desde los dos bordes fijos de la tabla.
+ *
+ * Son las dos mitades de una misma marca y por eso van juntas en una regla: una
+ * línea bajo el encabezado de la columna activa y otra al costado del número de
+ * la fila activa. Se cruzan en la celda donde está el usuario, y cada una sigue
+ * visible cuando la celda misma quedó fuera de la pantalla —el encabezado y la
+ * regleta son los dos bloques que no scrollean—.
+ *
+ * Cada línea se planta contra el borde que da al cuerpo de la tabla: la del
+ * encabezado abajo, la de la regleta a la derecha. Es lo que las hace leerse
+ * como la continuación de la fila y la columna, y no como el subrayado de una
+ * pestaña suelta.
+ *
+ * Apagadas por defecto: son dos señales más para una posición que ya tiene la
+ * suya —el anillo de la celda activa— y en una tabla con pocas columnas no
+ * agregan nada. Valen la pena cuando la tabla es grande y la celda activa se va
+ * de la vista al scrollear, que es justamente cuando `crosshair` se enciende.
+ *
+ * `box-shadow: inset` por la misma razón que el anillo de la celda: un borde
+ * correría el contenido del encabezado y del número dos píxeles cada vez que la
+ * selección se mueve.
+ */
+.dt-root[data-crosshair='true'] .dt-header-cell--active {
+  box-shadow: inset 0 calc(-1 * var(--dt-crosshair-width)) 0 0 var(--dt-primary);
+}
+
+.dt-root[data-crosshair='true'] .dt-row-number--active {
+  box-shadow: inset calc(-1 * var(--dt-crosshair-width)) 0 0 0 var(--dt-primary);
 }
 
 /* Con la selección por encabezado encendida, el título es accionable y tiene que
@@ -458,19 +531,421 @@
   bottom: 0;
 }
 
+/*
+ * Botón del menú de la columna.
+ *
+ * Mismas reglas de aparición que el de anclar —hover, foco, y siempre mientras
+ * el menú está abierto— y la misma razón: un botón que desaparece con el menú
+ * abierto deja el panel colgando de nada.
+ */
+.dt-menu-button {
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: var(--dt-radius);
+  background: transparent;
+  color: var(--dt-text-dimmed);
+  cursor: pointer;
+  opacity: 0;
+  transform: translateY(-50%);
+  transition:
+    opacity 120ms ease,
+    color 120ms ease;
+}
+
+.dt-menu-button svg {
+  width: 12px;
+  height: 12px;
+}
+
+.dt-header-cell:hover .dt-menu-button,
+.dt-menu-button:focus-visible,
+.dt-menu-button--on {
+  opacity: 1;
+}
+
+.dt-menu-button:hover,
+.dt-menu-button--on {
+  background: var(--dt-bg-accented);
+  color: var(--dt-text);
+}
+
+/* Con los dos botones, el de anclar se corre a la izquierda del de menú. */
+.dt-header-cell--pinnable.dt-header-cell--menu .dt-pin-button {
+  right: 32px;
+}
+
+@media (hover: none) {
+  .dt-menu-button {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dt-menu-button {
+    transition: none;
+  }
+}
+
+/*
+ * El panel del menú.
+ *
+ * Absoluto sobre la raíz, posicionado con `transform` desde JS. `z-index: 5` lo
+ * pone por encima de todo lo demás que flota —el fantasma del arrastre, la línea
+ * de caída, el editor—: es lo último que se abrió y tiene que recibir el clic.
+ */
+.dt-column-menu {
+  /*
+   * El redondeo lo decide `radiusBorder`, igual que el de la tabla.
+   *
+   * Antes salía de `--dt-radius`, el radio del TEMA —el de las píldoras y los
+   * controles—, así que el menú conservaba sus esquinas de siempre mientras la
+   * tabla cambiaba de forma. Dos redondeos distintos a pocos píxeles uno del
+   * otro se leen como un error de alineación, que es lo mismo que la
+   * documentación advierte para una grilla adentro de un panel.
+   */
+  --dt-menu-radius: var(--dt-root-radius);
+  /*
+   * El radio de adentro es el de afuera MENOS el padding.
+   *
+   * Es lo que hace que las dos curvas sean concéntricas: con el mismo radio en
+   * los dos, la opción resaltada se despega de la esquina del panel y queda un
+   * hueco con forma de cuerno. El `max` lo sostiene en cero cuando el redondeo
+   * es `none`, donde restar daría un negativo que el navegador ignora.
+   */
+  --dt-menu-item-radius: max(0px, calc(var(--dt-menu-radius) - 0.25rem));
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 5;
+  min-width: 13rem;
+  padding: 0.25rem;
+  border: 1px solid var(--dt-border);
+  border-radius: var(--dt-menu-radius);
+  background: var(--dt-bg-elevated);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 28%);
+}
+
+.dt-column-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.375rem var(--dt-cell-px);
+  border: none;
+  border-radius: var(--dt-menu-item-radius);
+  background: transparent;
+  color: var(--dt-text);
+  font: inherit;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+/*
+ * El dibujo de una opción.
+ *
+ * `flex: none` es lo que impide que se achique cuando el texto es largo: un
+ * ícono de menú deformado se lee como un error, y el que tiene que recortarse es
+ * el texto.
+ *
+ * El trazo va acá y no en cada `path` para que el peso de los ocho dibujos no
+ * pueda separarse, y `currentColor` los ata al color de la opción: en la que
+ * está bajo el cursor se aclaran junto con su texto, sin una regla aparte.
+ */
+.dt-column-menu-icon {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  color: var(--dt-text-dimmed);
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.dt-column-menu-item:hover .dt-column-menu-icon,
+.dt-column-menu-item:focus-visible .dt-column-menu-icon {
+  color: inherit;
+}
+
+.dt-column-menu-item:hover,
+.dt-column-menu-item:focus-visible {
+  background: var(--dt-bg-accented);
+  outline: none;
+}
+
+/*
+ * Separación por grupo, con un borde y no con un nodo aparte.
+ *
+ * Un `<hr>` entre grupos sería un hijo más del `role="menu"` que el lector de
+ * pantalla tendría que saltear, y la lista de items dejaría de ser homogénea
+ * para el recorrido con flechas.
+ */
+.dt-column-menu-item--separated {
+  margin-top: 0.25rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--dt-border);
+  /* Las esquinas de arriba se cuadran: una curva que se aleja de la línea del
+     separador se lee como que la línea no llega hasta el borde. */
+  border-radius: 0 0 var(--dt-menu-item-radius) var(--dt-menu-item-radius);
+}
+
+/*
+ * Con el preset `cells`, el menú también se cuadricula.
+ *
+ * La variante dibuja una grilla completa de celda a celda; el equivalente en una
+ * lista es una línea entre todas las opciones y no solo entre los grupos. Es la
+ * misma idea —la separación es explícita en todas partes— aplicada al único
+ * lugar de la tabla que no es una grilla.
+ */
+.dt-root[data-variant='cells'] .dt-column-menu-item + .dt-column-menu-item {
+  border-top: 1px solid var(--dt-border);
+  border-radius: 0 0 var(--dt-menu-item-radius) var(--dt-menu-item-radius);
+}
+
+/*
+ * El fantasma de la columna que se arrastra.
+ *
+ * ## Qué problema resuelve
+ *
+ * Arrastrar una columna atenuaba su encabezado y dibujaba una línea a lo lejos,
+ * y entre esas dos cosas no había nada agarrado al cursor: se veía el origen y
+ * el destino, pero no el objeto. Este es el objeto.
+ *
+ * Nace EXACTAMENTE encima del encabezado —el arrastre conserva el punto donde el
+ * usuario agarró— así que no aparece de la nada en otro lado: se despega de su
+ * sitio y desde ahí sigue al dedo. Al soltar, el nodo se desmonta y con él se va
+ * el fantasma, sin transición: la columna ya está en su lugar nuevo y una
+ * animación de salida la mostraría todavía en vuelo cuando ya llegó.
+ *
+ * ## Por qué no cuesta nada
+ *
+ * Se mueve con `transform` y nada más, igual que las filas: una propiedad que se
+ * compone sin layout ni repintado. Es el único nodo que se crea en todo el
+ * gesto.
+ *
+ * `pointer-events: none` no es un detalle: el fantasma está literalmente debajo
+ * del cursor, y sin esto se comería los `pointermove` que calculan dónde va a
+ * caer la columna.
+ */
+.dt-column-ghost {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  padding: 0 var(--dt-cell-px);
+  border: 1px solid var(--dt-primary);
+  background: var(--dt-bg-elevated);
+  color: var(--dt-text);
+  font-size: var(--dt-font-size);
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  /*
+   * La sombra es lo que lo levanta del plano de la tabla. Sin ella el fantasma
+   * se lee como una celda más apoyada encima de las otras, y la idea es
+   * justamente la contraria: esto está en el aire.
+   */
+  box-shadow: 0 8px 24px rgb(0 0 0 / 28%);
+  /*
+   * OPACO, y se probó al revés.
+   *
+   * Con algo de transparencia el contenido de las filas se lee a través del
+   * rótulo y el fantasma deja de parecer un objeto: parece un tinte. Lo que lo
+   * despega del plano es la sombra, no la transparencia.
+   */
+  pointer-events: none;
+  will-change: transform;
+}
+
+/* Con el encabezado en flex, alinear el CONTENIDO —título más flecha— es
+   `justify-content`. `text-align` se conserva para el texto de adentro. */
 .dt-header-cell--center {
+  justify-content: center;
   text-align: center;
 }
 
 .dt-header-cell--right {
+  justify-content: flex-end;
   text-align: right;
 }
 
 .dt-header-label {
-  display: block;
+  /*
+   * `0 1 auto`: mide lo que el texto y se ACHICA si no entra, en lugar de
+   * estirarse hasta el borde. Es lo que deja a la flecha del orden pegada al
+   * título y no contra el borde derecho, donde chocaría con el botón de anclar.
+   *
+   * `min-width: 0` es lo que habilita ese achique: un item de flex no baja de su
+   * ancho de contenido sin él, y el recorte con puntos suspensivos no llegaría a
+   * ocurrir nunca.
+   */
+  flex: 0 1 auto;
+  min-width: 0;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+}
+
+/*
+ * Encabezado de una columna ordenable.
+ *
+ * El cursor es lo único que lo anuncia antes de apretar, igual que con el
+ * anclaje y con el reordenamiento. No lleva subrayado ni color propio: la
+ * columna ordenable es la norma en una tabla que usa la función, y marcarlas
+ * todas sería marcar nada.
+ */
+.dt-header-cell--sortable {
+  cursor: pointer;
+}
+
+/* Ordenar gana sobre mover: si la columna se puede hacer las dos cosas, el
+   cursor dice la que ocurre al soltar sin arrastrar. */
+.dt-root[data-reorder='true'] .dt-header-cell--sortable {
+  cursor: pointer;
+}
+
+/* La columna que ordena se destaca del resto de los títulos. */
+.dt-header-cell--sorted {
+  color: var(--dt-text);
+}
+
+/*
+ * La flecha del sentido.
+ *
+ * Va en flujo, al lado del título, y no absoluta como el botón de anclar: tiene
+ * que empujar al texto en vez de taparlo, porque el título recorta con puntos
+ * suspensivos y una flecha encima escondería la última letra justo cuando el
+ * ancho aprieta.
+ */
+.dt-sort-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.125rem;
+  margin-left: 0.25rem;
+  color: var(--dt-primary);
+  vertical-align: middle;
+}
+
+.dt-sort-indicator svg {
+  width: 10px;
+  height: 10px;
+}
+
+/*
+ * La posición dentro del orden, cuando hay más de un criterio.
+ *
+ * Un número chico y no una segunda flecha: lo que hay que leer de un vistazo es
+ * cuál manda, y dos flechas iguales con distinta prioridad no lo dicen.
+ */
+.dt-sort-rank {
+  font-size: 0.625rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+/*
+ * Botón de anclar del encabezado.
+ *
+ * ## Cuándo se ve
+ *
+ * Al pasar el mouse por el encabezado, al recibir el foco, y SIEMPRE que la
+ * columna está anclada. Lo último no es un capricho: un botón que desaparece
+ * dejaría una columna anclada sin nada que explique por qué no scrollea ni cómo
+ * soltarla, y el estado quedaría atrapado.
+ *
+ * Donde no hay hover —una pantalla táctil— se ve siempre, porque ahí "pasar el
+ * mouse por encima" no existe y el botón sería inalcanzable.
+ *
+ * ## Por qué no está en el flujo
+ *
+ * El encabezado no es flex: su título recorta con puntos suspensivos, y eso
+ * depende de que el texto sea el único contenido en flujo. El botón va absoluto
+ * contra el borde derecho, a la izquierda del handle de redimensionado, y el
+ * título se aparta con un padding que solo se aplica si el botón existe.
+ */
+.dt-pin-button {
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: var(--dt-radius);
+  background: transparent;
+  color: var(--dt-text-dimmed);
+  cursor: pointer;
+  opacity: 0;
+  transform: translateY(-50%);
+  transition:
+    opacity 120ms ease,
+    color 120ms ease;
+}
+
+.dt-pin-button svg {
+  width: 12px;
+  height: 12px;
+}
+
+.dt-header-cell:hover .dt-pin-button,
+.dt-pin-button:focus-visible,
+.dt-pin-button--on {
+  opacity: 1;
+}
+
+.dt-pin-button:hover {
+  background: var(--dt-bg-accented);
+  color: var(--dt-text);
+}
+
+/* Anclada: el botón deja de ser una acción disponible y pasa a ser el estado. */
+.dt-pin-button--on {
+  color: var(--dt-primary);
+}
+
+@media (hover: none) {
+  .dt-pin-button {
+    opacity: 1;
+  }
+}
+
+/* El contenido se aparta para no pasar por debajo de los botones. Va en el
+   contenedor y no en el título: con flex, el que tiene que reservar el hueco es
+   la caja, o la flecha del orden terminaría debajo del alfiler. */
+.dt-header-cell--pinnable,
+.dt-header-cell--menu {
+  padding-right: calc(var(--dt-cell-px) + 20px);
+}
+
+/* Con los dos botones hay que reservar el doble. */
+.dt-header-cell--pinnable.dt-header-cell--menu {
+  padding-right: calc(var(--dt-cell-px) + 42px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dt-pin-button {
+    transition: none;
+  }
 }
 
 .dt-resize-handle {
@@ -626,17 +1101,23 @@
 }
 
 .dt-row-number {
+  /*
+   * El número vive en la REGLETA, no dentro de la fila, así que no puede heredar
+   * de ella el alto que el pool le escribe. Declara el suyo, con el mismo
+   * nombre: el pool escribe `--dt-row-h` en los dos nodos de un solo golpe.
+   */
+  --dt-row-h: var(--dt-row-height);
   position: absolute;
   top: 0;
   left: 0;
   box-sizing: border-box;
   width: 100%;
-  height: var(--dt-row-height);
+  height: var(--dt-row-h);
   padding: 0 calc(var(--dt-cell-px) * 0.5);
   overflow: hidden;
   color: var(--dt-text-dimmed);
   font-size: 0.8125em;
-  line-height: var(--dt-row-height);
+  line-height: var(--dt-row-h);
   text-align: center;
   white-space: nowrap;
   /* Los dígitos de ancho fijo evitan que la columna "baile" al scrollear. */
@@ -683,10 +1164,23 @@
  * correrse más allá de él. Ver `.dt-pinned-lane`.
  */
 .dt-row {
+  /*
+   * El alto de ESTA fila.
+   *
+   * Por defecto es el de todas, y entonces nadie escribe nada. Con alturas
+   * variables el pool lo pisa inline, y de ahí lo heredan la celda, su altura de
+   * línea, la cabecera de grupo y el agregado: una escritura por fila en lugar
+   * de una por celda. Ver `setRowHeight` en `internal/dom.ts`.
+   *
+   * Es a propósito que `--dt-row-height` NO se pise: de ella cuelgan los tamaños
+   * de las cajas decorativas —píldoras, casillas, avatares, con su `calc()`— y
+   * una fila de 200px no tiene por qué llevar una píldora de 186.
+   */
+  --dt-row-h: var(--dt-row-height);
   position: absolute;
   top: 0;
   left: 0;
-  height: var(--dt-row-height);
+  height: var(--dt-row-h);
   /*
    * La fila NO PINTA. Solo declara de qué color es.
    *
@@ -722,7 +1216,7 @@
   top: 0;
   left: 0;
   box-sizing: border-box;
-  height: var(--dt-row-height);
+  height: var(--dt-row-h);
   padding: 0 var(--dt-cell-px);
   overflow: hidden;
   outline: none;
@@ -736,7 +1230,7 @@
    * una caja —un badge, un avatar, un anillo— declara el modo `box` y se lleva
    * el bloque de abajo. Ver `.dt-cell--box`.
    */
-  line-height: var(--dt-row-height);
+  line-height: var(--dt-row-h);
   white-space: nowrap;
   text-overflow: ellipsis;
 }
@@ -956,7 +1450,7 @@
  */
 .dt-cell--active {
   z-index: 1;
-  box-shadow: inset 0 0 0 2px var(--dt-primary);
+  box-shadow: inset 0 0 0 var(--dt-selection-width) var(--dt-primary);
 }
 
 /* En modo `row` la unidad seleccionada es la fila: la celda no lleva anillo. */
@@ -1038,7 +1532,7 @@
   left: 0;
   z-index: 1;
   box-sizing: border-box;
-  border: 2px solid var(--dt-primary);
+  border: var(--dt-selection-width) solid var(--dt-primary);
   pointer-events: none;
   will-change: transform;
 }
@@ -1056,8 +1550,14 @@
 .dt-range-box::after {
   content: '';
   position: absolute;
-  right: -3px;
-  bottom: -3px;
+  /*
+   * El desplazamiento se mide desde la caja de PADDING, o sea por dentro del
+   * borde, así que adelgazar la línea correría el cuadradito hacia afuera. Al
+   * sumarle el grosor del borde queda clavado donde estaba: montado sobre la
+   * esquina y sobresaliendo 1px.
+   */
+  right: calc(-1px - var(--dt-selection-width));
+  bottom: calc(-1px - var(--dt-selection-width));
   width: 6px;
   height: 6px;
   border: 1px solid var(--dt-bg);
@@ -1095,7 +1595,7 @@
   left: 0;
   z-index: 2;
   box-sizing: border-box;
-  border: 2px solid var(--dt-primary);
+  border: var(--dt-selection-width) solid var(--dt-primary);
   pointer-events: none;
   animation-name: dt-copy-flash;
   animation-timing-function: ease-in-out;
@@ -1234,7 +1734,7 @@
   left: 0;
   z-index: 0;
   box-sizing: border-box;
-  height: var(--dt-row-height);
+  height: var(--dt-row-h);
   cursor: pointer;
   user-select: none;
 }
@@ -1323,12 +1823,12 @@
   left: 0;
   z-index: 1;
   box-sizing: border-box;
-  height: var(--dt-row-height);
+  height: var(--dt-row-h);
   padding: 0 var(--dt-cell-px);
   overflow: hidden;
   background: var(--dt-row-bg);
   color: var(--dt-text-muted);
-  line-height: var(--dt-row-height);
+  line-height: var(--dt-row-h);
   white-space: nowrap;
   text-overflow: ellipsis;
   font-variant-numeric: tabular-nums;
@@ -1367,8 +1867,20 @@
   box-sizing: border-box;
   margin: 0;
   padding: 0 var(--dt-cell-px);
-  border: 2px solid var(--dt-primary);
-  border-radius: var(--dt-radius);
+  border: var(--dt-selection-width) solid var(--dt-primary);
+  /*
+   * SIN redondeo, y no es un olvido del tema.
+   *
+   * El editor tiene que tapar la celda EXACTA: se posiciona con su misma caja,
+   * que es un rectángulo recto. Cualquier radio deja las cuatro esquinas fuera
+   * del área que el editor cubre, y por esos huecos se ve la grilla de abajo.
+   * No se arregla con un radio más chico: se arregla con ninguno.
+   *
+   * Es también lo que hace que el editor se lea como "esta celda, abierta" y no
+   * como un control flotando encima. `--dt-radius` sigue valiendo para todo lo
+   * demás: el panel del selector de columnas, las píldoras, el desplegable.
+   */
+  border-radius: 0;
   outline: none;
   background: var(--dt-bg);
   color: var(--dt-text);

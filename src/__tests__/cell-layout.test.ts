@@ -449,7 +449,10 @@ describe('stylesheet — what the classes the pool writes actually mean', () => 
     // flex: romper esto sería un bug peor que el que se estaba arreglando.
     const declarations = declarationsOf('.dt-cell')
 
-    expect(declarations).toContain('line-height: var(--dt-row-height)')
+    // `--dt-row-h` y no `--dt-row-height`: el alto que hereda de SU fila, que
+    // con alturas variables no es el de todas. El centrado por altura de línea
+    // —que es lo que este test protege— no cambió.
+    expect(declarations).toContain('line-height: var(--dt-row-h)')
     expect(declarations).toContain('white-space: nowrap')
     expect(declarations).toContain('text-overflow: ellipsis')
     expect(declarations).toContain('overflow: hidden')

@@ -74,11 +74,15 @@ export const projectColumns: readonly DataTableColumn<ProjectRow>[] = [
     width: 190,
     minWidth: 120,
     resizable: true,
+    sortable: true,
     editable: true,
     // Anclada al borde izquierdo: es la columna que identifica la fila, y con la
     // tabla corrida a la derecha es lo único que dice de qué proyecto se está
     // mirando el dato.
     pinned: 'start',
+    // Y soltable desde el encabezado: `pinned` es el estado INICIAL, `pinnable`
+    // es el permiso. El botón del header la suelta y la vuelve a anclar.
+    pinnable: 'start',
     // Sin `editor`: el valor es un string y no hay `options`, así que se infiere `text`.
     // Tampoco declara `aggregate`: un agregado se pinta en el offset de SU columna,
     // y en la primera taparía el chevrón, la etiqueta y el contador del grupo.
@@ -110,7 +114,12 @@ export const projectColumns: readonly DataTableColumn<ProjectRow>[] = [
     label: 'Estado',
     width: 130,
     resizable: true,
+    sortable: true,
     editable: true,
+    // Nace suelta y se puede anclar al borde izquierdo desde su encabezado. Es
+    // el caso que muestra para qué sirve: con la tabla corrida a la derecha,
+    // llevarse el estado al borde deja ver de qué proyecto se habla.
+    pinnable: true,
     // Renderer `select`: píldora con chevron. El editor, en cambio, lo pone el
     // consumidor desde el slot `#editor` de la tabla: `DemoStatusPicker.vue`
     // ocupa el lugar que en una aplicación real ocuparía el desplegable de un
@@ -136,6 +145,18 @@ export const projectColumns: readonly DataTableColumn<ProjectRow>[] = [
     renderer: 'badge',
     editor: 'select',
     options: PRIORITY_OPTIONS,
+    sortable: true,
+    /*
+     * Comparador propio, y es el caso donde hace falta de verdad.
+     *
+     * El orden natural del valor es alfabético, y alfabéticamente "alta" va
+     * antes que "baja" y "crítica" antes que "media": exactamente al revés de lo
+     * que significa. El orden que la gente espera es el de la escala, y la escala
+     * es la posición en `PRIORITY_OPTIONS`.
+     */
+    comparator: (a, b) =>
+      PRIORITY_OPTIONS.findIndex((option) => option.value === a.priority) -
+      PRIORITY_OPTIONS.findIndex((option) => option.value === b.priority),
   },
   {
     key: 'progress',
@@ -192,6 +213,7 @@ export const projectColumns: readonly DataTableColumn<ProjectRow>[] = [
     label: 'Vencimiento',
     width: 130,
     resizable: true,
+    sortable: true,
     editable: true,
     // Valor `Date`, así que el editor inferido es `date`. Sin `format` se vería
     // el ISO completo, que no es una fecha para personas.
@@ -207,7 +229,8 @@ export const projectColumns: readonly DataTableColumn<ProjectRow>[] = [
     renderer: 'checkbox',
     // Anclada al borde derecho, para ver el otro extremo: una casilla de acción
     // que conviene tener siempre a mano sin scrollear hasta el final.
-    pinned: 'end',
+    // pinned: 'end',
+    // pinnable: 'end',
   },
   {
     key: 'locked',

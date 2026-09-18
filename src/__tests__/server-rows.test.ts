@@ -418,8 +418,15 @@ describe('modo servidor — el marcador y las columnas ancladas', () => {
   })
 
   it('deja la barra quieta para quien pidió menos movimiento', () => {
-    const reduced = /@media \(prefers-reduced-motion: reduce\) \{([\s\S]*?)\n\}/.exec(STYLESHEET)
-    expect(reduced?.[1] ?? '').toContain('animation: none')
+    // TODOS los bloques de movimiento reducido, no el primero: la hoja tiene
+    // varios —el chevron del grupo, la transición del botón de anclar— y
+    // quedarse con uno hacía que agregar una regla de movimiento más arriba
+    // rompiera este test sin que nada de la barra hubiera cambiado.
+    const bloques = [
+      ...STYLESHEET.matchAll(/@media \(prefers-reduced-motion: reduce\) \{([\s\S]*?)\n\}/g),
+    ].map((match) => match[1] ?? '')
+
+    expect(bloques.some((cuerpo) => cuerpo.includes('animation: none'))).toBe(true)
   })
 })
 

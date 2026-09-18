@@ -1,4 +1,10 @@
-import type { DataTableColumn, GroupByState, PersistedTableState } from '../types'
+import type {
+  ColumnPin,
+  ColumnSort,
+  DataTableColumn,
+  GroupByState,
+  PersistedTableState,
+} from '../types'
 import { MAX_COLUMN_WIDTH, MIN_COLUMN_WIDTH } from './constants'
 import { clamp } from './values'
 import { groupIdColumnPath, reconcileGroupBy } from './aggregations'
@@ -89,6 +95,62 @@ export function reconcileColumnVisibility<TRow>(
   for (const column of columns) {
     const saved = persisted[column.key]
     result[column.key] = typeof saved === 'boolean' ? saved : (column.defaultVisible ?? true)
+  }
+
+  return result
+}
+
+/**
+ * Reconcilia el orden guardado contra las columnas que existen hoy.
+ *
+ * Descarta los criterios de columnas que ya no están y los sentidos que no son
+ * válidos, y **conserva el orden de prioridad** de los que sobreviven: es lo
+ * único que distingue "primero por estado, después por fecha" de lo contrario.
+ * Un criterio repetido se queda con el primero, que es el de más prioridad.
+ */
+export function reconcileSort<TRow>(
+  persisted: readonly ColumnSort[],
+  columns: readonly DataTableColumn<TRow>[],
+): ColumnSort[] {
+  const claves = new Set(columns.map((column) => column.key))
+  const vistas = new Set<string>()
+  const result: ColumnSort[] = []
+
+  for (const entry of persisted) {
+    if (!claves.has(entry.columnKey) || vistas.has(entry.columnKey)) continue
+    if (entry.direction !== 'asc' && entry.direction !== 'desc') continue
+    vistas.add(entry.columnKey)
+    result.push({ columnKey: entry.columnKey, direction: entry.direction })
+  }
+
+  return result
+}
+
+/**
+ * Reconcilia el anclaje guardado contra las columnas que existen hoy.
+ *
+ * Descarta las claves de columnas que ya no están y los valores que no son un
+ * borde válido. `null` SÍ es válido y se conserva: significa "el usuario la
+ * soltó", y perderlo volvería a anclar sola una columna declarada anclada.
+ *
+ * Una columna que perdió su `pinnable` conserva igual lo guardado. Es
+ * deliberado: quitarle el permiso de anclar no debería mover de lugar una
+ * columna que el usuario ya había anclado, solo sacarle el botón. Para
+ * deshacerlo está `resetLayout()`.
+ */
+export function reconcileColumnPinning<TRow>(
+  persisted: Readonly<Record<string, ColumnPin | null>>,
+  columns: readonly DataTableColumn<TRow>[],
+): Record<string, ColumnPin | null> {
+  const result: Record<string, ColumnPin | null> = {}
+
+  for (const column of columns) {
+    // `hasOwn` y no una comparación contra `undefined`: la clave ausente y la
+    // clave en `null` significan cosas distintas, y solo la segunda se guarda.
+    if (!Object.hasOwn(persisted, column.key)) continue
+    const saved = persisted[column.key]
+    if (saved !== null && saved !== 'start' && saved !== 'end') continue
+    result[column.key] = saved
   }
 
   return result
@@ -189,6 +251,17 @@ export function reconcilePersistedState<TRow>(
     columnOrder: reconcileColumnOrder(state.columnOrder, columns),
   }
 
+  // Opcional igual que las de agrupación, y por el mismo motivo: un payload
+  // escrito antes de que el anclaje desde la UI existiera no la trae, y no hay
+  // que inventarle el campo para después escribirlo de vuelta.
+  if (state.columnPinning !== undefined) {
+    result.columnPinning = reconcileColumnPinning(state.columnPinning, columns)
+  }
+
+  if (state.sort !== undefined) {
+    result.sort = reconcileSort(state.sort, columns)
+  }
+
   if (state.groupBy !== undefined || state.collapsedGroups !== undefined) {
     const groupBy = reconcileGroupBy(state.groupBy ?? [], columns)
     result.groupBy = groupBy
@@ -213,6 +286,26 @@ function isBooleanRecord(value: unknown): value is Record<string, boolean> {
 function isFiniteNumberRecord(value: unknown): value is Record<string, number> {
   if (!isPlainRecord(value)) return false
   return Object.values(value).every((entry) => typeof entry === 'number' && Number.isFinite(entry))
+}
+
+/** `true` si el valor es una lista de criterios de ordenamiento. */
+function isColumnSortArray(value: unknown): value is ColumnSort[] {
+  if (!Array.isArray(value)) return false
+  const entries: readonly unknown[] = value
+  return entries.every(
+    (entry) =>
+      isPlainRecord(entry) &&
+      typeof entry.columnKey === 'string' &&
+      (entry.direction === 'asc' || entry.direction === 'desc'),
+  )
+}
+
+/** `true` si el valor es un mapa de bordes de anclaje, donde `null` es válido. */
+function isColumnPinRecord(value: unknown): value is Record<string, ColumnPin | null> {
+  if (!isPlainRecord(value)) return false
+  return Object.values(value).every(
+    (entry) => entry === null || entry === 'start' || entry === 'end',
+  )
 }
 
 /** `true` si el valor es un array de strings. */
@@ -247,5 +340,7 @@ export function isPersistedTableState(value: unknown): value is PersistedTableSt
   // a todo el que actualice la librería. Si vienen, tienen que ser válidas.
   if (value.groupBy !== undefined && !isStringArray(value.groupBy)) return false
   if (value.collapsedGroups !== undefined && !isStringArray(value.collapsedGroups)) return false
+  if (value.columnPinning !== undefined && !isColumnPinRecord(value.columnPinning)) return false
+  if (value.sort !== undefined && !isColumnSortArray(value.sort)) return false
   return true
 }

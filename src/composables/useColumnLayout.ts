@@ -3,6 +3,7 @@ import type { ComputedRef, MaybeRefOrGetter } from 'vue'
 import type {
   CellAlign,
   ColumnPin,
+  ColumnPinState,
   ColumnVisibilityState,
   ColumnWidthState,
   DataTableColumn,
@@ -11,6 +12,28 @@ import { DEFAULT_COLUMN_WIDTH, MAX_COLUMN_WIDTH, MIN_COLUMN_WIDTH } from '../int
 import { reconcileColumnOrder } from '../internal/reconcile'
 import { defaultAlignFor } from '../internal/renderers'
 import { clamp } from '../internal/values'
+
+/**
+ * Mapa vacío compartido para el caso sin anclaje del usuario.
+ *
+ * Un literal nuevo por recálculo sería basura por frame en el caso que usa todo
+ * el mundo, que es no haber tocado ningún ancla nunca.
+ */
+const EMPTY_PINNING: ColumnPinState = Object.freeze({})
+
+/**
+ * A qué borde llevaría el botón del encabezado a esta columna, o `null` si no
+ * lleva botón.
+ *
+ * `true` y `'start'` son lo mismo: el borde izquierdo es a donde se ancla en la
+ * enorme mayoría de los casos, así que es lo que significa decir "sí" sin más.
+ */
+function pinnableSideOf<TRow>(column: DataTableColumn<TRow>): ColumnPin | null {
+  const declared = column.pinnable
+  if (declared === undefined || declared === false) return null
+  if (declared === true) return 'start'
+  return declared
+}
 
 /**
  * Una columna con su geometría ya resuelta.
@@ -36,10 +59,21 @@ export interface ResolvedColumn<TRow> {
   align: CellAlign
   /** Si el header muestra un handle de redimensionado. */
   resizable: boolean
+  /** Si la columna participa del ordenamiento. */
+  sortable: boolean
   /** Si la columna se puede mover arrastrando su encabezado. */
   reorderable: boolean
   /** Borde al que está anclada, o `null` si scrollea con el resto. */
   pinned: ColumnPin | null
+  /**
+   * Borde al que el botón del encabezado la anclaría, o `null` si no lleva
+   * botón.
+   *
+   * Es el lado DECLARADO, no el vigente: una columna con `pinnable: 'start'`
+   * conserva `'start'` acá aunque ahora mismo esté suelta. Lo que decide si el
+   * botón ancla o desancla es {@link ResolvedColumn.pinned}.
+   */
+  pinnable: ColumnPin | null
 }
 
 /** Tramo de columnas a pintar. `end` es exclusivo. */
@@ -62,6 +96,14 @@ export interface UseColumnLayoutOptions<TRow> {
   order: MaybeRefOrGetter<readonly string[]>
   /** Anchos vigentes por clave. Pisan a `column.width`, siempre acotados. */
   widths: MaybeRefOrGetter<ColumnWidthState>
+  /**
+   * Anclaje elegido por el usuario. Pisa a `column.pinned`.
+   *
+   * Igual que `widths` respecto de `column.width`: el layout no lo guarda, lo
+   * recibe. Una clave ausente deja mandar a la declaración; una clave en `null`
+   * es una decisión del usuario y la pisa.
+   */
+  pinning?: MaybeRefOrGetter<ColumnPinState>
   /**
    * Espacio reservado a la izquierda de la primera columna, en px.
    *
@@ -217,7 +259,20 @@ export function useColumnLayout<TRow>(
      * eligió arrastrando. Tres pasadas sobre una lista de decenas de elementos
      * cuestan nada y no dependen de esa promesa.
      */
-    const pinnedOf = (column: DataTableColumn<TRow>): ColumnPin | null => column.pinned ?? null
+    const pinning = toValue(options.pinning ?? EMPTY_PINNING)
+    /*
+     * Lo elegido por el usuario gana; la declaración es el valor inicial.
+     *
+     * El chequeo es contra `undefined` y no contra un valor falsy: `null`
+     * significa "el usuario la soltó" y tiene que pisar a un `pinned` declarado.
+     * Con `??` sobre el valor, soltar una columna declarada anclada habría sido
+     * imposible.
+     */
+    const pinnedOf = (column: DataTableColumn<TRow>): ColumnPin | null => {
+      const chosen = pinning[column.key]
+      if (chosen !== undefined) return chosen
+      return column.pinned ?? null
+    }
     const visible = orderedColumns.value.filter(resolveVisible)
     const sequence = [
       ...visible.filter((column) => pinnedOf(column) === 'start'),
@@ -244,6 +299,7 @@ export function useColumnLayout<TRow>(
         // a la derecha). Un `align` explícito de la columna siempre gana.
         align: column.align ?? defaultAlignFor(column.renderer) ?? 'left',
         resizable: column.resizable ?? false,
+        sortable: column.sortable ?? false,
         // Al revés que `resizable`: mover es lo normal, anclar es la excepción.
         // Redimensionar cambia cómo se ve una columna y puede arruinar un layout
         // pensado; moverla solo cambia el orden, que ya es estado del usuario.
@@ -251,6 +307,7 @@ export function useColumnLayout<TRow>(
         // significaría desanclarla.
         reorderable: pinnedOf(column) === null && (column.reorderable ?? true),
         pinned: pinnedOf(column),
+        pinnable: pinnableSideOf(column),
       })
 
       offset += width

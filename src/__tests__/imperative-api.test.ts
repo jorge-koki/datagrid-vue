@@ -328,7 +328,7 @@ describe('imperative API — scrollToCell', () => {
     harness.unmount()
   })
 
-  it('does NOT clamp its row index, unlike scrollToRow', async () => {
+  it('does not reject an out-of-range row index, unlike scrollToRow', async () => {
     const clamping = await mountGrid()
     clamping.api.scrollToRow(9_999)
     await clamping.flush()
@@ -341,18 +341,24 @@ describe('imperative API — scrollToCell', () => {
 
     // La asimetría es DELIBERADA y responde a de dónde viene cada índice.
     // `scrollToRow` es un salto absoluto que el consumidor pide con un número
-    // suelto, y acotarlo convierte un índice fuera de rango en el borde más
-    // cercano en vez de en una posición vacía. La posición que llega acá ya
-    // viene acotada por `moveActiveTo`, el camino interno de navegación, así que
-    // volver a acotarla sería trabajo repetido en cada flecha.
+    // suelto, y acotar el ÍNDICE convierte un fuera de rango en el borde más
+    // cercano en vez de en una posición vacía: se va a la última fila REAL.
+    // `scrollToCell` no acota el índice —la posición que llega ya viene acotada
+    // por `moveActiveTo`, el camino interno de navegación— y por eso apunta más
+    // abajo: al final del contenido, no a la última fila.
     //
-    // En un navegador de verdad la consecuencia observable se empareja igual,
-    // porque escribir `scrollTop` se acota contra la altura real del canvas. Acá
-    // el andamiaje deja `scrollTop` sin acotar justamente para poder ver qué
-    // pidió el componente, que es lo que este test fija.
+    // Esa diferencia de una fila es todo lo que queda de la asimetría. Antes de
+    // las alturas variables, `scrollToCell` pedía una posición absurda —la fila
+    // 10.000 de una tabla de 100— y era el navegador el que la acotaba. Ahora la
+    // acota la geometría, que no puede decir dónde empieza una fila que no
+    // existe. Lo que se VE es lo mismo en los dos casos: la vista se queda en el
+    // extremo.
     expect(clamped).toBe((ROW_COUNT - 1) * ROW_HEIGHT)
-    expect(harness.scrollPosition().top).toBe(10_000 * ROW_HEIGHT - VISIBLE_HEIGHT)
-    expect(harness.scrollPosition().top).toBeGreaterThan(clamped)
+    expect(harness.scrollPosition().top).toBe(ROW_COUNT * ROW_HEIGHT + ROW_HEIGHT - VISIBLE_HEIGHT)
+    // Y sigue pidiendo una posición que el contenido NO tiene: el máximo real
+    // es el alto total menos el viewport. Eso es lo que significa no acotar el
+    // índice, y es lo que el navegador termina emparejando.
+    expect(harness.scrollPosition().top).toBeGreaterThan(ROW_COUNT * ROW_HEIGHT - VISIBLE_HEIGHT)
     harness.unmount()
   })
 

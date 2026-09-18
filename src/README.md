@@ -410,44 +410,49 @@ repositorio está todo cableado a la vez sobre un dataset de hasta 50.000 filas.
 
 `rows`, `columns` y `rowKey` son obligatorias. Todo lo demás tiene valor por defecto.
 
-| Prop                    | Tipo                                                             | Por defecto                   | Descripción                                                                                                                                                                                                                           |
-| ----------------------- | ---------------------------------------------------------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `rows`                  | `readonly (TRow \| undefined)[]`                                 | —                             | El dataset. Nunca se corta, ni se copia, ni se vuelve reactivo en profundidad. La tabla solo indexa dentro de la ventana visible. Con `rowCount` puede tener huecos: ver [Datos del servidor](#datos-del-servidor-y-scroll-infinito). |
-| `rowCount`              | `number`                                                         | —                             | Cuántas filas tiene el dataset entero, cuando `rows` no las tiene todas. **Declararla enciende el modo servidor**; sin ella, nada cambia. Ver [Datos del servidor](#datos-del-servidor-y-scroll-infinito).                            |
-| `pageSize`              | `number`                                                         | `50`                          | Filas por pedido en modo servidor. Los tramos pedidos se alinean a este número.                                                                                                                                                       |
-| `prefetchPages`         | `number`                                                         | `1`                           | Páginas pedidas por adelantado a cada lado de la ventana visible, para que un scroll normal no muestre marcadores.                                                                                                                    |
-| `columns`               | `readonly DataTableColumn<TRow>[]`                               | —                             | Definiciones de columna, en orden de declaración. Ver [Columnas](#columnas).                                                                                                                                                          |
-| `rowKey`                | `keyof TRow \| ((row: TRow, index: number) => string \| number)` | —                             | Identidad de una fila. Se estampa como `data-row-key` para que el DOM siga siendo inspeccionable y testeable. Nunca afecta al reciclado: el pool recicla por slot de viewport.                                                        |
-| `rowHeight`             | `number`                                                         | `40` / `30` con `dense`       | Altura de fila en px. Es un número y no un valor CSS porque el virtualizador divide por él en cada frame. Se replica en `--dt-row-height`.                                                                                            |
-| `headerHeight`          | `number`                                                         | `44` / `34` con `dense`       | Altura del header en px. Se replica en `--dt-header-height`.                                                                                                                                                                          |
-| `dense`                 | `boolean`                                                        | `false`                       | Preset compacto: filas más bajas, tipografía menor, padding más ajustado.                                                                                                                                                             |
-| `overscan`              | `number`                                                         | `4`                           | Filas y columnas extra pintadas fuera de la ventana visible. Más alto cuesta tiempo de pintado y oculta bordes en blanco durante el scroll rápido.                                                                                    |
-| `defaultColumnWidth`    | `number`                                                         | `150`                         | Ancho en px para las columnas que no declaran el suyo.                                                                                                                                                                                |
-| `virtualizeColumns`     | `boolean`                                                        | `true`                        | Pinta solo las columnas visibles en horizontal. Conviene apagarlo en tablas angostas donde la fila entera entra: ahí el cálculo de ventana es overhead puro.                                                                          |
-| `theme`                 | `'light' \| 'dark' \| 'auto'`                                    | `'auto'`                      | Esquema de color. Ver [Temas](#temas).                                                                                                                                                                                                |
-| `variant`               | `'default' \| 'cells'`                                           | `'default'`                   | Preset visual. `'cells'` dibuja una grilla completa de celda a celda, sin importar `stripe` ni `bordered`.                                                                                                                            |
-| `radiusBorder`          | `'none' \| 'sm' \| 'md' \| 'lg' \| 'xl'`                         | `'none'`                      | Redondeo de las esquinas de la tabla, solo de la caja exterior. Ver [El redondeo de la caja](#el-redondeo-de-la-caja).                                                                                                                |
-| `showRowNumbers`        | `boolean`                                                        | `true`                        | Regleta de numeración fija a la izquierda. **No es una columna.** Ver [La regleta de numeración](#la-regleta-de-numeración).                                                                                                          |
-| `columnReorder`         | `boolean`                                                        | `true`                        | Mover columnas arrastrando el encabezado. Escribe `columnOrder`. Ver [Mover columnas](#mover-columnas-arrastrando).                                                                                                                   |
-| `columnSelection`       | `boolean`                                                        | `false`                       | Clic en un encabezado para seleccionar la columna entera. Produce un rango. Ver [Seleccionar en bloque](#seleccionar-una-columna-o-una-fila-entera).                                                                                  |
-| `rowSelection`          | `boolean`                                                        | `false`                       | Clic en el número de una fila para seleccionarla entera. No confundir con `selectionMode: 'row'`. Ver [Seleccionar en bloque](#seleccionar-una-columna-o-una-fila-entera).                                                            |
-| `emptyText`             | `string`                                                         | `'No data'`                   | Mensaje que se muestra cuando `rows` está vacío.                                                                                                                                                                                      |
-| `stripe`                | `boolean`                                                        | `false`                       | Marca las filas impares con `.dt-row--stripe`. **La librería no las pinta**: es un enganche para que el consumidor decida. Ver [El color de una fila](#el-color-de-una-fila).                                                         |
-| `bordered`              | `boolean`                                                        | `false`                       | Dibuja separadores de celda.                                                                                                                                                                                                          |
-| `columnVisibility`      | `Readonly<Record<string, boolean>>`                              | _no controlado_               | `v-model:column-visibility`. Una clave ausente se resuelve con `column.defaultVisible ?? true`.                                                                                                                                       |
-| `columnOrder`           | `readonly string[]`                                              | _no controlado_               | `v-model:column-order`. Se reconcilia contra las columnas actuales antes de aplicarse.                                                                                                                                                |
-| `columnWidths`          | `Readonly<Record<string, number>>`                               | _no controlado_               | `v-model:column-widths`. Pisa a `column.width` y siempre se acota por `minWidth` / `maxWidth`.                                                                                                                                        |
-| `tableId`               | `string`                                                         | —                             | Identificador único de esta tabla dentro de la aplicación. Obligatorio para persistir: es lo que separa el layout de una tabla del de otra.                                                                                           |
-| `persist`               | `boolean \| DataTablePersistOptions`                             | `false`                       | Persiste el layout entre sesiones. `true` significa `localStorage` con los valores por defecto. Ver [Persistencia](#visibilidad-orden-y-persistencia-de-columnas).                                                                    |
-| `selectionMode`         | `'none' \| 'cell' \| 'row'`                                      | `'cell'`                      | Qué seleccionan el clic y el teclado. Ver [Selección](#selección-y-navegación-con-el-teclado).                                                                                                                                        |
-| `rangeSelection`        | `boolean`                                                        | `true`                        | Arrastrar, `Shift`+clic y `Shift`+flechas seleccionan un rectángulo de celdas, y `Ctrl`+`C` lo copia. Solo rige con `selectionMode: 'cell'`. Ver [Selección de un rango](#selección-de-un-rango-de-celdas).                           |
-| `activeCell`            | `CellPosition \| null`                                           | _no controlado_               | `v-model:active-cell`. La celda seleccionada. `null` significa "controlado y sin selección".                                                                                                                                          |
-| `focusRing`             | `boolean`                                                        | `false`                       | Dibuja un anillo alrededor del viewport cuando la tabla tiene el foco por teclado. En `true` aparece solo mientras no hay celda activa. Ver [El anillo de foco](#el-anillo-de-foco-del-viewport).                                     |
-| `groupBy`               | `readonly string[]`                                              | _no controlado_ (lista vacía) | `v-model:group-by`. Claves de columna por las que agrupar, en orden de anidamiento. Ver [Agrupación](#agrupación).                                                                                                                    |
-| `expandedGroups`        | `readonly string[]`                                              | _no controlado_               | `v-model:expanded-groups`. `groupId` de los grupos expandidos. Una lista vacía significa "controlado y todo colapsado".                                                                                                               |
-| `groupsDefaultExpanded` | `boolean`                                                        | `true`                        | Estado inicial de un grupo del que todavía no se sabe nada. Deja de intervenir cuando `expandedGroups` está controlado.                                                                                                               |
-| `showGroupCount`        | `boolean`                                                        | `true`                        | Si la cabecera de grupo muestra la insignia con cuántas filas contiene.                                                                                                                                                               |
-| `emptyGroupLabel`       | `string`                                                         | `'(empty)'`                   | Etiqueta del grupo que junta los valores ausentes. Ver [Agrupación](#groupid-una-identidad-por-camino).                                                                                                                               |
+| Prop                    | Tipo                                                             | Por defecto                   | Descripción                                                                                                                                                                                                                                              |
+| ----------------------- | ---------------------------------------------------------------- | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `rows`                  | `readonly (TRow \| undefined)[]`                                 | —                             | El dataset. Nunca se corta, ni se copia, ni se vuelve reactivo en profundidad. La tabla solo indexa dentro de la ventana visible. Con `rowCount` puede tener huecos: ver [Datos del servidor](#datos-del-servidor-y-scroll-infinito).                    |
+| `rowCount`              | `number`                                                         | —                             | Cuántas filas tiene el dataset entero, cuando `rows` no las tiene todas. **Declararla enciende el modo servidor**; sin ella, nada cambia. Ver [Datos del servidor](#datos-del-servidor-y-scroll-infinito).                                               |
+| `pageSize`              | `number`                                                         | `50`                          | Filas por pedido en modo servidor. Los tramos pedidos se alinean a este número.                                                                                                                                                                          |
+| `prefetchPages`         | `number`                                                         | `1`                           | Páginas pedidas por adelantado a cada lado de la ventana visible, para que un scroll normal no muestre marcadores.                                                                                                                                       |
+| `columns`               | `readonly DataTableColumn<TRow>[]`                               | —                             | Definiciones de columna, en orden de declaración. Ver [Columnas](#columnas).                                                                                                                                                                             |
+| `rowKey`                | `keyof TRow \| ((row: TRow, index: number) => string \| number)` | —                             | Identidad de una fila. Se estampa como `data-row-key` para que el DOM siga siendo inspeccionable y testeable. Nunca afecta al reciclado: el pool recicla por slot de viewport.                                                                           |
+| `rowHeight`             | `number \| RowHeightResolver<TRow>`                              | `40` / `30` con `dense`       | Altura de fila en px, igual para todas o resuelta fila por fila. Es un número y no un valor CSS porque el virtualizador hace cuentas con él. El valor fijo se replica en `--dt-row-height`. Ver [Alturas de fila distintas](#alturas-de-fila-distintas). |
+| `headerHeight`          | `number`                                                         | `44` / `34` con `dense`       | Altura del header en px. Se replica en `--dt-header-height`.                                                                                                                                                                                             |
+| `dense`                 | `boolean`                                                        | `false`                       | Preset compacto: filas más bajas, tipografía menor, padding más ajustado.                                                                                                                                                                                |
+| `crosshair`             | `boolean`                                                        | `false`                       | Una línea bajo el encabezado de la columna activa y otra al costado de su número de fila. Ver [La cruz de la celda activa](#la-cruz-de-la-celda-activa).                                                                                                 |
+| `overscan`              | `number`                                                         | `4`                           | Filas y columnas extra pintadas fuera de la ventana visible. Más alto cuesta tiempo de pintado y oculta bordes en blanco durante el scroll rápido.                                                                                                       |
+| `defaultColumnWidth`    | `number`                                                         | `150`                         | Ancho en px para las columnas que no declaran el suyo.                                                                                                                                                                                                   |
+| `virtualizeColumns`     | `boolean`                                                        | `true`                        | Pinta solo las columnas visibles en horizontal. Conviene apagarlo en tablas angostas donde la fila entera entra: ahí el cálculo de ventana es overhead puro.                                                                                             |
+| `theme`                 | `'light' \| 'dark' \| 'auto'`                                    | `'auto'`                      | Esquema de color. Ver [Temas](#temas).                                                                                                                                                                                                                   |
+| `variant`               | `'default' \| 'cells'`                                           | `'default'`                   | Preset visual. `'cells'` dibuja una grilla completa de celda a celda, sin importar `stripe` ni `bordered`.                                                                                                                                               |
+| `radiusBorder`          | `'none' \| 'sm' \| 'md' \| 'lg' \| 'xl'`                         | `'none'`                      | Redondeo de las esquinas de la tabla, solo de la caja exterior. Ver [El redondeo de la caja](#el-redondeo-de-la-caja).                                                                                                                                   |
+| `showRowNumbers`        | `boolean`                                                        | `true`                        | Regleta de numeración fija a la izquierda. **No es una columna.** Ver [La regleta de numeración](#la-regleta-de-numeración).                                                                                                                             |
+| `columnReorder`         | `boolean`                                                        | `true`                        | Mover columnas arrastrando el encabezado. Escribe `columnOrder`. Ver [Mover columnas](#mover-columnas-arrastrando).                                                                                                                                      |
+| `columnSelection`       | `boolean`                                                        | `false`                       | Clic en un encabezado para seleccionar la columna entera. Produce un rango. Ver [Seleccionar en bloque](#seleccionar-una-columna-o-una-fila-entera).                                                                                                     |
+| `rowSelection`          | `boolean`                                                        | `false`                       | Clic en el número de una fila para seleccionarla entera. No confundir con `selectionMode: 'row'`. Ver [Seleccionar en bloque](#seleccionar-una-columna-o-una-fila-entera).                                                                               |
+| `emptyText`             | `string`                                                         | `'No data'`                   | Mensaje que se muestra cuando `rows` está vacío.                                                                                                                                                                                                         |
+| `sort`                  | `SortState`                                                      | _no controlado_               | `v-model:sort`. Criterios de orden vigentes. **La tabla no ordena `rows`**: administra el estado y lo anuncia. Ver [Ordenamiento](#ordenamiento).                                                                                                        |
+| `columnMenu`            | `boolean`                                                        | `false`                       | Menú de tres puntos en cada encabezado: ordenar, anclar, ocultar y restablecer. Ver [El menú de la columna](#el-menú-de-la-columna).                                                                                                                     |
+| `labels`                | `DataTableLabels`                                                | en inglés                     | Textos de los controles que pone la librería. Se pasa parcial. Ver [Traducir los textos](#traducir-los-textos).                                                                                                                                          |
+| `stripe`                | `boolean`                                                        | `false`                       | Marca las filas impares con `.dt-row--stripe`. **La librería no las pinta**: es un enganche para que el consumidor decida. Ver [El color de una fila](#el-color-de-una-fila).                                                                            |
+| `bordered`              | `boolean`                                                        | `false`                       | Dibuja separadores de celda.                                                                                                                                                                                                                             |
+| `columnVisibility`      | `Readonly<Record<string, boolean>>`                              | _no controlado_               | `v-model:column-visibility`. Una clave ausente se resuelve con `column.defaultVisible ?? true`.                                                                                                                                                          |
+| `columnOrder`           | `readonly string[]`                                              | _no controlado_               | `v-model:column-order`. Se reconcilia contra las columnas actuales antes de aplicarse.                                                                                                                                                                   |
+| `columnWidths`          | `Readonly<Record<string, number>>`                               | _no controlado_               | `v-model:column-widths`. Pisa a `column.width` y siempre se acota por `minWidth` / `maxWidth`.                                                                                                                                                           |
+| `columnPinning`         | `ColumnPinState`                                                 | _no controlado_               | `v-model:column-pinning`. Anclaje por clave de columna; pisa a `column.pinned`. Es lo que escribe el botón del encabezado. Ver [Anclar desde el encabezado](#anclar-desde-el-encabezado).                                                                |
+| `tableId`               | `string`                                                         | —                             | Identificador único de esta tabla dentro de la aplicación. Obligatorio para persistir: es lo que separa el layout de una tabla del de otra.                                                                                                              |
+| `persist`               | `boolean \| DataTablePersistOptions`                             | `false`                       | Persiste el layout entre sesiones. `true` significa `localStorage` con los valores por defecto. Ver [Persistencia](#visibilidad-orden-y-persistencia-de-columnas).                                                                                       |
+| `selectionMode`         | `'none' \| 'cell' \| 'row'`                                      | `'cell'`                      | Qué seleccionan el clic y el teclado. Ver [Selección](#selección-y-navegación-con-el-teclado).                                                                                                                                                           |
+| `rangeSelection`        | `boolean`                                                        | `true`                        | Arrastrar, `Shift`+clic y `Shift`+flechas seleccionan un rectángulo de celdas, y `Ctrl`+`C` lo copia. Solo rige con `selectionMode: 'cell'`. Ver [Selección de un rango](#selección-de-un-rango-de-celdas).                                              |
+| `activeCell`            | `CellPosition \| null`                                           | _no controlado_               | `v-model:active-cell`. La celda seleccionada. `null` significa "controlado y sin selección".                                                                                                                                                             |
+| `focusRing`             | `boolean`                                                        | `false`                       | Dibuja un anillo alrededor del viewport cuando la tabla tiene el foco por teclado. En `true` aparece solo mientras no hay celda activa. Ver [El anillo de foco](#el-anillo-de-foco-del-viewport).                                                        |
+| `groupBy`               | `readonly string[]`                                              | _no controlado_ (lista vacía) | `v-model:group-by`. Claves de columna por las que agrupar, en orden de anidamiento. Ver [Agrupación](#agrupación).                                                                                                                                       |
+| `expandedGroups`        | `readonly string[]`                                              | _no controlado_               | `v-model:expanded-groups`. `groupId` de los grupos expandidos. Una lista vacía significa "controlado y todo colapsado".                                                                                                                                  |
+| `groupsDefaultExpanded` | `boolean`                                                        | `true`                        | Estado inicial de un grupo del que todavía no se sabe nada. Deja de intervenir cuando `expandedGroups` está controlado.                                                                                                                                  |
+| `showGroupCount`        | `boolean`                                                        | `true`                        | Si la cabecera de grupo muestra la insignia con cuántas filas contiene.                                                                                                                                                                                  |
+| `emptyGroupLabel`       | `string`                                                         | `'(empty)'`                   | Etiqueta del grupo que junta los valores ausentes. Ver [Agrupación](#groupid-una-identidad-por-camino).                                                                                                                                                  |
 
 ### Controlado y no controlado
 
@@ -874,10 +879,13 @@ desplaza la vista hasta el foco.
 
 Dos gestos más, los dos **apagados por defecto**:
 
-| Prop              | Gesto                                | Qué selecciona                                          |
-| ----------------- | ------------------------------------ | ------------------------------------------------------- |
-| `columnSelection` | Clic en el encabezado de una columna | Esa columna, de la primera fila a la última             |
-| `rowSelection`    | Clic en el número de una fila        | Esa fila, de la primera columna **visible** a la última |
+| Prop              | Gesto                                | Qué selecciona                              |
+| ----------------- | ------------------------------------ | ------------------------------------------- |
+| `columnSelection` | Clic en el encabezado de una columna | Esa columna, de la primera fila a la última |
+
+En una columna **ordenable** ese clic se lo queda el orden, y seleccionarla pasa a
+`Ctrl`/`Cmd`+clic. Ver [Cuando conviven con `columnSelection`](#cuando-conviven-con-columnselection).
+| `rowSelection` | Clic en el número de una fila | Esa fila, de la primera columna **visible** a la última |
 
 **Lo que producen es un rango normal**, y de ahí sale todo lo demás sin una línea de código propia:
 se copia con `Ctrl`+`C`, se extiende con `Shift`+flechas —bajar el foco de una fila entera la
@@ -1151,7 +1159,11 @@ interface DataTableColumn<TRow> {
 | `width`                 | `defaultColumnWidth` (150)                     | Siempre acotado a `[max(32, minWidth), min(4000, maxWidth)]`.                                                                                                                                                             |
 | `minWidth` / `maxWidth` | `32` / `4000`                                  | Se aplican al resolver el ancho y durante el redimensionado.                                                                                                                                                              |
 | `resizable`             | `false`                                        | Muestra un handle de arrastre en el borde del header.                                                                                                                                                                     |
+| `sortable`              | `false`                                        | El encabezado responde al clic y muestra la flecha del sentido. Ver [Ordenamiento](#ordenamiento).                                                                                                                        |
+| `comparator`            | —                                              | Comparador propio en sentido ascendente, `(a, b) => number`. Solo lo usa `sortRows`. Hace falta cuando el orden natural del valor no es el que el usuario espera.                                                         |
+| `menu`                  | `true`                                         | En `false`, la columna no muestra el menú de tres puntos aunque la tabla lo tenga encendido.                                                                                                                              |
 | `pinned`                | —                                              | `'start'` o `'end'` anclan la columna a un borde: se queda a la vista mientras el resto scrollea. Manda sobre el orden y desactiva el arrastre de esa columna. Ver [Columnas ancladas](#columnas-ancladas).               |
+| `pinnable`              | `false`                                        | Pone un botón de anclar en el encabezado. El valor dice a qué borde lleva: `true` y `'start'` al izquierdo, `'end'` al derecho. Ver [Anclar desde el encabezado](#anclar-desde-el-encabezado).                            |
 | `reorderable`           | `true`                                         | `false` ancla la columna: no se la puede agarrar para moverla y ninguna otra puede cruzarla, así que se queda donde está. Solo interviene con `columnReorder` encendido.                                                  |
 | `align`                 | el `defaultAlign` del renderer, si no `'left'` | Un `align` explícito siempre gana. Se aplica como clase, no como estilo inline.                                                                                                                                           |
 | `editable`              | `false`                                        | Tiene que ser exactamente `true` para que la celda se pueda editar.                                                                                                                                                       |
@@ -2564,6 +2576,15 @@ de la tabla: esos son los tokens que sí se heredan.
 | `--dt-font-size`        | `0.875rem`           | igual                 | —                                      |
 | `--dt-cell-px`          | `0.75rem`            | igual                 | —                                      |
 | `--dt-group-indent`     | `16px`               | igual                 | — (`12px` con `dense`)                 |
+| `--dt-selection-width`  | `1px`                | igual                 | —                                      |
+| `--dt-crosshair-width`  | `2px`                | igual                 | —                                      |
+
+`--dt-selection-width` es el grosor de las **tres** marcas de selección a la vez: el anillo de la
+celda activa, el recuadro del rango y el destello del copiado. Es un solo token porque las tres
+tienen que medir lo mismo —el destello se dibuja exactamente encima del recuadro— y vale `1px` para
+que la línea coincida con las de la grilla de `bordered` y del preset `cells`. Subirlo a `2px`
+devuelve el contorno más marcado que tenía antes. La única línea que NO sale de acá es el corte del
+bloque anclado, que son 2px a propósito.
 
 La paleta de estados existe para que `CellOption.color` pueda ser un token del tema en lugar de un
 hexadecimal fijo. Conviene usar el mapa exportado `COLOR_TOKENS` (`COLOR_TOKENS.red` →
@@ -2669,8 +2690,12 @@ una prop de configuración, no algo que cambie durante el uso.
 
 ### El redondeo de la caja
 
-`radiusBorder` redondea **solo las esquinas de la tabla**, no los redondeos internos: los controles de
-edición, las píldoras y el panel del selector de columnas siguen el radio del tema, `--dt-radius`.
+`radiusBorder` redondea **solo las esquinas de la tabla**, no los redondeos internos: las píldoras y
+el panel del selector de columnas siguen el radio del tema, `--dt-radius`.
+
+El editor de celda no sigue ninguno de los dos: es **recto siempre**, y a propósito. Se posiciona con
+la caja exacta de la celda que está editando, que es un rectángulo recto; cualquier radio dejaría las
+cuatro esquinas sin tapar y por ahí se vería la grilla de abajo.
 
 | Valor              | Radio                                                                                   |
 | ------------------ | --------------------------------------------------------------------------------------- |
@@ -2695,9 +2720,11 @@ La selección no introduce ningún token nuevo: se dibuja enteramente con `--dt-
 
 | Enganche                           | Qué hace                                                                                                                                                                                          |
 | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `.dt-cell--active`                 | La celda activa. `box-shadow: inset 0 0 0 2px var(--dt-primary)` más `z-index: 1`.                                                                                                                |
+| `.dt-cell--active`                 | La celda activa. `box-shadow: inset 0 0 0 var(--dt-selection-width) var(--dt-primary)` más `z-index: 1`.                                                                                          |
 | `.dt-row--active`                  | La fila que contiene la celda activa, en **los dos** modos. Pone `--dt-row-bg` en `--dt-bg-accented`; quien lo pinta es la regleta y las celdas ancladas. También aplica a una cabecera de grupo. |
-| `.dt-header-cell--active`          | El header de la columna activa. Fondo acentuado más un subrayado de 2px en `--dt-primary`.                                                                                                        |
+| `.dt-header-cell--active`          | El header de la columna activa. Fondo acentuado. La línea de color la agrega `crosshair`.                                                                                                         |
+| `.dt-row-number--active`           | El número de la fila activa. Fondo acentuado y negrita. La línea de color la agrega `crosshair`.                                                                                                  |
+| `[data-crosshair]` en `.dt-root`   | Replica `crosshair` (`'true'` / `'false'`). Es de lo único que cuelgan las dos líneas.                                                                                                            |
 | `[data-selection]` en `.dt-root`   | Replica `selectionMode` (`none` / `cell` / `row`). En modo `'row'` ninguna celda se marca: quien señala la fila activa es su número en la regleta.                                                |
 | `[data-focus-ring]` en `.dt-root`  | Replica `focusRing` (`'true'` / `'false'`). Es la primera de las dos condiciones del anillo del viewport.                                                                                         |
 | `[data-active-cell]` en `.dt-root` | `'true'` mientras hay una celda marcada **en pantalla**. Es la segunda condición: con una celda marcada, el anillo del viewport se suprime.                                                       |
@@ -2724,7 +2751,7 @@ La selección en sí no cambia por esto. La posición sigue guardada, se sigue a
 
 El anillo es un `box-shadow: inset`, y no un `border` ni un `outline`. La elección sostiene algo:
 
-- Un `border` cambiaría la caja de la celda y correría su contenido 2px cada vez que la selección se
+- Un `border` cambiaría la caja de la celda y correría su contenido cada vez que la selección se
   mueve.
 - Un `outline` se dibuja por fuera de la caja, así que la celda vecina —que está posicionada en
   absoluto justo al lado— pintaría encima de la mitad.
@@ -2732,6 +2759,34 @@ El anillo es un `box-shadow: inset`, y no un `border` ni un `outline`. La elecci
 El `box-shadow: inset` se dibuja dentro de la caja existente, no cuesta layout y compone. El
 `z-index: 1` levanta la celda activa por encima de sus vecinas para que el anillo no quede recortado
 por el fondo de la siguiente.
+
+#### La cruz de la celda activa
+
+`crosshair` enciende dos líneas de color: una **bajo el encabezado** de la columna activa y otra **al
+costado del número** de su fila. Se cruzan en la celda donde está el usuario.
+
+```vue
+<DataTable :rows="rows" :columns="columns" row-key="id" crosshair />
+```
+
+Van juntas o no van: son la misma marca leída desde los dos bloques que **no scrollean**. Para qué
+sirven se ve recién cuando la tabla es grande: se marca una celda, se scrollea lejos, la celda se va
+de la pantalla —y el encabezado y la regleta siguen diciendo en qué columna y en qué fila estaba uno.
+En una tabla que entra entera no agregan nada sobre el anillo de la celda, y de ahí que vengan
+**apagadas**.
+
+`crosshair: false` no deja ninguna de las dos. Lo que no toca es el **fondo acentuado** del
+encabezado y del número, que va siempre: apagar la cruz apaga las líneas, no la referencia.
+
+El grosor sale de `--dt-crosshair-width`, que son `2px` y **no** comparte token con
+`--dt-selection-width`. No es un descuido: el contorno de la selección tiene que confundirse con las
+líneas de la grilla, y la cruz tiene que saltar a la vista desde el otro extremo de la tabla. Que hoy
+uno mida el doble que el otro es una consecuencia, no la regla.
+
+Las dos líneas son `box-shadow: inset`, por lo mismo que el anillo de la celda: un borde correría el
+contenido del encabezado y del número cada vez que la selección se mueve. Y las dos cuelgan de
+`[data-crosshair]` sobre `.dt-root`, un atributo que Vue escribe una vez —no el pool, y no por
+frame—, así que encenderlas no le cuesta al camino caliente ni una escritura.
 
 #### El color de una fila
 
@@ -2796,6 +2851,59 @@ final, sin importar dónde estén declaradas ni dónde las haya dejado un arrast
 el orden vigente. Una columna anclada además **no se puede mover arrastrando**: hacerlo significaría
 desanclarla.
 
+#### Anclar desde el encabezado
+
+`column.pinnable` pone un botón de alfiler en el encabezado. **Por defecto no hay ninguno**: sin esa
+bandera, una tabla no paga ni un nodo de más por columna.
+
+```ts
+const columns = [
+  // Empieza anclada y el usuario la puede soltar.
+  { key: 'name', label: 'Proyecto', pinned: 'start', pinnable: 'start' },
+  // Empieza suelta y el usuario la puede anclar al borde izquierdo.
+  { key: 'status', label: 'Estado', pinnable: true },
+  // Al derecho.
+  { key: 'active', label: 'Activo', pinnable: 'end' },
+]
+```
+
+`pinned` es el estado **inicial**; `pinnable` es el **permiso**, y su valor dice a qué borde lleva el
+botón: `true` y `'start'` son lo mismo. El botón **alterna**: ancla si está suelta y suelta si está
+anclada, a cualquiera de los dos bordes.
+
+**El lado se declara y no se elige en caliente.** En la práctica es una propiedad de la columna: una
+de identificación va a la izquierda y una de acciones a la derecha, y nadie ancla "Nombre" al borde
+derecho. Un menú de tres opciones por columna resolvería un caso que casi no existe a cambio de un
+gesto más en el que sí.
+
+El botón se ve al pasar el mouse por el encabezado, al recibir el foco, y **siempre que la columna
+está anclada** —si desapareciera, una columna anclada quedaría sin nada que explique por qué no
+scrollea ni cómo soltarla—. Donde no hay hover, una pantalla táctil, se ve siempre.
+
+El texto del botón sale de `pinLabel` y `unpinLabel` (`'Pin column'` / `'Unpin column'`), que es su
+`title` y su nombre accesible.
+
+#### Dónde vive el anclaje elegido
+
+En `columnPinning`, el cuarto v-model del juego de columnas. Se reconcilia contra las columnas
+declaradas y **se persiste** junto al resto del layout.
+
+```vue
+<DataTable v-model:column-pinning="pinning" … />
+```
+
+Una clave en `null` significa "el usuario la soltó" y **no** es lo mismo que la clave ausente, que
+significa "el usuario no la tocó" y deja mandar a `column.pinned`. Sin esa distinción, soltar una
+columna declarada anclada sería imposible: volvería a anclarse sola.
+
+`resetLayout()` vacía el mapa, que es volver a lo que declaran las columnas —y no dejarlas todas
+sueltas—.
+
+> **Ojo con `aggregate`.** Un agregado sobre una columna anclada se ignora: se dibuja en el offset de
+> SU columna, y anclado al inicio caería encima de la etiqueta del grupo. Mientras el anclaje era solo
+> declarativo eso se descubría al escribir la columna; con un botón lo dispara cualquiera en caliente,
+> así que la tabla **avisa una vez por consola** cuando pasa.
+
 #### Cómo se quedan quietas
 
 Cada fila lleva dos **carriles** (`.dt-pinned-lane`): cajas de tamaño cero, invisibles, cuya única
@@ -2837,8 +2945,11 @@ esas tiras son `role="none"`, así que los `columnheader` siguen perteneciendo a
 ### Mover columnas arrastrando
 
 Con `columnReorder` —encendida por defecto— el encabezado se agarra y se lleva: el cursor cambia a
-`move` al pasar por encima, una **línea vertical** marca dónde va a caer la columna, y al soltar se
-escribe el nuevo orden.
+`move` al pasar por encima, una **caja con el título** se despega del encabezado y sigue al puntero,
+una **línea vertical** marca dónde va a caer la columna, y al soltar se escribe el nuevo orden.
+
+Las tres señales dicen cosas distintas y por eso están las tres: el encabezado atenuado es **de
+dónde** sale, la caja es **qué** se está moviendo, y la línea es **dónde** va a caer.
 
 **No hay un modelo nuevo.** El arrastre escribe `columnOrder`, el mismo v-model que ya existía, que ya
 se reconciliaba contra las columnas declaradas y que la persistencia ya guardaba. En modo controlado
@@ -2850,6 +2961,7 @@ el componente anuncia por `update:columnOrder` y el padre decide, igual que con 
 | Dónde cae                   | En el hueco más cercano, cortando por el MEDIO de cada columna, no por su borde.                            |
 | La línea                    | `.dt-drop-indicator`. Aparece solo si soltar ahí cambiaría algo, así que su presencia ya es la respuesta.   |
 | La columna en vuelo         | `.dt-header-cell--dragging`, atenuada.                                                                      |
+| La caja que sigue al cursor | `.dt-column-ghost`. Nace encima del encabezado, conserva el punto donde se agarró y se recorta a 260px.     |
 | Columnas ocultas            | Se quedan pegadas a la misma vecina. La traducción del hueco al orden completo va por CLAVE, no por índice. |
 | El handle de redimensionado | No inicia el arrastre: tiene su propio gesto.                                                               |
 
@@ -2909,7 +3021,7 @@ const persist: DataTablePersistOptions = {
   adapter: myAdapter, // por defecto: localStorage
   debounce: 300, // ms; colapsa un arrastre de resize entero en una sola escritura
   version: 1, // subirla invalida los layouts viejos
-  include: { visibility: true, widths: true, order: true, grouping: true },
+  include: { visibility: true, widths: true, order: true, grouping: true, pinning: true },
 }
 ```
 
@@ -3144,6 +3256,247 @@ tabla vuelve a pedir desde la ventana en la que esté.
 
 ---
 
+## Ordenamiento
+
+**La tabla no ordena `rows`.** Administra los criterios, los muestra en el encabezado y los anuncia;
+reordenar el array —o volver a consultarle al servidor— sigue siendo del consumidor.
+
+No es una omisión: es lo único que funciona en los dos modos. En modo servidor la tabla solo tiene
+una ventana del dataset, así que ordenar lo que tiene a mano daría un orden correcto dentro de las 50
+filas cargadas y absurdo respecto de las 100.000 que hay.
+
+```ts
+{ key: 'name', label: 'Proyecto', sortable: true }
+```
+
+Con `sortable`, el encabezado responde al clic —**ascendente → descendente → sin orden**— y muestra
+la flecha del sentido. `Shift`+clic **suma** un criterio en lugar de reemplazarlo, que es lo que
+permite "por estado, y dentro de cada estado por fecha"; con más de uno, cada flecha lleva su número
+de prioridad.
+
+Al cambiar el orden la tabla **vuelve al principio**: con el orden cambiado, la fila 50.000 es otra
+fila, y quedarse donde estaba deja al usuario mirando un tramo que no pidió.
+
+### En memoria: dos líneas
+
+```ts
+import { sortRows } from 'vue-tablekit'
+
+const sort = ref<SortState>([])
+const filas = computed(() => sortRows(datos.value, sort.value, columnas))
+```
+
+```vue
+<DataTable v-model:sort="sort" :rows="filas" :columns="columnas" row-key="id" />
+```
+
+`sortRows` no muta lo que recibe, es **estable** —un empate conserva el orden en que venía, que es lo
+que hace que el segundo criterio no deshaga al primero— y devuelve **el mismo array** cuando no hay
+nada que ordenar, para no hacerle rehacer a la tabla la geometría y la ventana por nada.
+
+Compara el valor **crudo** y no el texto formateado: ordenar por el texto pondría `$1.000` antes que
+`$900`. Los vacíos —`null`, `undefined`, `NaN`, `''`— van al final **en los dos sentidos**: ordenar es
+para ver los valores, no para ver primero los huecos.
+
+Cuando el orden natural no es el que la gente espera, va un `comparator`:
+
+```ts
+{
+  key: 'priority',
+  sortable: true,
+  // Alfabéticamente "alta" va antes que "baja", justo al revés de lo que significa.
+  comparator: (a, b) => ESCALA.indexOf(a.priority) - ESCALA.indexOf(b.priority),
+}
+```
+
+### Contra el servidor: el mismo evento
+
+No hay un modo aparte ni una API nueva. Cambia qué hace el consumidor al enterarse:
+
+```ts
+watch(sort, () => {
+  // Un orden nuevo invalida todo lo que ya se trajo: son filas de otra consulta.
+  serverRows.value = []
+  // La tabla vuelve a pedir sola, desde la ventana donde esté.
+})
+```
+
+Es el mismo gesto que ya se usa para filtrar, y por el mismo motivo. `sortChange` es la alternativa a
+observar el v-model, para quien no quiere tomar posesión del estado: llega con los criterios y con la
+columna que el usuario acaba de tocar.
+
+**Restaurar un layout guardado no dispara `sortChange`.** Aplicar el orden persistido no es que el
+usuario haya apretado un encabezado, y emitirlo ahí le dispararía una consulta al servidor a cada
+montaje. El v-model sí se emite, que es lo que un padre controlado necesita para quedar en sincronía.
+
+### El menú de la columna
+
+`columnMenu` pone un botón de tres puntos en cada encabezado, con lo que la columna puede hacer:
+ordenar, anclar, ocultarse y restablecer el layout.
+
+```vue
+<DataTable column-menu … />
+```
+
+**No agrega ninguna capacidad nueva.** Es otra forma de llegar al mismo estado —`sort`,
+`columnPinning`, `columnVisibility`, `resetLayout()`— para quien no quiere poner controles propios
+alrededor de la tabla. Una columna se queda afuera con `column.menu: false`.
+
+El menú muestra **solo lo aplicable**: una columna que no ordena no trae las entradas de ordenar, y
+la que ya está en ascendente no ofrece "ordenar ascendente". Un menú con la mitad de las opciones
+deshabilitadas obliga a leerlo entero para descubrir que no servían.
+
+El panel sigue el aspecto de la tabla: su redondeo sale de `radiusBorder` —no del radio del tema— y
+el de sus opciones se deriva restándole el padding, para que las dos curvas queden concéntricas. Con
+el preset `cells` se cuadricula, con una línea entre todas las opciones.
+
+Se cierra con `Escape`, al apretar afuera, al elegir algo y **al scrollear en horizontal** —su
+posición se resuelve una vez, al abrir, y seguir al encabezado frame a frame sería trabajo en el
+camino caliente del scroll para algo que dura dos segundos—.
+
+### Cuando conviven con `columnSelection`
+
+Sobre el encabezado hay dos acciones posibles y no caben en el mismo clic. **Se la queda ordenar**, y
+seleccionar la columna entera pasa a `Ctrl`/`Cmd`+clic:
+
+| Columna      | Clic       | `Ctrl`/`Cmd`+clic |
+| ------------ | ---------- | ----------------- |
+| Ordenable    | Ordena     | Selecciona        |
+| No ordenable | Selecciona | Selecciona        |
+
+No es una convención nueva: es el mismo modificador de `Ctrl`/`Cmd`+`A`, `Ctrl`/`Cmd`+`C` y
+`Ctrl`/`Cmd`+`Home`. `Shift` no servía porque lo usa el orden multinivel.
+
+El reparto es ese y no el contrario por dos motivos. Apretar un encabezado para ordenar es la
+interacción más común que existe en una grilla, y seleccionar una columna para copiarla es ocasional:
+la acción frecuente tiene que llevarse el gesto frecuente. Y al revés quedaba un agujero —con
+`columnSelection` encendida y sin `columnMenu`, una columna con `sortable: true` no hacía
+absolutamente nada—.
+
+### Traducir los textos
+
+```ts
+const labels: DataTableLabels = {
+  sortAsc: 'Ordenar ascendente',
+  sortDesc: 'Ordenar descendente',
+  clearSort: 'Quitar el orden',
+  pin: 'Anclar columna',
+  unpin: 'Desanclar columna',
+  menu: 'Menú de la columna',
+  pinStart: 'Anclar al inicio',
+  pinEnd: 'Anclar al final',
+  hideColumn: 'Ocultar columna',
+  resetColumns: 'Restablecer columnas',
+}
+```
+
+Se pasa parcial: lo que no se declare queda en inglés. `emptyText` va aparte porque no es el rótulo de
+un control sino contenido de la tabla.
+
+---
+
+## Alturas de fila distintas
+
+Por defecto todas las filas miden lo mismo, y eso no es un detalle de estilo: es lo que hace que la
+tabla encuentre la fila que va en un píxel con una división, sin importar si hay cien filas o cien
+mil.
+
+Cuando hace falta que midan distinto, `rowHeight` acepta una función en lugar de un número:
+
+```vue
+<script setup lang="ts">
+const abiertas = ref(new Set<string>())
+
+// Como `computed`, NO inline en el template. El porqué está más abajo.
+const rowHeight = computed(() => {
+  const ids = abiertas.value
+  return (row: Proyecto | undefined) => {
+    if (row === undefined) return 32
+    return ids.has(row.id) ? 160 : 40
+  }
+})
+</script>
+
+<template>
+  <DataTable :rows="rows" :columns="columns" row-key="id" :row-height="rowHeight" />
+</template>
+```
+
+Todo lo demás acompaña solo: el recuadro de la selección abraza el alto real del bloque, el editor se
+abre del tamaño de su celda, la regleta de numeración sigue cada fila, `Av Pág` avanza las filas que
+entren de verdad desde donde uno esté, y la barra de scroll mide la suma.
+
+### Qué recibe la función
+
+```ts
+type RowHeightResolver<TRow> = (row: TRow | undefined, index: number) => number
+```
+
+**`row` puede ser `undefined`, y es normal.** Ocurre en dos casos: la posición es una cabecera de
+grupo —que no es ninguna fila del dataset— o la tabla está en modo servidor y esa fila todavía no
+llegó. Devolver un alto propio ahí es la forma de darle a las cabeceras de grupo el suyo.
+
+**`index` es la posición VISIBLE**, la que se ve en la regleta menos uno. Sin agrupación es el mismo
+índice que dentro de `rows`; con agrupación no, porque las cabeceras ocupan lugar. Es el único índice
+que existe siempre, y por eso es el que se pasa.
+
+**Lo que devuelva tiene que ser un número finito y positivo.** Cualquier otra cosa —un `NaN` de una
+cuenta con un campo que no llegó, un cero, un negativo— se descarta y se usa el alto por defecto. Una
+geometría rota no se vería como un error sino como filas superpuestas, que es mucho peor de
+diagnosticar.
+
+### Qué cuesta, y la única forma de pasarla mal
+
+La función corre **una vez por fila del dataset entero**, y eso pasa cada vez que cambia `rows`,
+cambian las columnas, o **cambia la identidad de la función**. No corre en cada frame: scrollear no
+la llama ni una sola vez, y esa es la propiedad que mantiene el scroll gratis con cualquier cantidad
+de filas.
+
+De ahí sale la única regla que hay que respetar:
+
+```vue
+<!-- MAL: una función nueva en cada render del padre. -->
+<DataTable :row-height="(row) => (row?.abierta ? 160 : 40)" />
+```
+
+Escrita así, cualquier cosa que haga renderizar al padre —tipear en un input que no tiene nada que
+ver— produce una función distinta, y la tabla vuelve a recorrer el dataset entero. Con cien mil filas
+eso se siente. Definida como `computed`, la identidad cambia solo cuando cambia algo de lo que el
+alto depende, que es exactamente cuando hay que recalcular.
+
+Por lo mismo, la función tiene que ser **pura y estable**: dos respuestas distintas para la misma
+fila dejarían la geometría y lo pintado en desacuerdo. Si el alto depende de algo que cambia, ese
+algo tiene que estar en los datos o en las dependencias del `computed`.
+
+### Con datos del servidor
+
+Se puede, con una consecuencia que conviene saber de antemano: **las filas que todavía no llegaron
+miden el alto por defecto**, y cuando llegan, el contenido de abajo se corre. Es inevitable —la tabla
+no puede saber cuánto mide una fila que no tiene— y se nota más cuanto más difieran las alturas.
+
+Además, cada página que llega es un `rows` nuevo, y un `rows` nuevo es una pasada sobre el dataset
+entero. Con `rowCount` en el millón, esa pasada se paga una vez por página. Si no hay una razón
+fuerte para las alturas variables, en modo servidor conviene un alto fijo.
+
+### Lo que no cambia para quien no la usa
+
+Con `rowHeight` numérico —o sin la prop— no cambia absolutamente nada: la misma aritmética de
+siempre, ni un array de offsets reservado, y el pool no escribe una sola propiedad de alto. La tabla
+incluso vuelve sola a ese camino si la función termina devolviendo el alto por defecto para todas,
+que es el caso de `(row) => row.abierta ? 160 : 40` mientras no haya ninguna abierta.
+
+### Cómo llega el alto al DOM
+
+Cada fila lleva la custom property `--dt-row-h`, y de ella cuelgan el alto de la fila, el de sus
+celdas, su altura de línea, la cabecera de grupo y el agregado. Es **una sola escritura por fila**,
+que la herencia reparte entre todo lo que está adentro.
+
+`--dt-row-height` NO se pisa, a propósito: de ella cuelgan los tamaños de las cajas decorativas
+—píldoras, casillas, avatares— con su `calc()`, y una fila de 200px no tiene por qué llevar una
+píldora de 186.
+
+---
+
 ## Notas de rendimiento
 
 ### Qué la hace rápida
@@ -3205,9 +3558,10 @@ Estas son las formas realistas de devolver el rendimiento, más o menos en el or
 6. **`virtualizeColumns` encendido en una tabla angosta.** Si todas las columnas entran en pantalla,
    el cálculo de ventana y el recorte son overhead puro. Conviene apagarlo.
 
-7. **Alturas de fila no uniformes.** No están soportadas: la matemática O(1) de la ventana depende de
-   una única altura fija. No conviene falsearlas con CSS, porque la geometría del virtualizador
-   dejaría de coincidir con el DOM.
+7. **`rowHeight` como función escrita inline en el template.** Es una función nueva en cada render
+   del padre, y cada una cuesta una pasada sobre el dataset entero. Va como `computed`: ver
+   [Alturas de fila distintas](#alturas-de-fila-distintas). Lo que sigue sin poder falsearse con CSS
+   es el alto: la geometría del virtualizador dejaría de coincidir con el DOM.
 
 8. **Una agregación propia cara.** Corre una vez por grupo y por reconstrucción del árbol, no por
    frame, pero un árbol con miles de grupos multiplica ese costo por miles. Y si además recorre las
@@ -3279,26 +3633,28 @@ explicar qué se compró a cambio.
 
 ### El resto de la suite
 
-| Archivo                       | Qué cubre                                                                                                                                                                                                                                                                                                                                                           |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `useVirtualWindow.test.ts`    | Matemática de la ventana: 100k filas, scroll negativo, overscroll, overscan                                                                                                                                                                                                                                                                                         |
-| `useColumnLayout.test.ts`     | Offsets acumulados, acotado de anchos, orden, y la búsqueda binaria por fuerza bruta                                                                                                                                                                                                                                                                                |
-| `reconcile.test.ts`           | Estado guardado contra columnas que cambiaron; payloads corruptos                                                                                                                                                                                                                                                                                                   |
-| `useTablePersistence.test.ts` | Orden carga/guardado, debounce, volcado al desmontar, degradación en SSR y modo privado                                                                                                                                                                                                                                                                             |
-| `useCellEditor.test.ts`       | Veto de `beforeEdit`, coacción de tipos, y que `rows` nunca se muta                                                                                                                                                                                                                                                                                                 |
-| `selection.test.ts`           | Teclado completo, auto-scroll en píxeles exactos, columnas ocultas, el anillo único —una sola celda marcada, y el anillo del viewport opcional y suprimido con celda activa— y la estructura accesible: roles, `aria-rowindex` del encabezado y `aria-colindex` alineado entre header y cuerpo                                                                      |
-| `renderers.test.ts`           | Valores inesperados en cada renderer incluido, y el aviso por nombre desconocido: una vez por nombre, nunca para un nombre registrado                                                                                                                                                                                                                               |
-| `range-selection.test.ts`     | El rectángulo: arrastre, `Shift`+clic, `Shift`+teclas, `Ctrl`+`A`, cuándo colapsa, que el ancla no se mueva ni se tiña, que se re-resuelva al ocultar una columna, y el copiado —TSV con el texto que se ve, comillas, cabeceras de grupo salteadas y filas sin pintar                                                                                              |
-| `row-numbers.test.ts`         | La regleta: encendida por defecto, numerando la posición visible, en blanco sobre las cabeceras de grupo, corriendo las columnas sin meterse en la selección ni en el copiado, su costo por frame y que nadie le escriba un `transform` a ninguna altura del scroll; más los cinco pasos de `radiusBorder`                                                          |
-| `bulk-selection.test.ts`      | Los dos gestos en bloque: que el encabezado seleccione la columna entera y el número la fila entera, que lo que producen sea un rango —se copia, se extiende, se colapsa—, que el handle de redimensionado no dispare ninguno, y que los dos vengan apagados                                                                                                        |
-| `column-reorder.test.ts`      | Mover columnas arrastrando: dónde cae según el medio de cada columna, el umbral que separa el clic del arrastre, la línea que solo aparece si el gesto cambia algo, las columnas ocultas que no se corren de vecina, y una columna anclada que ni se agarra ni se deja cruzar                                                                                       |
-| `pinned-columns.test.ts`      | Columnas ancladas: el orden que imponen, que su posición NO dependa del scroll, el carril `sticky` del que cuelgan y el ancho de fila que lo sostiene, que se pinte UNA sola copia de cada una, que ninguna regla deje una fila transparente, que sigan siendo seleccionables, copiables y editables —con el editor acompañándolas— y que no cuesten nada por frame |
-| `host-layout.test.ts`         | Lo que la tabla necesita del contenedor: que avise —una sola vez— cuando se queda sin alto y muestra una fila de cincuenta, que NO avise cuando solo está oculta, y que la hoja de estilos siga respaldando lo que la documentación dice sobre dónde van los tokens                                                                                                 |
-| `server-rows.test.ts`         | El modo servidor: que sin `rowCount` no se pida ni una fila, que los tramos se alineen a `pageSize`, que una página no se pida dos veces, que vaciar `rows` y `refreshRows()` vuelvan a pedir, y que un hueco se pinte como marcador —con `aria-busy`, con barra por columna y sin el texto de la fila anterior—                                                    |
-| `sticky-layout.test.ts`       | Lo que no acompaña al scroll —encabezado, regleta, carriles anclados—: que nadie les escriba la posición a ninguna altura del scroll, que el encabezado viva dentro del scroller sin dejar de ser la fila 1 de la grilla, que su alto se descuente de una página de filas, y el contrato `sticky` de la hoja de estilos                                             |
-| `cell-layout.test.ts`         | Modo de maquetado: qué renderers lo declaran, que la clase se escriba solo al cambiar de renderer, que las tres alineaciones produzcan el mismo estado en los dos modos, y —leyendo el `.css`— que la celda de texto conserve su recorte con puntos suspensivos                                                                                                     |
-| `grouping.test.ts`            | Aplanado, agregados anidados, expansión controlada, `formatAggregate`, `emptyGroupLabel`, y que `editCommit` reporta el índice ORIGINAL                                                                                                                                                                                                                             |
-| `slot-editor.test.ts`         | El slot `#editor`: dónde abre y dónde no, el veto, `commit()` y `cancel()` sobre la tubería de siempre, el índice ORIGINAL con un grupo plegado, el cierre por scroll y por puntero, el foco de ida y de vuelta, y que el presupuesto por frame no se mueve ni con el editor abierto                                                                                |
+| Archivo                       | Qué cubre                                                                                                                                                                                                                                                                                                                                                                                                            |
+| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `useVirtualWindow.test.ts`    | Matemática de la ventana: 100k filas, scroll negativo, overscroll, overscan                                                                                                                                                                                                                                                                                                                                          |
+| `useColumnLayout.test.ts`     | Offsets acumulados, acotado de anchos, orden, y la búsqueda binaria por fuerza bruta                                                                                                                                                                                                                                                                                                                                 |
+| `reconcile.test.ts`           | Estado guardado contra columnas que cambiaron; payloads corruptos                                                                                                                                                                                                                                                                                                                                                    |
+| `useTablePersistence.test.ts` | Orden carga/guardado, debounce, volcado al desmontar, degradación en SSR y modo privado                                                                                                                                                                                                                                                                                                                              |
+| `useCellEditor.test.ts`       | Veto de `beforeEdit`, coacción de tipos, y que `rows` nunca se muta                                                                                                                                                                                                                                                                                                                                                  |
+| `selection.test.ts`           | Teclado completo, auto-scroll en píxeles exactos, columnas ocultas, el anillo único —una sola celda marcada, y el anillo del viewport opcional y suprimido con celda activa— y la estructura accesible: roles, `aria-rowindex` del encabezado y `aria-colindex` alineado entre header y cuerpo                                                                                                                       |
+| `renderers.test.ts`           | Valores inesperados en cada renderer incluido, y el aviso por nombre desconocido: una vez por nombre, nunca para un nombre registrado                                                                                                                                                                                                                                                                                |
+| `range-selection.test.ts`     | El rectángulo: arrastre, `Shift`+clic, `Shift`+teclas, `Ctrl`+`A`, cuándo colapsa, que el ancla no se mueva ni se tiña, que se re-resuelva al ocultar una columna, y el copiado —TSV con el texto que se ve, comillas, cabeceras de grupo salteadas y filas sin pintar                                                                                                                                               |
+| `row-numbers.test.ts`         | La regleta: encendida por defecto, numerando la posición visible, en blanco sobre las cabeceras de grupo, corriendo las columnas sin meterse en la selección ni en el copiado, su costo por frame y que nadie le escriba un `transform` a ninguna altura del scroll; más los cinco pasos de `radiusBorder`                                                                                                           |
+| `bulk-selection.test.ts`      | Los dos gestos en bloque: que el encabezado seleccione la columna entera y el número la fila entera, que lo que producen sea un rango —se copia, se extiende, se colapsa—, que el handle de redimensionado no dispare ninguno, y que los dos vengan apagados                                                                                                                                                         |
+| `column-reorder.test.ts`      | Mover columnas arrastrando: dónde cae según el medio de cada columna, el umbral que separa el clic del arrastre, la línea que solo aparece si el gesto cambia algo, las columnas ocultas que no se corren de vecina, una columna anclada que ni se agarra ni se deja cruzar, y el ciclo de vida de la caja que sigue al cursor —cuándo nace, que acompaña al puntero y que no sobrevive ni al soltar ni al cancelar— |
+| `sorting.test.ts`             | Ordenamiento: que la tabla NO toque `rows`, el ciclo de tres estados del clic, el `Shift` que suma criterios, `aria-sort`, que un arrastre no ordene de paso, `sortRows` —identidad estable, estabilidad, vacíos al final en los dos sentidos, comparador propio— y el menú de columna entero                                                                                                                        |
+| `column-pinning.test.ts`      | Anclar y desanclar desde el encabezado: cuándo aparece el botón, a qué borde lleva, que soltar una columna DECLARADA anclada funcione —la distinción entre `null` y la clave ausente—, que anclarla la vuelva inmóvil, que el botón no arrastre ni seleccione, el modo controlado, `resetLayout()`, el aviso del agregado que se pierde y la reconciliación de lo guardado                                           |
+| `pinned-columns.test.ts`      | Columnas ancladas: el orden que imponen, que su posición NO dependa del scroll, el carril `sticky` del que cuelgan y el ancho de fila que lo sostiene, que se pinte UNA sola copia de cada una, que ninguna regla deje una fila transparente, que sigan siendo seleccionables, copiables y editables —con el editor acompañándolas— y que no cuesten nada por frame                                                  |
+| `host-layout.test.ts`         | Lo que la tabla necesita del contenedor: que avise —una sola vez— cuando se queda sin alto y muestra una fila de cincuenta, que NO avise cuando solo está oculta, y que la hoja de estilos siga respaldando lo que la documentación dice sobre dónde van los tokens                                                                                                                                                  |
+| `server-rows.test.ts`         | El modo servidor: que sin `rowCount` no se pida ni una fila, que los tramos se alineen a `pageSize`, que una página no se pida dos veces, que vaciar `rows` y `refreshRows()` vuelvan a pedir, y que un hueco se pinte como marcador —con `aria-busy`, con barra por columna y sin el texto de la fila anterior—                                                                                                     |
+| `sticky-layout.test.ts`       | Lo que no acompaña al scroll —encabezado, regleta, carriles anclados—: que nadie les escriba la posición a ninguna altura del scroll, que el encabezado viva dentro del scroller sin dejar de ser la fila 1 de la grilla, que su alto se descuente de una página de filas, y el contrato `sticky` de la hoja de estilos                                                                                              |
+| `cell-layout.test.ts`         | Modo de maquetado: qué renderers lo declaran, que la clase se escriba solo al cambiar de renderer, que las tres alineaciones produzcan el mismo estado en los dos modos, y —leyendo el `.css`— que la celda de texto conserve su recorte con puntos suspensivos                                                                                                                                                      |
+| `grouping.test.ts`            | Aplanado, agregados anidados, expansión controlada, `formatAggregate`, `emptyGroupLabel`, y que `editCommit` reporta el índice ORIGINAL                                                                                                                                                                                                                                                                              |
+| `slot-editor.test.ts`         | El slot `#editor`: dónde abre y dónde no, el veto, `commit()` y `cancel()` sobre la tubería de siempre, el índice ORIGINAL con un grupo plegado, el cierre por scroll y por puntero, el foco de ida y de vuelta, y que el presupuesto por frame no se mueve ni con el editor abierto                                                                                                                                 |
 
 ---
 
@@ -3306,22 +3662,20 @@ explicar qué se compró a cambio.
 
 Dicho sin vueltas. Nada de esto está implementado:
 
-| Sin implementar                                   | Notas                                                                                                                                                                                                                                                                                                            |
-| ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Ordenamiento**                                  | Sin estado de orden, sin indicadores y sin clic para ordenar. Hay que ordenar `rows` por fuera y pasar el array ya ordenado.                                                                                                                                                                                     |
-| **Filtrado y búsqueda**                           | Lo mismo: filtrar aguas arriba y pasar el array ya filtrado.                                                                                                                                                                                                                                                     |
-| **Selección múltiple con `Ctrl`+clic**            | El rango rectangular **sí** está implementado —arrastre, `Shift`+clic, `Shift`+flechas y copiado; ver [Selección de un rango](#selección-de-un-rango-de-celdas)—, pero es **uno solo y contiguo**: no hay varios rectángulos sueltos ni celdas salteadas.                                                        |
-| **Pegado**                                        | Se copia, no se pega. La tabla es controlada y nunca escribe sobre `rows`; un pegado tendría que pasar por la tubería de edición celda por celda.                                                                                                                                                                |
-| **Auto-scroll al arrastrar un rango**             | El rango crece hasta la celda que esté bajo el puntero; si el puntero sale del viewport, se queda donde estaba. Para abarcar más de una pantalla: scrollear y `Shift`+clic.                                                                                                                                      |
-| **Autorrelleno desde el fill handle**             | El cuadradito de la esquina del rango es una marca de extremo. No arrastra.                                                                                                                                                                                                                                      |
-| **Selección de varias filas con casillas**        | No hay modelo `selectedRows` ni columna de casillas incluida. El modo `'row'` marca una fila por vez; `rowClick` y `cellSelect` son los enganches para construir la propia.                                                                                                                                      |
-| **Pivoteo**                                       | La agrupación **sí** está implementada (ver [Agrupación](#agrupación)); pivotear no, y queda **deliberadamente fuera de alcance**: exige una matriz de columnas derivadas de los datos, lo que rompe el supuesto de que las columnas son configuración estática sobre el que se apoya todo el camino de pintado. |
-| **Reordenar columnas con el teclado**             | El arrastre con el mouse **sí** está (ver [Mover columnas](#mover-columnas-arrastrando)); un atajo de teclado no. El v-model `columnOrder` queda como el camino para una UI propia.                                                                                                                              |
-| **Virtualización de filas con alturas variables** | `rowHeight` es fijo por tabla. Las alturas variables reemplazarían la división O(1) por un índice de offsets medidos.                                                                                                                                                                                            |
-| **Anclar columnas desde la UI**                   | El anclaje **sí** está, declarativo por columna (ver [Columnas ancladas](#columnas-ancladas)); lo que no hay es un gesto para anclar y desanclar en caliente. La prop es la vía.                                                                                                                                 |
-| **Agregado en una columna anclada**               | `aggregate` sobre una columna con `pinned` se ignora en silencio. Un agregado se dibuja en el offset de SU columna, así que anclado al inicio caería encima del chevron, la etiqueta y el contador del grupo. La vía es no anclar esa columna.                                                                   |
-| **Editor de selección múltiple**                  | El renderer `tags` muestra listas; no hay ningún editor que edite una.                                                                                                                                                                                                                                           |
-| **SSR del cuerpo**                                | El header y el armazón renderizan bien; el cuerpo se pinta al montar, solo del lado del cliente.                                                                                                                                                                                                                 |
+| Sin implementar                            | Notas                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Filtrado y búsqueda**                    | Lo mismo: filtrar aguas arriba y pasar el array ya filtrado.                                                                                                                                                                                                                                                                                                                                                               |
+| **Selección múltiple con `Ctrl`+clic**     | El rango rectangular **sí** está implementado —arrastre, `Shift`+clic, `Shift`+flechas y copiado; ver [Selección de un rango](#selección-de-un-rango-de-celdas)—, pero es **uno solo y contiguo**: no hay varios rectángulos sueltos ni celdas salteadas.                                                                                                                                                                  |
+| **Pegado**                                 | Se copia, no se pega. La tabla es controlada y nunca escribe sobre `rows`; un pegado tendría que pasar por la tubería de edición celda por celda.                                                                                                                                                                                                                                                                          |
+| **Auto-scroll al arrastrar un rango**      | El rango crece hasta la celda que esté bajo el puntero; si el puntero sale del viewport, se queda donde estaba. Para abarcar más de una pantalla: scrollear y `Shift`+clic.                                                                                                                                                                                                                                                |
+| **Autorrelleno desde el fill handle**      | El cuadradito de la esquina del rango es una marca de extremo. No arrastra.                                                                                                                                                                                                                                                                                                                                                |
+| **Selección de varias filas con casillas** | No hay modelo `selectedRows` ni columna de casillas incluida. El modo `'row'` marca una fila por vez; `rowClick` y `cellSelect` son los enganches para construir la propia.                                                                                                                                                                                                                                                |
+| **Pivoteo**                                | La agrupación **sí** está implementada (ver [Agrupación](#agrupación)); pivotear no, y queda **deliberadamente fuera de alcance**: exige una matriz de columnas derivadas de los datos, lo que rompe el supuesto de que las columnas son configuración estática sobre el que se apoya todo el camino de pintado.                                                                                                           |
+| **Reordenar columnas con el teclado**      | El arrastre con el mouse **sí** está (ver [Mover columnas](#mover-columnas-arrastrando)); un atajo de teclado no. El v-model `columnOrder` queda como el camino para una UI propia.                                                                                                                                                                                                                                        |
+| **Alturas de fila MEDIDAS del contenido**  | Las alturas **declaradas** sí están (ver [Alturas de fila distintas](#alturas-de-fila-distintas)): `rowHeight` acepta una función y cada fila puede medir lo suyo. Lo que no hay es que la fila crezca sola con su contenido, que exigiría medir el DOM pintado y rehacer el maquetado de la celda —se centra con `line-height` y recorta con puntos suspensivos, dos cosas que dependen de un alto conocido de antemano—. |
+| **Agregado en una columna anclada**        | `aggregate` sobre una columna con `pinned` se ignora en silencio. Un agregado se dibuja en el offset de SU columna, así que anclado al inicio caería encima del chevron, la etiqueta y el contador del grupo. La vía es no anclar esa columna.                                                                                                                                                                             |
+| **Editor de selección múltiple**           | El renderer `tags` muestra listas; no hay ningún editor que edite una.                                                                                                                                                                                                                                                                                                                                                     |
+| **SSR del cuerpo**                         | El header y el armazón renderizan bien; el cuerpo se pinta al montar, solo del lado del cliente.                                                                                                                                                                                                                                                                                                                           |
 
 ### Un componente Vue por celda — deliberadamente no soportado
 
@@ -3341,16 +3695,16 @@ cuando cambia la configuración de columnas.
 
 ## Referencia: qué exporta el paquete
 
-| Export                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | Tipo                                                                    |
-| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| `DataTable` (también el export por defecto), `DataTableColumnToggle`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | Componentes                                                             |
-| `COLOR_TOKENS`, `ColorTokenName`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | Mapa de la paleta de estados y el tipo de su clave                      |
-| `registerRenderer`, `resolveRenderer`, `createTextRenderer`, `TEXT_RENDERER_TYPE`                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | Registro de renderers                                                   |
-| `textRenderer`, `numberRenderer`, `badgeRenderer`, `selectRenderer`, `progressRenderer`, `avatarRenderer`, `checkboxRenderer`, `tagsRenderer`                                                                                                                                                                                                                                                                                                                                                                                                              | Instancias de los renderers incluidos, para componer sobre ellas        |
-| `createLocalStorageAdapter`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | El adapter de almacenamiento por defecto                                |
-| `groupId`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | Constructor del id de un grupo, para `expandedGroups` y `toggleGroup()` |
-| `DataTableProps`, `DataTableColumn`, `DataTableInstance`, `DataTableTheme`, `CellValue`, `CellAlign`, `CellLayout`, `CellOption`, `CellEditorType`, `CellEditorSlotProps`, `CellPosition`, `CellRenderer`, `CellRenderContext`, `CellRendererHandle`, `AnyCellRenderer`, `CellRendererFactory`, `SelectionMode`, `CellSelectEvent`, `BeforeEditEvent`, `AfterEditEvent`, `EditCommitEvent`, `ColumnResizeEvent`, `ColumnVisibilityState`, `ColumnWidthState`, `DataTablePersistOptions`, `DataTableStorageAdapter`, `PersistedTableState`, `VirtualWindow` | Tipos                                                                   |
-| `GroupByState`, `GroupRow`, `GroupIdSegment`, `DataRow`, `FlatRow`, `GroupToggleEvent`, `BuiltInAggregation`, `AggregationFn`, `ColumnAggregation`                                                                                                                                                                                                                                                                                                                                                                                                         | Tipos de la agrupación                                                  |
+| Export                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | Tipo                                                                    |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `DataTable` (también el export por defecto), `DataTableColumnToggle`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | Componentes                                                             |
+| `COLOR_TOKENS`, `ColorTokenName`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | Mapa de la paleta de estados y el tipo de su clave                      |
+| `registerRenderer`, `resolveRenderer`, `createTextRenderer`, `TEXT_RENDERER_TYPE`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | Registro de renderers                                                   |
+| `textRenderer`, `numberRenderer`, `badgeRenderer`, `selectRenderer`, `progressRenderer`, `avatarRenderer`, `checkboxRenderer`, `tagsRenderer`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | Instancias de los renderers incluidos, para componer sobre ellas        |
+| `createLocalStorageAdapter`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | El adapter de almacenamiento por defecto                                |
+| `groupId`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | Constructor del id de un grupo, para `expandedGroups` y `toggleGroup()` |
+| `DataTableProps`, `DataTableColumn`, `DataTableInstance`, `DataTableTheme`, `CellValue`, `CellAlign`, `CellLayout`, `CellOption`, `CellEditorType`, `CellEditorSlotProps`, `CellPosition`, `CellRenderer`, `CellRenderContext`, `CellRendererHandle`, `AnyCellRenderer`, `CellRendererFactory`, `SelectionMode`, `RowHeightResolver`, `SortState`, `ColumnSort`, `SortDirection`, `SortChangeEvent`, `DataTableLabels`, `CellSelectEvent`, `BeforeEditEvent`, `AfterEditEvent`, `EditCommitEvent`, `ColumnResizeEvent`, `ColumnVisibilityState`, `ColumnWidthState`, `DataTablePersistOptions`, `DataTableStorageAdapter`, `PersistedTableState`, `VirtualWindow` | Tipos                                                                   |
+| `GroupByState`, `GroupRow`, `GroupIdSegment`, `DataRow`, `FlatRow`, `GroupToggleEvent`, `BuiltInAggregation`, `AggregationFn`, `ColumnAggregation`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Tipos de la agrupación                                                  |
 
 Los composables y el pool de nodos **no** se exportan. Son detalles de implementación, y exportarlos
 los convertiría en API que después habría que sostener para siempre.

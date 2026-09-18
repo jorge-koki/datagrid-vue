@@ -38,6 +38,9 @@ export type {
   CellValue,
   ColumnAggregation,
   ColumnResizeEvent,
+  ColumnPin,
+  ColumnPinState,
+  ColumnSort,
   ColumnVisibilityState,
   ColumnWidthState,
   DataRow,
@@ -58,7 +61,11 @@ export type {
   PersistedTableState,
   RangeCopyEvent,
   RangeSelectEvent,
+  RowHeightResolver,
   RowsRequestEvent,
+  SortChangeEvent,
+  SortDirection,
+  SortState,
   SelectionMode,
   VirtualWindow,
 } from './types'
@@ -118,5 +125,15 @@ export type ColorTokenName = keyof typeof COLOR_TOKENS
  * exactamente la falla silenciosa que este export existe para eliminar.
  */
 export { groupId } from './internal/aggregations'
+
+/**
+ * Ordena un array de filas según los criterios que produjo la tabla.
+ *
+ * Sale de acá y no de una utilidad aparte porque la tabla NO ordena `rows`: el
+ * estado del orden lo administra ella y reordenar es del consumidor. Esta
+ * función es para que eso sean dos líneas en el caso en memoria. En modo
+ * servidor no se usa: ahí el orden viaja en la consulta.
+ */
+export { sortRows } from './internal/sorting'
 
 export { createLocalStorageAdapter } from './composables/useTablePersistence'

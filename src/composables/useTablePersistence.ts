@@ -111,6 +111,8 @@ interface ResolvedPersistOptions {
   includeWidths: boolean
   includeOrder: boolean
   includeGrouping: boolean
+  includePinning: boolean
+  includeSort: boolean
   storageKey: string
 }
 
@@ -164,6 +166,8 @@ export function useTablePersistence<TRow>(
       includeWidths: include?.widths ?? true,
       includeOrder: include?.order ?? true,
       includeGrouping: include?.grouping ?? true,
+      includePinning: include?.pinning ?? true,
+      includeSort: include?.sort ?? true,
       storageKey: `${STORAGE_KEY_PREFIX}${tableId}`,
     }
   })
@@ -220,6 +224,16 @@ export function useTablePersistence<TRow>(
     if (config.includeGrouping && current.groupBy !== undefined) {
       payload.groupBy = [...current.groupBy]
       payload.collapsedGroups = [...(current.collapsedGroups ?? [])]
+    }
+
+    // Igual que la agrupación: la clave solo viaja si el estado la trae, y el
+    // estado solo la trae si el usuario tocó algún ancla.
+    if (config.includePinning && current.columnPinning !== undefined) {
+      payload.columnPinning = { ...current.columnPinning }
+    }
+
+    if (config.includeSort && current.sort !== undefined) {
+      payload.sort = current.sort.map((entry) => ({ ...entry }))
     }
 
     return payload
@@ -325,6 +339,12 @@ export function useTablePersistence<TRow>(
       if (config.includeGrouping && reconciled.groupBy !== undefined) {
         applied.groupBy = reconciled.groupBy
         applied.collapsedGroups = reconciled.collapsedGroups ?? []
+      }
+      if (config.includePinning && reconciled.columnPinning !== undefined) {
+        applied.columnPinning = reconciled.columnPinning
+      }
+      if (config.includeSort && reconciled.sort !== undefined) {
+        applied.sort = reconciled.sort
       }
       options.onLoad(applied)
     }
