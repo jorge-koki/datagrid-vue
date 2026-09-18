@@ -74,10 +74,40 @@ en el repositorio; sin él, el paso de publicación falla y hay que hacerlo a ma
 texto de la portada solo llega al registro con la versión siguiente. En GitHub, en cambio, se
 actualiza con cada push.
 
-**Despublicar no es una opción.** npm no reasigna un nombre despublicado ni siquiera a su dueño; es
-exactamente lo que dejó inservible al nombre `datagrid-vue` desde 2019. Está contado en el
-[checklist previo a publicar](./src/README.md#checklist-previo-a-publicar), junto con la otra regla
-con la que nos chocamos: npm rechaza nombres que, sin guiones, coincidan con uno que ya existe.
+## Por qué el paquete se llama `vue-tablekit`
+
+Porque los dos nombres obvios están vetados, cada uno por una regla distinta de npm, y ninguna de las
+dos se puede consultar de antemano. Queda anotado acá porque volver a chocarse con ellas cuesta un
+intento de publicación cada vez.
+
+**`datagrid-vue` tiene una lápida.** Alguien publicó `0.0.1`, `0.0.2` y `0.0.3` el 2019-09-10 y las
+despublicó todas ese mismo día. El registro conserva el documento:
+
+```sh
+curl -s https://registry.npmjs.org/datagrid-vue
+# {"_id":"datagrid-vue", ... "unpublished":{"time":"2019-09-10T17:20:15.368Z","versions":[...]}}
+```
+
+npm no reasigna un nombre despublicado: solo su dueño original podría volver a usarlo, y cualquier
+otra cuenta recibe un `403`. Es también la razón por la que **despublicar no es una opción** una vez
+que una versión sale: deja el nombre inutilizable para siempre, para uno mismo incluido.
+
+**`datatable-vue` es "demasiado parecido" a `data-table-vue`.** npm compara los nombres después de
+quitarles guiones y puntos, y rechaza los que coinciden:
+
+```
+403 Forbidden - PUT https://registry.npmjs.org/datatable-vue
+Package name too similar to existing package data-table-vue
+```
+
+La comparación es por coincidencia EXACTA del nombre sin guiones, no por parecido general: lo que
+choca con `data-table-vue` es cualquier partición de `datatablevue`, y nada más. Un `404` del
+registro **no alcanza para saberlo**, porque la regla solo se evalúa al publicar. La forma de
+anticiparla es consultar todas las particiones con guion del candidato.
+
+`vue-tablekit` pasa las dos: libre y sin lápida en sus cuatro variantes —`vue-table-kit`,
+`vue-tablekit`, `vuetable-kit`, `vuetablekit`—. Y describe bien lo que hay adentro, que no es solo la
+tabla: vienen ocho tipos de celda, el selector de columnas y los composables.
 
 ## Configuración del editor
 
