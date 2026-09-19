@@ -1109,9 +1109,13 @@ export interface DataTableProps<TRow> {
    * anclado ahí, porque marcar una fila tiene que ser posible con la tabla
    * corrida a cualquier lado.
    *
+   * Con un objeto en lugar de `true` se cambia cómo se ve —sobre todo el
+   * `renderer`, para poner una casilla propia— sin poder romper lo que la hace
+   * funcionar. Ver {@link SelectionColumnOptions}.
+   *
    * Lo que produce vive en {@link DataTableProps.selectedRows}.
    */
-  selectionColumn?: boolean
+  selectionColumn?: boolean | SelectionColumnOptions<TRow>
   /**
    * Las filas marcadas. `v-model:selected-rows`.
    *
@@ -1345,6 +1349,40 @@ export interface RowSelectionState {
   mode: 'some' | 'all'
   /** La lista, que significa una cosa u otra según {@link RowSelectionState.mode}. */
   keys: readonly RowKey[]
+}
+
+/**
+ * Cómo se dibuja la columna de casillas, si no alcanza con la de fábrica.
+ *
+ * Es un subconjunto de {@link DataTableColumn} a propósito: lo que se puede
+ * cambiar es el ASPECTO, no la identidad ni el comportamiento. La clave, el
+ * puente con el estado de selección y las banderas que la vuelven una columna
+ * quieta —no se ordena, no se mueve, no se esconde— se reponen después de la
+ * mezcla: dejarlas abiertas permitiría que el usuario terminara sin forma de
+ * marcar una fila.
+ *
+ * El campo que casi siempre se quiere es `renderer`, para poner la casilla
+ * propia. Recibe el contexto de siempre y saca de `ctx.value` si esa fila está
+ * marcada.
+ */
+export interface SelectionColumnOptions<TRow> {
+  /** Ancho en px. Por defecto 44. */
+  width?: number
+  /** Título del encabezado. Vacío por defecto: ahí va la tricasilla. */
+  header?: string
+  /** A qué borde se ancla, o `null` para que scrollee con las demás. */
+  pinned?: ColumnPin | null
+  /** Alineación del contenido. Centrada por defecto. */
+  align?: CellAlign
+  /** Clase extra en cada celda. */
+  cellClass?: string
+  /**
+   * El renderer de la casilla. Por nombre registrado o instancia.
+   *
+   * `ctx.value` llega como `true` o `false`: si ESA fila está marcada, ya
+   * resuelto contra los dos modos del estado. No hace falta leer `selectedRows`.
+   */
+  renderer?: string | CellRenderer<TRow>
 }
 
 /** Payload de `rowSelectionChange`. Llega DESPUÉS de aplicar el cambio. */

@@ -561,24 +561,62 @@ const rowNumberWidth = computed(() => {
  * esconde. Dejar cualquiera de esas encendidas permitiría que el usuario se
  * quede sin forma de marcar una fila.
  */
+/**
+ * El índice que NO tiene un `accessor`.
+ *
+ * `accessor` recibe la fila y nada más, así que un `rowKey` en forma de función
+ * no puede recibir acá su segundo parámetro. No es una limitación en la
+ * práctica: un `rowKey` cuyo resultado dependa del índice está diciendo que la
+ * identidad de una fila es su POSICIÓN, que es exactamente el bug que esta
+ * función existe para evitar. Con él, marcar filas no puede funcionar de ninguna
+ * forma: filtrar corre las posiciones y la selección queda sobre otras filas.
+ *
+ * El pintado no depende de esto: el renderer recibe el índice de verdad por
+ * `ctx.rowIndex` y pregunta por `SELECTION_HOOKS`. Esto solo alimenta
+ * `ctx.value`, que es la comodidad que se le da a un renderer propio.
+ */
+const ACCESSOR_HAS_NO_ROW_INDEX = -1
+
 const selectionColumnDef = computed<DataTableColumn<TRow> | null>(() => {
-  if (!props.selectionColumn) return null
+  const pedido = props.selectionColumn
+  if (!pedido) return null
+  const encargo = typeof pedido === 'object' ? pedido : {}
+
+  const isSelected = (row: TRow, rowIndex: number): boolean =>
+    isRowSelectedIn(selectedRowsState.value, listedRowKeys.value, rowKeyOf(row, rowIndex))
+
   return {
-    key: SELECTION_COLUMN_KEY,
     header: '',
     width: SELECTION_COLUMN_WIDTH,
     renderer: 'selection',
     align: 'center',
     pinned: 'start',
+    // Lo que el consumidor quiera cambiar va ENTRE el aspecto de fábrica y los
+    // invariantes de abajo: puede poner su propia casilla, no puede dejarse sin
+    // forma de marcar una fila.
+    ...encargo,
+    key: SELECTION_COLUMN_KEY,
     resizable: false,
     reorderable: false,
     sortable: false,
     pinnable: false,
     hideable: false,
-    [SELECTION_HOOKS]: {
-      isSelected: (row: TRow, rowIndex: number) =>
-        isRowSelectedIn(selectedRowsState.value, listedRowKeys.value, rowKeyOf(row, rowIndex)),
-    },
+    // Sin menú. Lo que ofrece —ordenar, anclar, esconder— no aplica a esta
+    // columna, y lo único que quedaba era "restablecer columnas", que no tiene
+    // nada que ver con marcar filas y aparecía justo donde el usuario apunta
+    // para seleccionar.
+    menu: false,
+    /*
+     * El valor de la celda ES si la fila está marcada.
+     *
+     * No sale de la fila —no hay ningún campo que lo diga— sino del estado, y
+     * ponerlo acá tiene dos efectos que importan: un renderer propio lo recibe
+     * en `ctx.value` sin tener que conocer los dos modos del conjunto, y el
+     * caché del pool vuelve a servir para algo, porque ahora el valor crudo de
+     * la celda cambia cuando cambia la marca.
+     */
+    accessor: (row: TRow) => isSelected(row, ACCESSOR_HAS_NO_ROW_INDEX),
+    [SELECTION_HOOKS]: { isSelected },
   } as DataTableColumn<TRow>
 })
 
@@ -594,11 +632,28 @@ const columnsWithSelection = computed<readonly DataTableColumn<TRow>[]>(() => {
   return propia ? [propia, ...props.columns] : props.columns
 })
 
+/**
+ * El orden que ve el layout, con la casilla siempre adelante.
+ *
+ * Un orden guardado no conoce la clave de la columna de selección —no existía
+ * cuando se guardó— y la reconciliación agrega al final lo que no reconoce. El
+ * resultado era que la casilla apareciera DESPUÉS de la primera columna anclada,
+ * que es justo donde nadie la busca.
+ *
+ * Forzarla adelante no le quita control a nadie: esa columna no se reordena, así
+ * que su posición nunca fue una preferencia del usuario que haya que respetar.
+ */
+const effectiveColumnOrder = computed<readonly string[]>(() => {
+  const guardado = columnOrder.value
+  if (!props.selectionColumn || guardado.length === 0) return guardado
+  return [SELECTION_COLUMN_KEY, ...guardado.filter((key) => key !== SELECTION_COLUMN_KEY)]
+})
+
 const layout = useColumnLayout<TRow>({
   columns: () => columnsWithSelection.value,
   defaultColumnWidth: () => props.defaultColumnWidth,
   visibility: columnVisibility,
-  order: columnOrder,
+  order: effectiveColumnOrder,
   widths: columnWidths,
   pinning: columnPinning,
   leadingOffset: () => rowNumberWidth.value,

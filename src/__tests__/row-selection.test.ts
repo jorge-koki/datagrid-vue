@@ -181,6 +181,31 @@ describe('marcar filas — la columna que pone la tabla', () => {
     harness.unmount()
   })
 
+  it('encabeza aunque el orden guardado no la conozca', async () => {
+    // El caso real: un layout guardado antes de que existiera la columna. La
+    // reconciliación agrega al final lo que no reconoce, y la casilla terminaba
+    // DESPUÉS de la primera columna anclada, que es donde nadie la busca.
+    const harness = await mountTable({
+      viewport: { width: 700, height: 400 },
+      props: {
+        rows: makeRows(6),
+        columns: COLUMNS,
+        rowKey: 'id',
+        selectionColumn: true,
+        columnOrder: ['name', 'id'],
+      },
+    })
+
+    const claves = [...harness.wrapper.element.querySelectorAll('.dt-header-cell')].map((h) =>
+      h.getAttribute('data-column-key'),
+    )
+    expect(claves[0]).toBe(SELECTION_COLUMN_KEY)
+    // Y el orden que sí pidió el consumidor se respeta detrás.
+    expect(claves.slice(1)).toEqual(['name', 'id'])
+
+    harness.unmount()
+  })
+
   it('no está cuando no se pide', async () => {
     const harness = await mountTable({
       viewport: { width: 700, height: 400 },
@@ -188,6 +213,82 @@ describe('marcar filas — la columna que pone la tabla', () => {
     })
 
     expect(harness.canvas.querySelector('.dt-selection-checkbox')).toBeNull()
+
+    harness.unmount()
+  })
+})
+
+describe('marcar filas — la casilla se puede reemplazar', () => {
+  it('acepta un renderer propio y le pasa si la fila está marcada', async () => {
+    const vistos: unknown[] = []
+    const harness = await mountTable({
+      viewport: { width: 700, height: 400 },
+      props: {
+        rows: makeRows(6),
+        columns: COLUMNS,
+        rowKey: 'id',
+        selectedRows: { mode: 'some', keys: [2] },
+        selectionColumn: {
+          width: 60,
+          renderer: {
+            type: 'casilla-propia',
+            create: (cell: HTMLElement) => ({ root: cell }),
+            update: (_handle: unknown, ctx: { value: unknown }) => {
+              vistos.push(ctx.value)
+            },
+          },
+        },
+      } as never,
+    })
+
+    // `ctx.value` llega ya resuelto contra los dos modos del estado: un renderer
+    // propio no tiene que conocer la forma del conjunto para dibujarse.
+    expect(vistos.length).toBeGreaterThan(0)
+    expect(vistos.filter((valor) => valor === true)).toHaveLength(1)
+    expect(vistos.filter((valor) => valor === false).length).toBeGreaterThan(0)
+
+    harness.unmount()
+  })
+
+  it('no deja pisar lo que la hace funcionar', async () => {
+    const harness = await mountTable({
+      viewport: { width: 700, height: 400 },
+      props: {
+        rows: makeRows(6),
+        columns: COLUMNS,
+        rowKey: 'id',
+        // Todo esto se ignora: con la columna ordenable, movible o escondible el
+        // usuario podría quedarse sin forma de marcar una fila.
+        selectionColumn: { sortable: true, hideable: true, reorderable: true, key: 'otra' },
+      } as never,
+    })
+
+    const suyo = [...harness.wrapper.element.querySelectorAll('.dt-header-cell')][0]
+    expect(suyo?.getAttribute('data-column-key')).toBe(SELECTION_COLUMN_KEY)
+    expect(suyo?.classList.contains('dt-header-cell--sortable')).toBe(false)
+
+    harness.unmount()
+  })
+
+  it('no lleva menú de columna', async () => {
+    const harness = await mountTable({
+      viewport: { width: 700, height: 400 },
+      props: {
+        rows: makeRows(6),
+        columns: COLUMNS,
+        rowKey: 'id',
+        selectionColumn: true,
+        columnMenu: true,
+      },
+    })
+
+    const encabezados = [...harness.wrapper.element.querySelectorAll('.dt-header-cell')]
+    // El menú ofrece ordenar, anclar y esconder, que no aplican acá. Lo único que
+    // quedaba era "restablecer columnas", justo donde el usuario apunta para
+    // marcar una fila.
+    expect(encabezados[0]?.querySelector('.dt-menu-button')).toBeNull()
+    // Y las demás lo conservan.
+    expect(encabezados[1]?.querySelector('.dt-menu-button')).not.toBeNull()
 
     harness.unmount()
   })

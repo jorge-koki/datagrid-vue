@@ -2738,6 +2738,25 @@ isRowSelected(seleccionadas, fila.id) // ¿esta fila está marcada?
 countSelectedRows(seleccionadas, total) // cuántas hay, contra el dataset entero
 ```
 
+#### Poner tu propia casilla
+
+Con un objeto en lugar de `true` se cambia cómo se ve, sin poder romper lo que la hace funcionar:
+
+```vue
+<DataTable
+  :selection-column="{ width: 56, renderer: miCasilla }"
+  v-model:selected-rows="seleccionadas"
+/>
+```
+
+El renderer recibe en `ctx.value` si ESA fila está marcada —`true` o `false`, ya resuelto contra los
+dos modos—, así que no tiene que conocer la forma del conjunto. Se puede cambiar `width`, `header`,
+`pinned`, `align`, `cellClass` y `renderer`.
+
+Lo que **no** se puede pisar es la clave de la columna ni las banderas que la vuelven una columna
+quieta: no se ordena, no se mueve, no se esconde y no lleva menú. Dejarlas abiertas permitiría que el
+usuario terminara sin forma de marcar una fila.
+
 #### Si no tienes un identificador
 
 `rowKey` es opcional. Sin declararlo, la tabla le cuelga a cada fila una identidad atada a la

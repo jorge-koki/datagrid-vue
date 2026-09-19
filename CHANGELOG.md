@@ -40,6 +40,10 @@ editando con el teclado en modo fila, y con la mayor en `0` eso sube la minor. T
     en modo servidor, de las cuales la tabla conoce las 50 que cargó, y el usuario presiona la
     casilla del encabezado. No hay 9000 claves que enumerar. Con el conjunto invertido, una fila que
     todavía no se descargó ya está marcada, y al llegar aparece marcada sola.
+  - La casilla se reemplaza pasando un objeto en lugar de `true`: `renderer`, `width`, `header`,
+    `pinned`, `align` y `cellClass`. El renderer propio recibe en `ctx.value` si esa fila está
+    marcada, ya resuelto contra los dos modos. La clave y las banderas que la vuelven una columna
+    quieta —no se ordena, no se mueve, no se esconde, no lleva menú— no se pueden pisar.
   - Para leerlo se exportan `isRowSelected` y `countSelectedRows`, que saben invertir la pregunta
     según el modo. Preguntar `keys.includes(...)` a mano da la respuesta al revés justo en ese caso.
 - **`rowKey` pasa a ser opcional.** Sin declararlo, la tabla le cuelga a cada fila una identidad
