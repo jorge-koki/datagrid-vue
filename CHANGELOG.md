@@ -7,7 +7,12 @@ Mientras la versión mayor sea `0`, un cambio incompatible sube la **minor**. La
 como pública es exactamente la que exporta [`src/index.ts`](./src/index.ts): lo que está bajo
 `internal/` y los composables pueden cambiar en cualquier versión sin aviso.
 
-## [0.2.1] — 2026-09-18
+## [0.3.0] — 2026-09-18
+
+Sube la **minor** y no el parche por una sola línea de esta lista: en `selectionMode: 'row'`,
+`Enter` y `F2` dejaron de abrir el editor. Es un cambio incompatible para quien tuviera usuarios
+editando con el teclado en modo fila, y con la mayor en `0` eso sube la minor. También cambian ahí
+`Ctrl`+`C`, `Home`, `End` y `Tab`.
 
 ### Documentación
 
@@ -15,6 +20,9 @@ como pública es exactamente la que exporta [`src/index.ts`](./src/index.ts): lo
   el registro sino una palabra: `planilla`, que en México significa nómina o lista de candidatos y no
   hoja de cálculo. Además se fue el voseo, `acá` pasó a `aquí` y `apretar` a `presionar` o `hacer
   clic` —salvo donde de verdad significaba estrujar—.
+- Un segundo barrido de voseo, hecho por FORMA y no contra una lista de verbos, encontró cinco
+  imperativos más que la primera pasada no conocía. Uno de ellos salía por `console.warn` a quien usara
+  modo servidor con `groupBy`.
 
 ### Agregado
 
