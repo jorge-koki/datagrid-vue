@@ -7,6 +7,15 @@ Mientras la versión mayor sea `0`, un cambio incompatible sube la **minor**. La
 como pública es exactamente la que exporta [`src/index.ts`](./src/index.ts): lo que está bajo
 `internal/` y los composables pueden cambiar en cualquier versión sin aviso.
 
+## [0.3.2] — 2026-09-19
+
+### Corregido
+
+- **`emptyText` vacío ya no deja una franja.** La caja del mensaje dibuja una línea arriba y reserva
+  2rem de aire a cada lado, y eso se pintaba igual con la cadena vacía: quedaba una franja de 4rem
+  cruzada por un separador que no separaba nada. Ahora "sin texto" significa "sin elemento". Un
+  texto de puros espacios cuenta como vacío, porque no se ve y de todas formas arrastraría la caja.
+
 ## [0.3.1] — 2026-09-19
 
 Sube el PARCHE y no la minor porque solo agrega: `loading` es una prop nueva y nada de lo que

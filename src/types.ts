@@ -1149,7 +1149,17 @@ export interface DataTableProps<TRow> {
    * llegó ya se pinta como esqueleto ella sola.
    */
   loading?: boolean
-  /** Mensaje mostrado cuando `rows` está vacío. */
+  /**
+   * Mensaje mostrado cuando `rows` está vacío. Por defecto `'No data'`.
+   *
+   * Con la cadena VACÍA no se dibuja nada: ni el texto ni la caja que lo
+   * contiene, que trae una línea arriba y 2rem de aire a cada lado. "Sin texto"
+   * significa "sin mensaje", no "un mensaje en blanco".
+   *
+   * El valor de fábrica está en inglés por lo mismo que {@link DataTableLabels}:
+   * es el idioma con el que una librería de npm llega a cualquiera. Cambiarlo es
+   * pasarle el texto que corresponda.
+   */
   emptyText?: string
   /** Fondo alternado para las filas impares. */
   stripe?: boolean

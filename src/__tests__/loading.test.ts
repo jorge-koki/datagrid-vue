@@ -110,6 +110,36 @@ describe('loading — la reconsulta, con datos viejos todavía en `rows`', () =>
   })
 })
 
+describe('la tabla vacía — sin texto, sin caja', () => {
+  it('con `emptyText` vacío no dibuja NADA', async () => {
+    const harness = await mountWith({ rows: [], emptyText: '' })
+
+    // El elemento entero, no solo su texto. `.dt-empty` dibuja una línea arriba y
+    // reserva 2rem de aire a cada lado: con la cadena vacía quedaba una franja de
+    // 4rem cruzada por un separador que no separa nada.
+    expect(harness.wrapper.element.querySelector('.dt-empty')).toBeNull()
+
+    harness.unmount()
+  })
+
+  it('un texto de puros espacios cuenta como vacío', async () => {
+    const harness = await mountWith({ rows: [], emptyText: '   ' })
+
+    // No se ve, y de todas formas arrastraría la caja.
+    expect(harness.wrapper.element.querySelector('.dt-empty')).toBeNull()
+
+    harness.unmount()
+  })
+
+  it('con texto, ahí sí aparece', async () => {
+    const harness = await mountWith({ rows: [], emptyText: 'Sin resultados' })
+
+    expect(harness.wrapper.element.querySelector('.dt-empty')?.textContent).toBe('Sin resultados')
+
+    harness.unmount()
+  })
+})
+
 describe('loading — lo que no cambia', () => {
   it('viene apagado', async () => {
     const harness = await mountWith({ rows: rows(10) })

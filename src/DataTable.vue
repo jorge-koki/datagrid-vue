@@ -1060,6 +1060,18 @@ function onHeaderSelectionToggle(): void {
   setRowSelection(setAllRowsSelected(marcarTodas), marcarTodas ? 'all' : 'none', null, null)
 }
 
+/**
+ * ¿Se muestra el mensaje de tabla vacía?
+ *
+ * Tres condiciones, y cada una descarta un estado que NO es "no hay datos":
+ * que haya filas, que se esté esperando —ver `loading`— y que el consumidor
+ * tenga algo que decir. El último se mide con la cadena ya recortada, porque un
+ * texto de puros espacios no se ve y de todas formas arrastraría la caja.
+ */
+const showEmptyMessage = computed(
+  () => props.rows.length === 0 && !props.loading && props.emptyText.trim().length > 0,
+)
+
 /** Valor actual de una celda, para poder alternarlo desde el teclado. */
 function readCurrentValue(position: CellPosition): CellValue {
   const row = grouping.rowAt(position.rowIndex)
@@ -3817,7 +3829,14 @@ function headerAlignClass(column: ResolvedColumn<TRow>): string | undefined {
       calla: decir "no hay resultados" sobre una consulta que todavía no respondió
       es afirmar algo que nadie sabe.
     -->
-    <div v-if="rows.length === 0 && !loading" class="dt-empty">{{ emptyText }}</div>
+    <!--
+      Sin texto no hay elemento, y no solo un elemento sin texto.
+      `.dt-empty` dibuja una línea arriba y reserva 2rem de aire a cada lado: con
+      la cadena vacía eso dejaba una franja de 4rem cruzada por un separador que
+      no separa nada de nada. `emptyText=""` es la forma de decir "no muestres
+      nada", y eso tiene que incluir lo que dibuja la caja.
+    -->
+    <div v-if="showEmptyMessage" class="dt-empty">{{ emptyText }}</div>
 
     <!--
       Línea de caída: dónde va a quedar la columna que se está arrastrando.

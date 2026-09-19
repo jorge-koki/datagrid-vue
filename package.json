@@ -1,6 +1,6 @@
 {
   "name": "vue-tablekit",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "High-performance virtualized data grid for Vue 3, with DOM node recycling, cell editing, custom renderers and persistent column layout.",
   "license": "MIT",
   "author": "jorge-koki",
