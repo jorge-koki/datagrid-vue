@@ -5,6 +5,13 @@ ponerse lenta. Sin dependencias: solo Vue.
 
 **→ [Probala en vivo](https://jorge-koki.github.io/vue-tablekit/)**
 
+<!--
+  URL absoluta y no relativa: el README se renderiza también en npm, fuera del
+  repositorio, y ahí una ruta relativa no resuelve. La imagen vive en `docs/`,
+  que no entra en el tarball, así que no le suma bytes a quien instala.
+-->
+![La tabla con una selección de bloque, columnas ancladas, píldoras de estado y anillos de progreso, junto a los controles y los contadores en vivo de la demo](https://raw.githubusercontent.com/jorge-koki/vue-tablekit/main/docs/vue-tablekit.png)
+
 ```sh
 npm install vue-tablekit
 ```
