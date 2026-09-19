@@ -39,8 +39,12 @@ const columnas: DataTableColumn<Empleado>[] = [
 - Navegación por teclado completa y **selección de bloques** que se copian con `Ctrl`+`C` y se pegan
   en Excel.
 - **Edición en línea** cancelable. La tabla nunca escribe en tus datos.
+- **Ordenamiento** por una o varias columnas. La tabla lleva el estado y vos ordenás —o le preguntás
+  al servidor—, que es lo que hace que funcione igual con mil filas que con un millón.
 - **Agrupación multinivel** con totales, promedios, conteos, mínimos y máximos.
-- **Columnas anclables, redimensionables, ocultables y reordenables**, con el layout guardado.
+- **Columnas anclables, redimensionables, ocultables y reordenables**, con el layout guardado y un
+  menú propio en cada encabezado si lo querés.
+- **Alturas de fila distintas**, decididas por vos fila por fila.
 - **Datos del servidor**: pide los tramos que le faltan mientras scrolleás.
 - **Ocho tipos de celda**, temas claro / oscuro, y el color principal en una línea:
   `.dt-root { --dt-primary: #8b5cf6 }`.
