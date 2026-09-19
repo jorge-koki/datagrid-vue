@@ -414,7 +414,7 @@ const effectiveGroupBy = computed<readonly string[]>(() => {
     console.warn(
       '[DataTable] `groupBy` se ignora porque la tabla está en modo servidor ' +
         '(`rowCount` declarado): no se puede agrupar un dataset que no está cargado ' +
-        'entero. Agrupá del lado del servidor y mandá las filas ya ordenadas.',
+        'entero. Agrupa del lado del servidor y manda las filas ya ordenadas.',
     )
   }
   // Una constante y no un `[]` nuevo: este computed se lee en cada

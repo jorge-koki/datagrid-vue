@@ -61,7 +61,7 @@ import { readCellValue } from '../internal/values'
  *
  * Con la lista vacía, {@link UseRowGroupingReturn.flatRows} vale `null` y no se
  * construye ni un objeto por fila. `null` no es "todavía no está": es la
- * respuesta, y significa "indexá `rows` directo". El camino sin agrupación no
+ * respuesta, y significa "indexa `rows` directo". El camino sin agrupación no
  * paga ni una asignación por esta función.
  */
 

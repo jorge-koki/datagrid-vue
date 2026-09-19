@@ -148,7 +148,7 @@ function short(value: unknown): string {
 export function recordDomWrites(root: Element): DomWriteRecorder {
   if (active) {
     throw new Error(
-      '[dom-recorder] ya hay una grabadora activa; llamá a stop() antes de abrir otra',
+      '[dom-recorder] ya hay una grabadora activa; llama a stop() antes de abrir otra',
     )
   }
   active = true

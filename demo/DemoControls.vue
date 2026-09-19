@@ -153,7 +153,7 @@ const columnVisibility = defineModel<ColumnVisibilityState>('columnVisibility', 
         llegaría en el mismo tick del pedido y no habría nada que mirar.
       -->
       <p v-if="dataSource === 'server'" class="demo-field-note">
-        Se piden <strong>50 filas</strong> por vez, con {{ SERVER_LATENCY }}ms de demora. Scrolleá
+        Se piden <strong>50 filas</strong> por vez, con {{ SERVER_LATENCY }}ms de demora. Scrollea
         rápido para ver los marcadores, y mira la bitácora.
       </p>
     </fieldset>
@@ -298,7 +298,11 @@ const columnVisibility = defineModel<ColumnVisibilityState>('columnVisibility', 
 
       <p v-if="crosshair" class="demo-field-note">
         Una línea bajo el encabezado de la columna y otra al costado del número de fila. Marca una
-        celda y scrolleá lejos: las dos siguen a la vista.
+        celda y scrollea lejos: las dos siguen a la vista.
+        <template v-if="selectionMode === 'row'">
+          En modo fila solo ves la horizontal: ahí lo elegido es la fila entera y no hay ninguna
+          columna que marcar.
+        </template>
       </p>
     </fieldset>
 

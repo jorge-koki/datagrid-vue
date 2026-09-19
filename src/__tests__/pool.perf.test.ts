@@ -165,7 +165,7 @@ describe('node recycling — scrolling reuses nodes instead of replacing them', 
  * Si estos números fallan hacia arriba, lo más probable es que alguien haya roto
  * la rotación —volviendo al mapeo `rowRange.start + slot`— y el costo haya vuelto
  * a ser proporcional a la ventana. Si fallan hacia abajo puede ser una mejora
- * real: verificá que el contenido siga siendo correcto antes de bajar la
+ * real: verifica que el contenido siga siendo correcto antes de bajar la
  * constante.
  */
 const ENTERING_ROW_WRITES = 6

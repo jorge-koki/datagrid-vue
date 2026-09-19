@@ -421,7 +421,7 @@ repositorio está todo cableado a la vez sobre un dataset de hasta 50.000 filas.
 | `rowHeight`             | `number \| RowHeightResolver<TRow>`                              | `40` / `30` con `dense`       | Altura de fila en px, igual para todas o resuelta fila por fila. Es un número y no un valor CSS porque el virtualizador hace cuentas con él. El valor fijo se replica en `--dt-row-height`. Ver [Alturas de fila distintas](#alturas-de-fila-distintas). |
 | `headerHeight`          | `number`                                                         | `44` / `34` con `dense`       | Altura del header en px. Se replica en `--dt-header-height`.                                                                                                                                                                                             |
 | `dense`                 | `boolean`                                                        | `false`                       | Preset compacto: filas más bajas, tipografía menor, padding más ajustado.                                                                                                                                                                                |
-| `crosshair`             | `boolean`                                                        | `false`                       | Una línea bajo el encabezado de la columna activa y otra al costado de su número de fila. Ver [La cruz de la celda activa](#la-cruz-de-la-celda-activa).                                                                                                 |
+| `crosshair`             | `boolean`                                                        | `false`                       | Una línea bajo el encabezado de la columna activa y otra al costado de su número de fila. En `selectionMode: 'row'` solo la segunda. Ver [La cruz de la celda activa](#la-cruz-de-la-celda-activa).                                                      |
 | `overscan`              | `number`                                                         | `4`                           | Filas y columnas extra pintadas fuera de la ventana visible. Más alto cuesta tiempo de pintado y oculta bordes en blanco durante el scroll rápido.                                                                                                       |
 | `defaultColumnWidth`    | `number`                                                         | `150`                         | Ancho en px para las columnas que no declaran el suyo.                                                                                                                                                                                                   |
 | `virtualizeColumns`     | `boolean`                                                        | `true`                        | Pinta solo las columnas visibles en horizontal. Conviene apagarlo en tablas angostas donde la fila entera entra: ahí el cálculo de ventana es overhead puro.                                                                                             |
@@ -2759,7 +2759,7 @@ La selección no introduce ningún token nuevo: se dibuja enteramente con `--dt-
 | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `.dt-cell--active`                 | La celda activa. `box-shadow: inset 0 0 0 var(--dt-selection-width) var(--dt-primary)` más `z-index: 1`.                                                                                          |
 | `.dt-row--active`                  | La fila que contiene la celda activa, en **los dos** modos. Pone `--dt-row-bg` en `--dt-bg-accented`; quien lo pinta es la regleta y las celdas ancladas. También aplica a una cabecera de grupo. |
-| `.dt-header-cell--active`          | El header de la columna activa. Fondo acentuado. La línea de color la agrega `crosshair`.                                                                                                         |
+| `.dt-header-cell--active`          | El header de la columna activa. Fondo acentuado. La línea de color la agrega `crosshair`. **No se aplica en modo fila**, donde la columna no es parte de lo elegido.                              |
 | `.dt-row-number--active`           | El número de la fila activa. Fondo acentuado y negrita. La línea de color la agrega `crosshair`.                                                                                                  |
 | `[data-crosshair]` en `.dt-root`   | Replica `crosshair` (`'true'` / `'false'`). Es de lo único que cuelgan las dos líneas.                                                                                                            |
 | `[data-selection]` en `.dt-root`   | Replica `selectionMode` (`none` / `cell` / `row`). En modo `'row'` ninguna celda se marca: quien señala la fila activa es su número en la regleta.                                                |
@@ -2839,6 +2839,12 @@ En una tabla que entra entera no agregan nada sobre el anillo de la celda, y de 
 
 `crosshair: false` no deja ninguna de las dos. Lo que no toca es el **fondo acentuado** del
 encabezado y del número, que va siempre: apagar la cruz apaga las líneas, no la referencia.
+
+**En `selectionMode: 'row'` la cruz se reduce a su línea horizontal**, la del número de fila. No es
+una limitación: ahí lo elegido es la fila entera y no hay ninguna columna que marcar —ver
+[Qué cambia en modo fila](#qué-cambia-en-modo-fila)—. Una línea bajo un encabezado apuntaría a una
+columna que el usuario no eligió, no puede mover y no ve marcada en ningún otro lado. El fondo
+acentuado del encabezado se va por la misma razón; el del número de fila se queda.
 
 El grosor sale de `--dt-crosshair-width`, que son `2px` y **no** comparte token con
 `--dt-selection-width`. No es un descuido: el contorno de la selección tiene que confundirse con las

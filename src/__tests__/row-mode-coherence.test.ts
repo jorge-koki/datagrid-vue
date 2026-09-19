@@ -88,6 +88,51 @@ describe('modo fila — el encabezado no marca ninguna columna', () => {
   })
 })
 
+describe('modo fila — la cruz se reduce a su línea horizontal', () => {
+  it('marca la fila y ninguna columna', async () => {
+    const harness = await mountTable({
+      viewport: { width: 700, height: 400 },
+      props: {
+        rows: rows(30),
+        columns: COLUMNS,
+        rowKey: 'id',
+        selectionMode: 'row',
+        crosshair: true,
+        showRowNumbers: true,
+      },
+    })
+    await harness.clickCell(3, 'name')
+
+    // No es media función: es que en modo fila no hay columna que marcar. Una
+    // línea bajo un encabezado apuntaría a una columna que el usuario no eligió,
+    // no puede mover y no ve marcada en ningún otro lado.
+    expect(harness.grid.querySelectorAll('.dt-header-cell--active')).toHaveLength(0)
+    expect(harness.grid.querySelectorAll('.dt-row-number--active')).toHaveLength(1)
+
+    harness.unmount()
+  })
+
+  it('en modo celda marca las dos, que ahí sí se cruzan en algo', async () => {
+    const harness = await mountTable({
+      viewport: { width: 700, height: 400 },
+      props: {
+        rows: rows(30),
+        columns: COLUMNS,
+        rowKey: 'id',
+        selectionMode: 'cell',
+        crosshair: true,
+        showRowNumbers: true,
+      },
+    })
+    await harness.clickCell(3, 'name')
+
+    expect(harness.grid.querySelectorAll('.dt-header-cell--active')).toHaveLength(1)
+    expect(harness.grid.querySelectorAll('.dt-row-number--active')).toHaveLength(1)
+
+    harness.unmount()
+  })
+})
+
 describe('modo fila — ninguna tecla corre un cursor invisible', () => {
   it('las flechas horizontales no mueven la columna', async () => {
     const harness = await mountWith('row')
