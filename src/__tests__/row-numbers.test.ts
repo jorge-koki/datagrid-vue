@@ -27,6 +27,7 @@ import { describe, expect, it } from 'vitest'
 import { countMatching, measureDomWrites } from './dom-recorder'
 import { createPoolFixture, makeRows as makeDemoRows, mountTable, resolveColumns } from './harness'
 import type { TableHarness, TableProps } from './harness'
+import { ROW_NUMBER_MAX_WIDTH, ROW_NUMBER_MIN_WIDTH } from '../internal/constants'
 
 type Row = { id: number; name: string; amount: number }
 
@@ -43,7 +44,15 @@ const COLUMN_WIDTH = 120
  * fallar y obligar a mirar qué pasó con el layout, no acompañar el cambio en
  * silencio.
  */
-const GUTTER = ROW_HEIGHT
+/*
+ * El ancho de la regleta cuando el número entra holgado.
+ *
+ * Sale de las constantes y no de un número escrito a mano, porque lo que se
+ * afirma es la INTENCIÓN: la regleta tiende al cuadrado de la fila pero acotada,
+ * para no gastar 40px de margen en mostrar dos dígitos. Con el ancho a mano,
+ * mover el techo de la banda rompía cinco pruebas que no tenían nada que ver.
+ */
+const GUTTER = Math.min(ROW_NUMBER_MAX_WIDTH, Math.max(ROW_NUMBER_MIN_WIDTH, ROW_HEIGHT))
 
 function makeRows(count: number): Row[] {
   const rows: Row[] = []
@@ -227,14 +236,16 @@ describe('row numbers — the space they reserve', () => {
     harness.unmount()
   })
 
-  it('stays square while the number fits', async () => {
+  it('keeps one width while the number fits', async () => {
     const few = await mountNumbered({}, 9)
     const hundreds = await mountNumbered({}, 100)
 
-    // Uno y tres dígitos entran igual en el cuadrado: la regleta no se ensancha
-    // por tener más filas, sino por no poder mostrar el número.
-    expect(few.grid.style.getPropertyValue('--dt-row-number-width')).toBe(`${ROW_HEIGHT}px`)
-    expect(hundreds.grid.style.getPropertyValue('--dt-row-number-width')).toBe(`${ROW_HEIGHT}px`)
+    // Uno y tres dígitos dan el mismo ancho: la regleta no se ensancha por tener
+    // más filas, sino por no poder mostrar el número. Y ese ancho está acotado
+    // por arriba, así que no sigue a la altura de fila hasta robarle a los datos.
+    expect(few.grid.style.getPropertyValue('--dt-row-number-width')).toBe(`${GUTTER}px`)
+    expect(hundreds.grid.style.getPropertyValue('--dt-row-number-width')).toBe(`${GUTTER}px`)
+    expect(GUTTER).toBeLessThan(ROW_HEIGHT)
     few.unmount()
     hundreds.unmount()
   })
@@ -242,10 +253,11 @@ describe('row numbers — the space they reserve', () => {
   it('grows only when the number does not fit', async () => {
     const many = await mountNumbered({}, 100_000)
 
-    // Seis dígitos no entran en 40px, y recortarlos sería peor que ensanchar: la
-    // regleta existe justamente para leer el número.
+    // Seis dígitos no entran en el ancho acotado, y recortarlos sería peor que
+    // ensanchar: la regleta existe justamente para leer el número. Primero es
+    // legible y después es angosta.
     const width = Number.parseInt(many.grid.style.getPropertyValue('--dt-row-number-width'), 10)
-    expect(width).toBeGreaterThan(ROW_HEIGHT)
+    expect(width).toBeGreaterThan(GUTTER)
     many.unmount()
   })
 })

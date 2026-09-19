@@ -431,6 +431,8 @@ repositorio está todo cableado a la vez sobre un dataset de hasta 50.000 filas.
 | `showRowNumbers`        | `boolean`                                                        | `true`                        | Regleta de numeración fija a la izquierda. **No es una columna.** Ver [La regleta de numeración](#la-regleta-de-numeración).                                                                                                                             |
 | `columnReorder`         | `boolean`                                                        | `true`                        | Mover columnas arrastrando el encabezado. Escribe `columnOrder`. Ver [Mover columnas](#mover-columnas-arrastrando).                                                                                                                                      |
 | `columnSelection`       | `boolean`                                                        | `false`                       | Clic en un encabezado para seleccionar la columna entera. Produce un rango. Ver [Seleccionar en bloque](#seleccionar-una-columna-o-una-fila-entera).                                                                                                     |
+| `selectionColumn`       | `boolean`                                                        | `false`                       | Columna de casillas al inicio, con tricasilla en el encabezado. Lo marcado vive en `selectedRows`. Ver [Marcar filas con casillas](#marcar-filas-con-casillas).                                                                                          |
+| `selectedRows`          | `RowSelectionState`                                              | —                             | Las filas marcadas, por clave. `v-model:selected-rows`. Ver [Marcar filas con casillas](#marcar-filas-con-casillas).                                                                                                                                     |
 | `rowSelection`          | `boolean`                                                        | `false`                       | Clic en el número de una fila para seleccionarla entera. No confundir con `selectionMode: 'row'`. Ver [Seleccionar en bloque](#seleccionar-una-columna-o-una-fila-entera).                                                                               |
 | `emptyText`             | `string`                                                         | `'No data'`                   | Mensaje que se muestra cuando `rows` está vacío.                                                                                                                                                                                                         |
 | `sort`                  | `SortState`                                                      | _no controlado_               | `v-model:sort`. Criterios de orden vigentes. **La tabla no ordena `rows`**: administra el estado y lo anuncia. Ver [Ordenamiento](#ordenamiento).                                                                                                        |
@@ -2692,6 +2694,65 @@ que decidir quién gana en cada cruce.
 La única vertical que sobrevive a `'rows'` es el corte del bloque anclado. No es decoración: dice
 dónde termina lo que está fijo y empieza lo que scrollea, y sin él las dos partes se verían iguales
 hasta que alguien scrollee.
+
+### Marcar filas con casillas
+
+`selectionColumn` enciende una columna de casillas al inicio, con la tricasilla en el encabezado. La
+pone la tabla: no se declara en `columns` ni hay que reservarle ancho.
+
+```vue
+<DataTable
+  :rows="rows"
+  :columns="columns"
+  row-key="id"
+  selection-column
+  v-model:selected-rows="seleccionadas"
+/>
+```
+
+Lo marcado se guarda **por clave de fila y nunca por posición**, y esa es toda la idea. Si se
+guardara por índice, filtrar la tabla dejaría la marca sobre otra fila: la que estaba en la posición
+1 deja de estarlo en cuanto cambia el conjunto. Con claves, filtrar y desfiltrar no le hace nada a la
+selección; lo que vuelve a aparecer vuelve marcado.
+
+#### Los dos modos, y por qué hay dos
+
+| `mode`   | Qué es `keys`     | Cuándo                                       |
+| -------- | ----------------- | -------------------------------------------- |
+| `'some'` | Las marcadas      | Lo de siempre.                               |
+| `'all'`  | Las **excluidas** | Después de marcar la casilla del encabezado. |
+
+El segundo existe por un caso que no se puede resolver de otra forma: 9000 filas en modo servidor, de
+las cuales la tabla conoce las 50 que descargó, y el usuario presiona la casilla del encabezado. No
+hay 9000 claves que enumerar. Invertido, la respuesta es "todas menos estas", que se traduce a un
+`WHERE ... NOT IN` sin traerse el dataset entero —y una fila que todavía no llegó aparece marcada
+sola cuando llega—.
+
+Por eso **no se lee con `keys.includes(...)`**: en `'all'` esa pregunta da la respuesta al revés.
+Para eso se exportan dos ayudantes que ya saben invertirla:
+
+```ts
+import { countSelectedRows, isRowSelected } from 'vue-tablekit'
+
+isRowSelected(seleccionadas, fila.id) // ¿esta fila está marcada?
+countSelectedRows(seleccionadas, total) // cuántas hay, contra el dataset entero
+```
+
+#### Si no tienes un identificador
+
+`rowKey` es opcional. Sin declararlo, la tabla le cuelga a cada fila una identidad atada a la
+**referencia** de su objeto, y eso alcanza para todo lo que pasa del lado del cliente: `filter` y
+`toSorted` devuelven los mismos objetos, así que una selección sobrevive a filtrar y a reordenar sin
+que declares nada.
+
+**No alcanza en modo servidor.** Cada página llega como objetos nuevos de un JSON: la referencia de
+ayer no existe hoy, y un hash del contenido se rompe en cuanto un campo cambia o hay dos filas
+iguales. Si el servidor no distingue dos registros, la tabla tampoco puede. Con `rowCount` declarado
+y sin `rowKey` se avisa una vez por consola, en lugar de perder lo marcado en silencio.
+
+> `selectionColumn` **no** es `rowSelection`. Aquel agrega la columna de casillas y un conjunto que
+> persiste; este es un gesto sobre la regleta que produce un rango de celdas. Ver
+> [Seleccionar en bloque](#seleccionar-una-columna-o-una-fila-entera).
 
 ### La regleta de numeración
 

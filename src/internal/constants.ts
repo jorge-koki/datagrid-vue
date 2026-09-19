@@ -65,14 +65,18 @@ export const MAX_COLUMN_WIDTH = 4000
 /**
  * Banda dentro de la que se acota el ancho CUADRADO de la regleta, en px.
  *
- * La regleta busca ser un cuadrado: tan ancha como alta es la fila. Es la forma
- * que tiene una numeración en cualquier hoja de cálculo, y la que hace que se lea como
- * un margen y no como una columna más. Con filas muy bajas o muy altas ese
- * cuadrado dejaría de tener sentido —un borde grueso o una franja enorme—, y por
- * eso el lado se acota a esta banda.
+ * La regleta tiende al cuadrado —tan ancha como alta es la fila—, que es lo que
+ * la hace leer como un margen y no como una columna más. Pero el cuadrado es una
+ * TENDENCIA y no una regla: con filas de 40px daría 40px de margen para mostrar
+ * dos dígitos, y una hoja de cálculo de verdad no gasta tanto. El techo de la
+ * banda es lo que corta esa proporción antes de que le robe ancho a los datos; el
+ * piso evita el otro extremo, una franja tan angosta que se lea como un borde.
+ *
+ * Cuando el número no entra en esa banda, manda la cuenta de dígitos de más
+ * abajo: primero es legible y después es angosta.
  */
-export const ROW_NUMBER_MIN_WIDTH = 28
-export const ROW_NUMBER_MAX_WIDTH = 48
+export const ROW_NUMBER_MIN_WIDTH = 20
+export const ROW_NUMBER_MAX_WIDTH = 30
 
 /**
  * Cuánto suma cada dígito al ancho de la regleta, en px. Denso entre paréntesis.
@@ -87,8 +91,8 @@ export const ROW_NUMBER_DIGIT_WIDTH = 7
 export const DENSE_ROW_NUMBER_DIGIT_WIDTH = 6
 
 /** Aire a los costados del número, en px. Denso entre paréntesis. */
-export const ROW_NUMBER_PADDING = 12
-export const DENSE_ROW_NUMBER_PADDING = 8
+export const ROW_NUMBER_PADDING = 8
+export const DENSE_ROW_NUMBER_PADDING = 6
 
 /**
  * Nodos de fila que se conservan por encima de la cantidad visible al recortar
@@ -135,6 +139,19 @@ export const ROW_KIND_DATA = 'data'
 
 /** El otro valor posible de `__dtRowKind`. Ver {@link ROW_KIND_DATA}. */
 export const ROW_KIND_GROUP = 'group'
+
+/**
+ * La clave de la columna de casillas que inyecta `selectionColumn`.
+ *
+ * Lleva un prefijo que ningún campo de un objeto usaría, porque comparte espacio
+ * de nombres con las claves del consumidor: si alguien tuviera una columna
+ * llamada `selection`, las dos se pisarían en el orden, en los anchos y en todo
+ * lo que se guarda por clave.
+ */
+export const SELECTION_COLUMN_KEY = '__dt-selection'
+
+/** Ancho de esa columna, en px. Lo justo para la casilla y su aire. */
+export const SELECTION_COLUMN_WIDTH = 44
 
 /** Sangría en px que suma cada nivel de anidamiento de grupo. */
 export const GROUP_INDENT_STEP = 16

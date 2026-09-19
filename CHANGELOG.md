@@ -31,7 +31,22 @@ editando con el teclado en modo fila, y con la mayor en `0` eso sube la minor. T
   una columna ancha de texto, donde el clic se da sin querer al ir a redimensionarla o arrastrarla. La
   flecha del sentido aparece igual: dice cómo está ordenada la tabla, no cómo se la ordenó.
 - **`pinnable: 'menu'`**: la columna se ancla, pero sin botón en el encabezado.
-- **`variant: 'rows'`**, el extremo opuesto de `'cells'`: una línea entre filas y ninguna vertical,
+- **Marcar filas con casillas: `selectionColumn` y `v-model:selected-rows`.** Lo marcado se guarda
+  por CLAVE de fila y nunca por posición, que es lo que lo hace sobrevivir a un filtro: la fila que
+  estaba en la posición 1 deja de serlo al filtrar, y una selección guardada por índice terminaría
+  apuntando a registros que el usuario nunca eligió.
+  - El estado tiene dos modos y una sola lista. En `'some'`, `keys` son las marcadas; en `'all'`, son
+    las EXCLUIDAS. El segundo existe para el caso que no se puede resolver de otra forma: 9000 filas
+    en modo servidor, de las cuales la tabla conoce las 50 que cargó, y el usuario presiona la
+    casilla del encabezado. No hay 9000 claves que enumerar. Con el conjunto invertido, una fila que
+    todavía no se descargó ya está marcada, y al llegar aparece marcada sola.
+  - Para leerlo se exportan `isRowSelected` y `countSelectedRows`, que saben invertir la pregunta
+    según el modo. Preguntar `keys.includes(...)` a mano da la respuesta al revés justo en ese caso.
+- **`rowKey` pasa a ser opcional.** Sin declararlo, la tabla le cuelga a cada fila una identidad
+  atada a la referencia de su objeto: alcanza para todo lo del lado del cliente, porque `filter` y
+  `toSorted` devuelven los mismos objetos. **No alcanza en modo servidor**, donde cada página llega
+  como objetos nuevos; ahí se avisa una vez por consola en lugar de perder la selección en silencio.
+- **`variant: 'rows'`, el extremo opuesto de `'cells'`: una línea entre filas y ninguna vertical,
   tampoco en el encabezado. Pisa a `stripe` y a `bordered` como todo preset. La única vertical que
   sobrevive es el corte del bloque anclado, que no es decoración sino la marca de dónde termina lo
   fijo y empieza lo que scrollea.
@@ -58,6 +73,10 @@ editando con el teclado en modo fila, y con la mayor en `0` eso sube la minor. T
 
 ### Cambiado
 
+- **La regleta de numeración es más angosta.** Tendía al cuadrado —tan ancha como alta la fila—, lo
+  que con filas de 40px gastaba 40px de margen para mostrar dos dígitos. El techo de esa proporción
+  baja de 48 a 30px: una hoja de cálculo de verdad no gasta tanto. Cuando el número no entra, sigue
+  ensanchándose lo justo: primero es legible y después es angosta.
 - **El menú de columna ofrece ahora los DOS bordes para anclar**, no solo el declarado en `pinnable`.
   La asimetría con el botón sale de lo que cada control puede hacer: un botón es un gesto y solo puede
   significar una cosa, así que se le declara cuál; un menú tiene lugar para preguntar. Es además la

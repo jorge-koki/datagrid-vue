@@ -8,6 +8,7 @@ import { selectRenderer } from './select'
 import { progressRenderer } from './progress'
 import { avatarRenderer } from './avatar'
 import { checkboxRenderer } from './checkbox'
+import { selectionRenderer } from './selection'
 import { tagsRenderer } from './tags'
 
 /**
@@ -32,6 +33,8 @@ export { selectRenderer } from './select'
 export { progressRenderer } from './progress'
 export { avatarRenderer } from './avatar'
 export { checkboxRenderer, revertCheckbox } from './checkbox'
+export { SELECTION_HOOKS, selectionRenderer } from './selection'
+export type { SelectionColumnHooks } from './selection'
 export { tagsRenderer } from './tags'
 
 /** Renderers incluidos, listos para usarse por nombre desde `column.renderer`. */
@@ -43,6 +46,7 @@ const builtIn: readonly AnyCellRenderer[] = [
   progressRenderer,
   avatarRenderer,
   checkboxRenderer,
+  selectionRenderer,
   tagsRenderer,
 ]
 

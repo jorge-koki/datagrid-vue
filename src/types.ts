@@ -969,12 +969,28 @@ export interface DataTableProps<TRow> {
   /**
    * Identidad de una fila: un nombre de propiedad o una función.
    *
-   * Se usa para el atributo `data-row-key` estampado en cada fila pintada, de
-   * modo que el DOM siga siendo inspeccionable y testeable. El pool recicla
-   * nodos por slot de viewport, nunca por clave, así que esto jamás afecta la
+   * Se usa para el atributo `data-row-key` estampado en cada fila pintada —de
+   * modo que el DOM siga siendo inspeccionable y testeable— y, sobre todo, para
+   * saber QUÉ fila está marcada cuando hay casillas. El pool recicla nodos por
+   * slot de viewport, nunca por clave, así que esto jamás afecta la
    * reconciliación.
+   *
+   * ## Si no lo declaras
+   *
+   * La tabla le cuelga a cada objeto de fila una identidad interna, atada a la
+   * REFERENCIA del objeto. Eso alcanza para todo lo que pasa del lado del
+   * cliente: `rows.filter(...)`, `toSorted(...)` y cualquier reordenamiento
+   * devuelven los mismos objetos, así que una selección sobrevive a filtrar y
+   * desfiltrar sin que declares nada.
+   *
+   * **No alcanza en modo servidor.** Cada página llega como objetos nuevos de un
+   * JSON: la referencia de ayer no existe hoy, y un hash del contenido se rompe
+   * en cuanto un campo cambia o hay dos filas iguales. Si el servidor no
+   * distingue dos registros, la tabla tampoco puede. Con `rowCount` declarado y
+   * sin `rowKey` se avisa una vez por consola, en lugar de perder la selección
+   * en silencio.
    */
-  rowKey: keyof TRow | ((row: TRow, index: number) => string | number)
+  rowKey?: keyof TRow | ((row: TRow, index: number) => RowKey)
   /**
    * Altura de fila en px, fija para todas o resuelta fila por fila.
    *
@@ -1084,6 +1100,28 @@ export interface DataTableProps<TRow> {
    * clic—, `rangeSelection` y `selectionMode: 'cell'`.
    */
   rowSelection?: boolean
+  /**
+   * Columna de casillas al inicio, con la tricasilla en el encabezado. Por
+   * defecto `false`.
+   *
+   * La pone la tabla: no se declara en `columns` ni hay que reservarle ancho.
+   * Va anclada al inicio, delante de cualquier columna que el consumidor haya
+   * anclado ahí, porque marcar una fila tiene que ser posible con la tabla
+   * corrida a cualquier lado.
+   *
+   * Lo que produce vive en {@link DataTableProps.selectedRows}.
+   */
+  selectionColumn?: boolean
+  /**
+   * Las filas marcadas. `v-model:selected-rows`.
+   *
+   * Controlada o no, como el resto del estado: sin la prop la tabla lleva la
+   * suya y solo avisa; con la prop, la prop manda y la tabla únicamente emite.
+   *
+   * Ver {@link RowSelectionState} para los dos modos y por qué son claves y no
+   * índices.
+   */
+  selectedRows?: RowSelectionState
   /** Mensaje mostrado cuando `rows` está vacío. */
   emptyText?: string
   /** Fondo alternado para las filas impares. */
@@ -1274,6 +1312,52 @@ export interface DataTableProps<TRow> {
  * - `none`: sin selección. Ni siquiera se registran los manejadores de teclado.
  */
 export type SelectionMode = 'none' | 'cell' | 'row'
+
+/** Identidad de una fila, tal como la devuelve {@link DataTableProps.rowKey}. */
+export type RowKey = string | number
+
+/**
+ * Qué filas marcó el usuario con las casillas. `v-model:selected-rows`.
+ *
+ * Son CLAVES y no índices, y esa es toda la idea: el índice no es identidad. Si
+ * el usuario filtra, la fila que estaba en la posición 1 ya no es la misma; al
+ * quitar el filtro, una selección guardada por posición apunta a registros que
+ * nunca eligió. Con claves, filtrar y desfiltrar no le hace nada al conjunto.
+ *
+ * ## Los dos modos
+ *
+ * | `mode`   | Qué es `keys`     | Qué significa                        |
+ * | -------- | ----------------- | -------------------------------------- |
+ * | `'some'` | Las marcadas      | Lo de siempre.                         |
+ * | `'all'`  | Las **excluidas** | Todo marcado, salvo las que figuran.   |
+ *
+ * El segundo existe por el caso que no se puede resolver de otra forma: 9000
+ * filas en modo servidor, de las cuales la tabla conoce las 50 que cargó, y el
+ * usuario presiona la casilla del encabezado. No hay 9000 claves que enumerar.
+ * En `'all'` la respuesta es "todas menos estas", que el consumidor traduce a un
+ * `WHERE ... NOT IN` sin traerse el dataset entero.
+ *
+ * Para leerlo están {@link isRowSelected} y {@link countSelectedRows}, que ya
+ * saben invertir la pregunta según el modo.
+ */
+export interface RowSelectionState {
+  /** `'some'`: `keys` son las marcadas. `'all'`: son las excluidas. */
+  mode: 'some' | 'all'
+  /** La lista, que significa una cosa u otra según {@link RowSelectionState.mode}. */
+  keys: readonly RowKey[]
+}
+
+/** Payload de `rowSelectionChange`. Llega DESPUÉS de aplicar el cambio. */
+export interface RowSelectionChangeEvent<TRow> {
+  /** El estado ya aplicado. */
+  readonly selection: RowSelectionState
+  /** La fila que se tocó, o `null` si el gesto fue sobre el encabezado. */
+  readonly row: TRow | null
+  /** Su clave, o `null` por lo mismo. */
+  readonly key: RowKey | null
+  /** Qué gesto lo produjo. */
+  readonly reason: 'row' | 'all' | 'none'
+}
 
 /** Se emite cuando cambia la celda activa. */
 export interface CellSelectEvent<TRow> {

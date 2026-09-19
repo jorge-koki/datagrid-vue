@@ -4,7 +4,7 @@ import { computed, shallowRef, useTemplateRef, watch, watchEffect } from 'vue'
 // este repositorio el alias de Vite resuelve `vue-tablekit` a `src/index.ts`, de
 // modo que la demo compila contra la API pública y nada más: si algo no está
 // exportado desde el `index.ts`, esta pantalla no compila.
-import { DataTable, sortRows } from 'vue-tablekit'
+import { countSelectedRows, DataTable, sortRows } from 'vue-tablekit'
 import type {
   AfterEditEvent,
   BeforeEditEvent,
@@ -20,6 +20,8 @@ import type {
   GroupToggleEvent,
   RangeCopyEvent,
   RangeSelectEvent,
+  RowSelectionChangeEvent,
+  RowSelectionState,
   RowHeightResolver,
   RowsRequestEvent,
   SelectionMode,
@@ -249,6 +251,8 @@ const variant = shallowRef<DataTableVariant>('default')
  */
 const radiusBorder = shallowRef<DataTableRadius>('lg')
 const showRowNumbers = shallowRef(true)
+const selectionColumn = shallowRef(false)
+const selectedRows = shallowRef<RowSelectionState>({ mode: 'some', keys: [] })
 
 /**
  * Los dos gestos de selección en bloque, apagados igual que en el componente.
@@ -475,6 +479,20 @@ function describe(value: CellValue): string {
  * Primer eslabón del ciclo. Es cancelable: llamar a `cancel()` impide que el
  * editor se abra, y entonces no hay `editCommit` ni `afterEdit`.
  */
+/**
+ * Lo que se marcó, contado bien.
+ *
+ * El contador NO es `keys.length`: en modo `'all'` esa lista son las EXCLUIDAS,
+ * así que mostrarla diría "2 seleccionadas" justo después de marcar las 9000.
+ * `countSelectedRows` ya sabe invertir la cuenta.
+ */
+function onRowSelectionChange(event: RowSelectionChangeEvent<ProjectRow>): void {
+  const total = countSelectedRows(event.selection, tableRowCount.value ?? rows.value.length)
+  if (event.reason === 'all') logEvent('selection', `todas marcadas · ${total}`)
+  else if (event.reason === 'none') logEvent('selection', 'selección limpiada')
+  else logEvent('selection', `${event.key} · ${total} marcada(s)`)
+}
+
 function onBeforeEdit(event: BeforeEditEvent<ProjectRow>): void {
   if (event.row.locked) {
     event.cancel()
@@ -574,6 +592,7 @@ function onAfterEdit(event: AfterEditEvent<ProjectRow>): void {
             v-model:focus-ring="focusRing"
             v-model:crosshair="crosshair"
             v-model:show-row-numbers="showRowNumbers"
+            v-model:selection-column="selectionColumn"
             v-model:column-reorder="columnReorder"
             v-model:column-visibility="columnVisibility"
             :columns="projectColumns"
@@ -612,6 +631,9 @@ function onAfterEdit(event: AfterEditEvent<ProjectRow>): void {
             :variant="variant"
             :radius-border="radiusBorder"
             :show-row-numbers="showRowNumbers"
+            :selection-column="selectionColumn"
+            v-model:selected-rows="selectedRows"
+            @row-selection-change="onRowSelectionChange"
             :column-reorder="columnReorder"
             :column-selection="columnSelection"
             :row-selection="rowSelection"

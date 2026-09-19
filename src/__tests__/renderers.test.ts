@@ -151,7 +151,9 @@ describe('resolveRenderer — unknown names degrade to text, and say so once', (
     // El síntoma visible queda explicado.
     expect(message).toContain(`\`${TEXT_RENDERER_TYPE}\``)
     // Y la lista de nombres válidos, para que el typo salte por comparación.
-    expect(message).toContain('avatar, badge, checkbox, number, progress, select, tags, text')
+    expect(message).toContain(
+      'avatar, badge, checkbox, number, progress, select, selection, tags, text',
+    )
     // Cómo registrar uno propio, sin tener que abrir la documentación.
     expect(message).toContain('registerRenderer')
   })

@@ -122,6 +122,7 @@ const crosshair = defineModel<boolean>('crosshair', { required: true })
 /* ---------------------------------------------------------------- Columnas */
 
 const showRowNumbers = defineModel<boolean>('showRowNumbers', { required: true })
+const selectionColumn = defineModel<boolean>('selectionColumn', { required: true })
 const columnReorder = defineModel<boolean>('columnReorder', { required: true })
 const columnVisibility = defineModel<ColumnVisibilityState>('columnVisibility', { required: true })
 </script>
@@ -314,6 +315,18 @@ const columnVisibility = defineModel<ColumnVisibilityState>('columnVisibility', 
         <input v-model="showRowNumbers" type="checkbox" />
         <span>Numeración</span>
       </label>
+
+      <label class="demo-field demo-field--inline">
+        <input v-model="selectionColumn" type="checkbox" />
+        <span>Casillas de selección</span>
+      </label>
+
+      <p v-if="selectionColumn" class="demo-field-note">
+        Lo marcado se guarda por CLAVE de fila, no por posición: filtra, quita el filtro y vuelve
+        marcado. La casilla del encabezado marca las
+        {{ dataSource === 'server' ? 'filas del servidor entero' : 'filas de la tabla' }}, no solo
+        las que se ven.
+      </p>
 
       <label class="demo-field demo-field--inline">
         <input v-model="columnReorder" type="checkbox" />

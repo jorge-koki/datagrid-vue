@@ -1,5 +1,5 @@
 <script setup lang="ts" generic="TRow extends Record<string, unknown>">
-import { computed, nextTick, onBeforeUnmount, onMounted, shallowRef, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, shallowRef, watch, watchEffect } from 'vue'
 import type {
   AfterEditEvent,
   BeforeEditEvent,
@@ -24,12 +24,24 @@ import type {
   PersistedTableState,
   RangeCopyEvent,
   RangeSelectEvent,
+  RowKey,
+  RowSelectionChangeEvent,
+  RowSelectionState,
   RowsRequestEvent,
   SortChangeEvent,
   SortDirection,
   SortState,
 } from './types'
 import { nextSortState } from './internal/sorting'
+import {
+  EMPTY_ROW_SELECTION,
+  isRowSelectedIn,
+  listedKeySet,
+  rowSelectionHeaderState,
+  sameRowSelection,
+  setAllRowsSelected,
+  toggleRowSelection,
+} from './internal/row-selection'
 import { useRowMetrics } from './composables/useRowMetrics'
 import { useRemoteRows } from './composables/useRemoteRows'
 import { useColumnLayout } from './composables/useColumnLayout'
@@ -56,7 +68,10 @@ import {
   ROW_NUMBER_MAX_WIDTH,
   ROW_NUMBER_MIN_WIDTH,
   ROW_NUMBER_PADDING,
+  SELECTION_COLUMN_KEY,
+  SELECTION_COLUMN_WIDTH,
 } from './internal/constants'
+import { SELECTION_HOOKS } from './internal/renderers'
 import { EMPTY_GROUP_LABEL } from './internal/aggregations'
 import { buildRangeText } from './internal/clipboard'
 import { clamp, readCellValue } from './internal/values'
@@ -158,6 +173,8 @@ const emit = defineEmits<{
   'update:columnOrder': [string[]]
   'update:columnWidths': [ColumnWidthState]
   'update:columnPinning': [ColumnPinState]
+  'update:selectedRows': [RowSelectionState]
+  rowSelectionChange: [RowSelectionChangeEvent<TRow>]
   'update:sort': [ColumnSort[]]
   sortChange: [SortChangeEvent]
   'update:groupBy': [string[]]
@@ -205,6 +222,7 @@ const internalOrder = shallowRef<string[]>([])
 const internalWidths = shallowRef<Record<string, number>>({})
 const internalPinning = shallowRef<Record<string, ColumnPin | null>>({})
 const internalSort = shallowRef<ColumnSort[]>([])
+const internalRowSelection = shallowRef<RowSelectionState>(EMPTY_ROW_SELECTION)
 
 const columnVisibility = computed<ColumnVisibilityState>(
   () => props.columnVisibility ?? internalVisibility.value,
@@ -213,6 +231,43 @@ const columnOrder = computed<readonly string[]>(() => props.columnOrder ?? inter
 const columnWidths = computed<ColumnWidthState>(() => props.columnWidths ?? internalWidths.value)
 const columnPinning = computed<ColumnPinState>(() => props.columnPinning ?? internalPinning.value)
 const sort = computed<SortState>(() => props.sort ?? internalSort.value)
+const selectedRowsState = computed<RowSelectionState>(
+  () => props.selectedRows ?? internalRowSelection.value,
+)
+
+/**
+ * Las claves LISTADAS, como conjunto.
+ *
+ * El bucle de pintado pregunta una vez por fila visible, y `Array.includes` es
+ * lineal: con unos miles de claves eso es recorrer la lista treinta veces por
+ * frame. El conjunto se arma cuando la selección cambia y el frame solo consulta.
+ *
+ * Son las listadas y no las marcadas: en modo `'all'` las listadas son las
+ * EXCLUIDAS, y un conjunto de "todas las marcadas" no se puede construir sin
+ * enumerar un dataset que ni siquiera está cargado.
+ */
+const listedRowKeys = computed(() => listedKeySet(selectedRowsState.value))
+
+/**
+ * Cuántas filas hay en total para la selección.
+ *
+ * En modo servidor es `rowCount` y no lo cargado: con 50 de 9000 en memoria, la
+ * casilla del encabezado tiene que decir 9000, que es lo que el usuario acaba de
+ * elegir.
+ */
+const selectableRowCount = computed(() => props.rowCount ?? props.rows.length)
+
+function setRowSelection(
+  next: RowSelectionState,
+  reason: RowSelectionChangeEvent<TRow>['reason'],
+  row: TRow | null,
+  key: RowKey | null,
+): void {
+  if (sameRowSelection(selectedRowsState.value, next)) return
+  if (props.selectedRows === undefined) internalRowSelection.value = next
+  emit('update:selectedRows', next)
+  emit('rowSelectionChange', { selection: next, row, key, reason })
+}
 
 function setColumnVisibility(next: Record<string, boolean>): void {
   if (props.columnVisibility === undefined) internalVisibility.value = next
@@ -489,8 +544,58 @@ const rowNumberWidth = computed(() => {
   return Math.max(square, digits * perDigit + padding)
 })
 
+/**
+ * La columna de casillas, si `selectionColumn` está encendida.
+ *
+ * La arma la tabla y no el consumidor: no se declara en `columns` ni hay que
+ * reservarle ancho. Va anclada al inicio y por delante de lo que el consumidor
+ * haya anclado ahí, porque marcar una fila tiene que poder hacerse con la tabla
+ * corrida a cualquier lado.
+ *
+ * El predicado viaja COLGADO DE LA COLUMNA, en `SELECTION_HOOKS`. Un renderer
+ * está registrado globalmente y no puede ver el estado de esta instancia; la
+ * columna sí la controla la instancia, y es lo único que llega hasta el renderer.
+ *
+ * Todo lo que la haría comportarse como una columna de datos queda apagado: no
+ * se redimensiona, no se mueve, no se ordena, no se ancla a mano y no se
+ * esconde. Dejar cualquiera de esas encendidas permitiría que el usuario se
+ * quede sin forma de marcar una fila.
+ */
+const selectionColumnDef = computed<DataTableColumn<TRow> | null>(() => {
+  if (!props.selectionColumn) return null
+  return {
+    key: SELECTION_COLUMN_KEY,
+    header: '',
+    width: SELECTION_COLUMN_WIDTH,
+    renderer: 'selection',
+    align: 'center',
+    pinned: 'start',
+    resizable: false,
+    reorderable: false,
+    sortable: false,
+    pinnable: false,
+    hideable: false,
+    [SELECTION_HOOKS]: {
+      isSelected: (row: TRow, rowIndex: number) =>
+        isRowSelectedIn(selectedRowsState.value, listedRowKeys.value, rowKeyOf(row, rowIndex)),
+    },
+  } as DataTableColumn<TRow>
+})
+
+/**
+ * Las columnas que ve el layout: las del consumidor, con la de casillas adelante.
+ *
+ * Se inyecta acá y no más abajo para que todo lo demás —anclaje, anchos,
+ * virtualización horizontal, pintado— la trate como a cualquier otra sin una
+ * sola rama especial.
+ */
+const columnsWithSelection = computed<readonly DataTableColumn<TRow>[]>(() => {
+  const propia = selectionColumnDef.value
+  return propia ? [propia, ...props.columns] : props.columns
+})
+
 const layout = useColumnLayout<TRow>({
-  columns: () => props.columns,
+  columns: () => columnsWithSelection.value,
   defaultColumnWidth: () => props.defaultColumnWidth,
   visibility: columnVisibility,
   order: columnOrder,
@@ -800,12 +905,84 @@ const pool = useRowPool<TRow>({
     selectWholeRow(rowIndex)
   },
   onCellToggle: (position, nextValue) => {
+    // La casilla de selección comparte el gesto con las de datos —las dos son un
+    // `<input type="checkbox">` dentro de una celda— pero no la tubería: marcar
+    // una fila no edita nada, y un `beforeEdit` que vete la edición no tiene por
+    // qué impedir seleccionarla.
+    if (position.columnKey === SELECTION_COLUMN_KEY) {
+      toggleRowAt(position.rowIndex)
+      return
+    }
     editor.commitValue(position, nextValue)
   },
   onGroupToggle: (groupId) => {
     grouping.toggleGroup(groupId)
   },
 })
+
+/**
+ * Alterna la marca de una fila, por su posición VISIBLE.
+ *
+ * La posición solo sirve para llegar a la fila: lo que se guarda es su clave. Una
+ * cabecera de grupo no es ninguna fila y no se marca.
+ */
+function toggleRowAt(rowIndex: number): void {
+  const row = grouping.rowAt(rowIndex)
+  if (row === undefined) return
+  const key = rowKeyOf(row, grouping.toSourceIndex(rowIndex))
+  setRowSelection(toggleRowSelection(selectedRowsState.value, key), 'row', row, key)
+}
+
+/**
+ * En qué va la tricasilla del encabezado: vacía, cuadrito o palomita.
+ *
+ * Se mide contra el total del DATASET —`rowCount` en modo servidor— y no contra
+ * lo cargado. Con 50 filas en memoria de 9000, marcar todo tiene que dejar la
+ * casilla llena, no en "algunas".
+ */
+const headerSelectionState = computed(() =>
+  rowSelectionHeaderState(selectedRowsState.value, selectableRowCount.value),
+)
+
+/**
+ * La casilla del encabezado, para escribirle sus propiedades a mano.
+ *
+ * `checked` e `indeterminate` no se ligan: ver el comentario en el template.
+ */
+const headerSelectionInput = shallowRef<HTMLInputElement | null>(null)
+
+function registerHeaderSelectionInput(el: unknown): void {
+  headerSelectionInput.value = el instanceof HTMLInputElement ? el : null
+}
+
+watchEffect(
+  () => {
+    const input = headerSelectionInput.value
+    if (!input) return
+    const estado = headerSelectionState.value
+    input.checked = estado === 'all'
+    input.indeterminate = estado === 'some'
+  },
+  // Después de que Vue tocó el DOM: antes, el nodo podría no existir todavía.
+  { flush: 'post' },
+)
+
+const headerSelectionLabel = computed(() =>
+  headerSelectionState.value === 'all' ? 'Quitar la selección' : 'Seleccionar todas las filas',
+)
+
+/**
+ * El gesto del encabezado: marcar todo o limpiar.
+ *
+ * Marcar todo entra en modo `'all'`, que es lo único que puede responder por
+ * filas que no se descargaron. Con algunas marcadas, el gesto LIMPIA en vez de
+ * completar: es lo que espera quien acaba de marcar tres a mano y presiona la
+ * casilla para deshacerlo.
+ */
+function onHeaderSelectionToggle(): void {
+  const marcarTodas = headerSelectionState.value === 'none'
+  setRowSelection(setAllRowsSelected(marcarTodas), marcarTodas ? 'all' : 'none', null, null)
+}
 
 /** Valor actual de una celda, para poder alternarlo desde el teclado. */
 function readCurrentValue(position: CellPosition): CellValue {
@@ -2065,10 +2242,83 @@ function onSlotEditorKeyDown(event: KeyboardEvent): void {
 /* ------------------------------------------------------------------ Pintado */
 
 /** Resuelve la clave estable de una fila para `data-row-key`. */
-function resolveRowKey(row: TRow, index: number): string {
+/**
+ * Identidad sintética, para cuando el consumidor no declaró `rowKey`.
+ *
+ * Se ata a la REFERENCIA del objeto y no a su contenido, y en esa diferencia
+ * está todo lo que puede y lo que no. Filtrar, ordenar o reagrupar del lado del
+ * cliente devuelven LOS MISMOS objetos —`filter` y `toSorted` no clonan nada—,
+ * así que la identidad sobrevive a todo eso sola. Editar un campo tampoco la
+ * mueve, cosa que un hash del contenido sí haría.
+ *
+ * Lo que no puede: cruzar un `fetch`. Una página nueva trae objetos nuevos, y
+ * ningún esquema sintético los reconoce. De ahí el aviso de más abajo.
+ *
+ * `WeakMap` y no `Map`: la tabla no tiene por qué sostener viva una fila que el
+ * consumidor ya soltó. Cuando el arreglo se reemplaza, las claves viejas se
+ * recolectan con él.
+ */
+const syntheticRowKeys = new WeakMap<object, string>()
+let syntheticRowKeyCount = 0
+
+function syntheticRowKey(row: TRow): string {
+  if (typeof row !== 'object' || row === null) return String(row)
+  const yaTiene = syntheticRowKeys.get(row)
+  if (yaTiene !== undefined) return yaTiene
+  syntheticRowKeyCount += 1
+  const nueva = `dt-${syntheticRowKeyCount}`
+  syntheticRowKeys.set(row, nueva)
+  return nueva
+}
+
+/**
+ * La identidad de una fila, CON SU TIPO.
+ *
+ * No se convierte a texto, y no es un detalle: si `rowKey` es `'id'` sobre un
+ * número, el consumidor va a comparar lo que recibe en `selectedRows` contra
+ * `row.id`. Devolver `'42'` donde él tiene `42` hace que esa comparación falle
+ * siempre, y en silencio.
+ *
+ * El texto lo pide una sola cosa —el atributo del DOM— y lo resuelve
+ * {@link resolveRowKey}.
+ */
+function rowKeyOf(row: TRow, index: number): RowKey {
   const key = props.rowKey
-  if (typeof key === 'function') return String(key(row, index))
-  return String(row[key])
+  if (key === undefined) return syntheticRowKey(row)
+  if (typeof key === 'function') return key(row, index)
+  const bruto = row[key]
+  return typeof bruto === 'number' ? bruto : String(bruto)
+}
+
+/** La misma identidad, ya como texto: es lo único que acepta un atributo. */
+function resolveRowKey(row: TRow, index: number): string {
+  return String(rowKeyOf(row, index))
+}
+
+/**
+ * Avisa una vez si se pide marcar filas contra un servidor sin declarar
+ * identidad.
+ *
+ * Es el único caso donde la tabla NO puede arreglarlo por su cuenta: cada página
+ * llega como objetos nuevos, y la identidad sintética se apoya en la referencia.
+ * El usuario marcaría filas, cambiaría de página y las encontraría desmarcadas
+ * al volver, sin ninguna pista de por qué.
+ */
+let warnedAboutRowIdentity = false
+
+function warnIfSelectionHasNoIdentity(): void {
+  if (warnedAboutRowIdentity) return
+  if (props.rowKey !== undefined) return
+  if (!props.selectionColumn) return
+  if (props.rowCount === undefined) return
+
+  warnedAboutRowIdentity = true
+  console.warn(
+    '[DataTable] Hay casillas de selección y modo servidor, pero no se declaró `rowKey`. ' +
+      'Sin él la tabla identifica cada fila por la referencia de su objeto, y una página ' +
+      'nueva trae objetos nuevos: lo marcado se pierde al cambiar de página o al filtrar. ' +
+      'Declara `rowKey` con un campo que el servidor devuelva siempre igual.',
+  )
 }
 
 /**
@@ -2116,6 +2366,7 @@ function paintFrame(): void {
   editor.syncPosition()
 
   warnIfCollapsed()
+  warnIfSelectionHasNoIdentity()
 }
 
 /**
@@ -2199,6 +2450,29 @@ watch(
     () => props.showGroupCount,
   ],
   () => scroll.requestFrame(),
+  { flush: 'post' },
+)
+
+/**
+ * Repinta las casillas cuando cambia la selección.
+ *
+ * Tiene watcher propio porque necesita algo que los demás no: INVALIDAR el pool,
+ * no solo agendar un frame. El camino rápido del pintado saltea toda celda cuyo
+ * valor crudo no haya cambiado, y el valor crudo de una casilla de selección no
+ * cambia nunca —no sale de la fila, sale del estado—. Sin invalidar, marcar una
+ * fila actualizaba el estado y la tricasilla del encabezado, pero la casilla de
+ * la fila se quedaba como estaba.
+ *
+ * Invalidar repinta las celdas visibles, no la tabla entera: son unos cientos, y
+ * cada renderer compara antes de escribir, así que las que no cambiaron no tocan
+ * el DOM. Se paga trabajo de JS en un frame, no un reflow.
+ */
+watch(
+  selectedRowsState,
+  () => {
+    pool.invalidate()
+    scroll.requestFrame()
+  },
   { flush: 'post' },
 )
 
@@ -3258,7 +3532,39 @@ function headerAlignClass(column: ResolvedColumn<TRow>): string | undefined {
               @pointerdown="onHeaderPointerDown($event, column)"
               @click="onHeaderClick($event, column)"
             >
-              <span class="dt-header-label">{{ column.label }}</span>
+              <!--
+                La tricasilla de la columna de selección, que reemplaza al título:
+                esa columna no tiene ninguno y la casilla es todo su contenido.
+
+                `checked` e `indeterminate` se escriben A MANO, desde un
+                `watchEffect`, en lugar de ligarlas. No es preferencia y costó dos
+                intentos fallidos:
+
+                Ligar `:checked` termina escribiendo el ATRIBUTO `checked`, y en un
+                checkbox el atributo solo fija el valor INICIAL: después del primer
+                clic el elemento queda "sucio" y el atributo ya no mueve nada. La
+                casilla se quedaba vacía con la tabla entera marcada.
+                `indeterminate` ni siquiera existe como atributo. Las dos viven
+                solo como propiedad, así que se escriben como propiedad.
+
+                Y NO lleva `.prevent`, aunque parezca que debería. El navegador
+                alterna la casilla él solo al recibir el clic, y `preventDefault`
+                no cancela ese cambio: lo REVIERTE después de los manejadores,
+                pisando lo que el efecto acababa de escribir. Se lo deja alternar y
+                el efecto corrige, que siempre alcanza: cada clic sobre esta
+                casilla cambia el estado, así que el efecto siempre vuelve a
+                correr.
+              -->
+              <input
+                v-if="column.key === SELECTION_COLUMN_KEY"
+                class="dt-checkbox dt-selection-checkbox"
+                type="checkbox"
+                tabindex="-1"
+                :aria-label="headerSelectionLabel"
+                :ref="registerHeaderSelectionInput"
+                @click.stop="onHeaderSelectionToggle"
+              />
+              <span v-else class="dt-header-label">{{ column.label }}</span>
               <!--
                 Indicador del orden. Solo existe mientras la columna ordena, así
                 que una tabla sin ordenamiento no paga un nodo por encabezado.

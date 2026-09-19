@@ -63,6 +63,9 @@ export type {
   RangeSelectEvent,
   RowHeightResolver,
   RowsRequestEvent,
+  RowKey,
+  RowSelectionChangeEvent,
+  RowSelectionState,
   SortChangeEvent,
   SortDirection,
   SortState,
@@ -135,5 +138,20 @@ export { groupId } from './internal/aggregations'
  * servidor no se usa: ahí el orden viaja en la consulta.
  */
 export { sortRows } from './internal/sorting'
+/*
+ * Leer el estado de selección sin tener que conocer sus dos modos.
+ *
+ * Se exportan porque la forma del estado es invertible —en `'all'`, `keys` son
+ * las EXCLUIDAS— y preguntar a mano `keys.includes(...)` da la respuesta al revés
+ * justo en el caso que importa: el usuario marcó todo sobre 9000 filas.
+ */
+export {
+  countSelectedRows,
+  EMPTY_ROW_SELECTION,
+  isRowSelected,
+  rowSelectionHeaderState,
+  setAllRowsSelected,
+  toggleRowSelection,
+} from './internal/row-selection'
 
 export { createLocalStorageAdapter } from './composables/useTablePersistence'

@@ -12,6 +12,7 @@ import type { ShallowRef } from 'vue'
 /** Etapa del ciclo de edición, de selección o de agrupación que produjo la entrada. */
 export type DemoLogKind =
   | 'select'
+  | 'selection'
   | 'before'
   | 'veto'
   | 'commit'
