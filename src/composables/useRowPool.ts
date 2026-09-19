@@ -280,6 +280,15 @@ export interface RowPoolPaintState<TRow> {
    * de la ventana y el pintado.
    */
   placeholders?: boolean
+  /**
+   * Pintar TODAS las filas como esqueleto, haya datos o no.
+   *
+   * Distinto de {@link RowPoolPaintState.placeholders}, que solo permite
+   * esqueletos donde falta la fila. Esto los fuerza: es "estoy esperando" y no
+   * "esta página no llegó", y la diferencia importa cuando `rows` todavía trae
+   * el resultado de la consulta anterior.
+   */
+  loading?: boolean
   /** Tramo vertical de filas a pintar. */
   rowRange: VirtualWindow
   /** Tramo horizontal de columnas a pintar, ya recortado por el componente. */
@@ -674,6 +683,7 @@ export function useRowPool<TRow extends Record<string, unknown>>(
     // Fuera del modo servidor un hueco en `rows` no es "todavía no llegó" sino
     // "no existe", y la fila se retira. Es una lectura por pintado, no por fila.
     const placeholders = state.placeholders ?? false
+    const loading = state.loading ?? false
     const visibleRowCount = Math.max(0, rowRange.end - rowRange.start)
     const visibleColumnCount = columns.length
     // Índice ABSOLUTO de la primera columna del tramo, que es la base de la
@@ -802,8 +812,11 @@ export function useRowPool<TRow extends Record<string, unknown>>(
       // ventana y este pintado —no hay nada ahí, la fila se retira— o que la
       // tabla esté en modo servidor y esa página todavía no haya llegado, que es
       // un estado normal y tiene que verse como tal.
-      if (row === undefined) {
-        if (placeholders) {
+      // `loading` gana sobre el dato: con una reconsulta en curso, `rows` todavía
+      // trae el resultado ANTERIOR, y pintarlo sería mostrar datos viejos como si
+      // fueran los nuevos.
+      if (row === undefined || loading) {
+        if (placeholders || loading) {
           paintPlaceholderRow(rowNode, rowIndex, columns, pinnedColumns, rowMetrics, frame)
         } else {
           retireRow(rowNode)

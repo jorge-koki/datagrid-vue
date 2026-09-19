@@ -434,6 +434,7 @@ repositorio está todo cableado a la vez sobre un dataset de hasta 50.000 filas.
 | `selectionColumn`       | `boolean`                                                        | `false`                       | Columna de casillas al inicio, con tricasilla en el encabezado. Lo marcado vive en `selectedRows`. Ver [Marcar filas con casillas](#marcar-filas-con-casillas).                                                                                          |
 | `selectedRows`          | `RowSelectionState`                                              | —                             | Las filas marcadas, por clave. `v-model:selected-rows`. Ver [Marcar filas con casillas](#marcar-filas-con-casillas).                                                                                                                                     |
 | `rowSelection`          | `boolean`                                                        | `false`                       | Clic en el número de una fila para seleccionarla entera. No confundir con `selectionMode: 'row'`. Ver [Seleccionar en bloque](#seleccionar-una-columna-o-una-fila-entera).                                                                               |
+| `loading`               | `boolean`                                                        | `false`                       | Pinta el esqueleto sobre todas las filas visibles. Para la primera carga o una reconsulta; en modo servidor, una página que no llegó ya se pinta así sola. Ver [El esqueleto de carga](#el-esqueleto-de-carga).                                          |
 | `emptyText`             | `string`                                                         | `'No data'`                   | Mensaje que se muestra cuando `rows` está vacío.                                                                                                                                                                                                         |
 | `sort`                  | `SortState`                                                      | _no controlado_               | `v-model:sort`. Criterios de orden vigentes. **La tabla no ordena `rows`**: administra el estado y lo anuncia. Ver [Ordenamiento](#ordenamiento).                                                                                                        |
 | `columnMenu`            | `boolean`                                                        | `false`                       | Menú de tres puntos en cada encabezado: ordenar, anclar, ocultar y restablecer. Ver [El menú de la columna](#el-menú-de-la-columna).                                                                                                                     |
@@ -2772,6 +2773,41 @@ y sin `rowKey` se avisa una vez por consola, en lugar de perder lo marcado en si
 > `selectionColumn` **no** es `rowSelection`. Aquel agrega la columna de casillas y un conjunto que
 > persiste; este es un gesto sobre la regleta que produce un rango de celdas. Ver
 > [Seleccionar en bloque](#seleccionar-una-columna-o-una-fila-entera).
+
+### El esqueleto de carga
+
+Una barra por celda, en la posición exacta de **su** columna, con un latido suave. No es una franja
+gris a lo ancho de la fila, y la diferencia no es estética: una franja no se corresponde con nada del
+encabezado y se lee como un error de pintado, mientras que las barras alineadas se leen como lo que
+son, las mismas columnas esperando su contenido.
+
+Aparece por dos caminos:
+
+**Solo, en modo servidor.** Una fila cuya página todavía no llegó se pinta así sin que haya que
+pedirlo. Es el caso del scroll rápido, y no necesita ninguna prop.
+
+**A mano, con `loading`.** Enciende el esqueleto sobre **todas** las filas visibles, haya datos o no.
+Cubre los dos momentos que el automático no alcanza:
+
+```vue
+<DataTable :rows="rows" :columns="columns" :loading="cargando" />
+```
+
+| Momento       | Qué pasa sin `loading`                                                                  |
+| ------------- | --------------------------------------------------------------------------------------- |
+| Primera carga | `rows` vacío → se muestra `emptyText`, que afirma algo que nadie sabe todavía.          |
+| Reconsulta    | `rows` trae el resultado ANTERIOR → se muestran datos viejos como si fueran los nuevos. |
+
+Por eso `loading` **gana sobre el dato** en lugar de rellenar solo los huecos: en una reconsulta las
+filas sí están, y mostrarlas sería mentir sobre lo que se ve.
+
+Mientras está encendido no aparece `emptyText`: "no hay datos" y "todavía no sé" no son lo mismo. Y
+con `rows` vacío se dibujan las filas que entren en la pantalla y ni una más: el esqueleto es una
+señal de espera, no una promesa de cuántos resultados van a llegar.
+
+El latido es una animación de `opacity`, que resuelve el compositor sin repintar: decenas de barras a
+la vez no le cuestan un frame al scroll. Con `prefers-reduced-motion` se apaga y las barras quedan
+quietas.
 
 ### La regleta de numeración
 

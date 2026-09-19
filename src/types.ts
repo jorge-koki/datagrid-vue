@@ -1126,6 +1126,29 @@ export interface DataTableProps<TRow> {
    * índices.
    */
   selectedRows?: RowSelectionState
+  /**
+   * La tabla está esperando datos. Por defecto `false`.
+   *
+   * Pinta el esqueleto —una barra por celda, en la posición exacta de su
+   * columna— sobre TODAS las filas visibles, tenga o no tenga datos cargados. Es
+   * lo que cubre los dos casos que el esqueleto automático de modo servidor no
+   * alcanza:
+   *
+   * - la **primera carga**, donde `rows` todavía está vacío y sin esto se vería
+   *   el mensaje de "sin datos", que dice algo falso;
+   * - una **reconsulta** —cambiar un filtro, reordenar contra el servidor— donde
+   *   `rows` sigue trayendo el resultado ANTERIOR. Sin esto, la tabla muestra
+   *   datos viejos como si fueran los nuevos, que es peor que no mostrar nada.
+   *
+   * Con `rows` vacío se dibujan las filas que entren en la pantalla, para que el
+   * esqueleto se vea. Mientras está encendido no aparece
+   * {@link DataTableProps.emptyText}: "no hay datos" y "todavía no sé" no son lo
+   * mismo.
+   *
+   * No hace falta en modo servidor para el scroll normal: una página que aún no
+   * llegó ya se pinta como esqueleto ella sola.
+   */
+  loading?: boolean
   /** Mensaje mostrado cuando `rows` está vacío. */
   emptyText?: string
   /** Fondo alternado para las filas impares. */

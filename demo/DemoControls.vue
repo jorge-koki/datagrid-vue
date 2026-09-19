@@ -123,6 +123,7 @@ const crosshair = defineModel<boolean>('crosshair', { required: true })
 
 const showRowNumbers = defineModel<boolean>('showRowNumbers', { required: true })
 const selectionColumn = defineModel<boolean>('selectionColumn', { required: true })
+const loading = defineModel<boolean>('loading', { required: true })
 const columnReorder = defineModel<boolean>('columnReorder', { required: true })
 const columnVisibility = defineModel<ColumnVisibilityState>('columnVisibility', { required: true })
 </script>
@@ -320,6 +321,17 @@ const columnVisibility = defineModel<ColumnVisibilityState>('columnVisibility', 
         <input v-model="selectionColumn" type="checkbox" />
         <span>Casillas de selección</span>
       </label>
+
+      <label class="demo-field demo-field--inline">
+        <input v-model="loading" type="checkbox" />
+        <span>Esperando datos</span>
+      </label>
+
+      <p v-if="loading" class="demo-field-note">
+        El esqueleto: una barra por celda, en la posición de SU columna. Se enciende a mano para la
+        primera carga o una reconsulta; en modo servidor, una página que aún no llegó ya se pinta
+        así ella sola.
+      </p>
 
       <p v-if="selectionColumn" class="demo-field-note">
         Lo marcado se guarda por CLAVE de fila, no por posición: filtra, quita el filtro y vuelve

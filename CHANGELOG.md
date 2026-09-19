@@ -50,6 +50,12 @@ editando con el teclado en modo fila, y con la mayor en `0` eso sube la minor. T
   atada a la referencia de su objeto: alcanza para todo lo del lado del cliente, porque `filter` y
   `toSorted` devuelven los mismos objetos. **No alcanza en modo servidor**, donde cada página llega
   como objetos nuevos; ahí se avisa una vez por consola en lugar de perder la selección en silencio.
+- **`loading`**, para encender el esqueleto a mano. Ya existía, pero atado a una sola causa: en modo
+  servidor, una fila cuya página no había llegado. Eso dejaba fuera los dos momentos donde más falta
+  hace. En la **primera carga**, con `rows` vacío, la tabla mostraba `emptyText`, que afirma algo que
+  nadie sabe todavía. Y en una **reconsulta** —cambiar un filtro, reordenar contra el servidor—
+  `rows` sigue trayendo el resultado ANTERIOR, y pintarlo es mostrar datos viejos como si fueran los
+  nuevos: por eso `loading` gana sobre el dato en lugar de rellenar solo los huecos.
 - **`variant: 'rows'`, el extremo opuesto de `'cells'`: una línea entre filas y ninguna vertical,
   tampoco en el encabezado. Pisa a `stripe` y a `bordered` como todo preset. La única vertical que
   sobrevive es el corte del bloque anclado, que no es decoración sino la marca de dónde termina lo

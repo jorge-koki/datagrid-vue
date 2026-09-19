@@ -128,6 +128,7 @@ const props = withDefaults(defineProps<DataTableProps<TRow>>(), {
   columnSelection: false,
   rowSelection: false,
   emptyText: 'No data',
+  loading: false,
   columnMenu: false,
   stripe: false,
   bordered: false,
@@ -506,9 +507,29 @@ const grouping = useRowGrouping<TRow>({
  * lo dice `rows`. Sin `rowCount` las dos siguen saliendo del mismo lado.
  */
 const visibleRowCount = computed(() => {
-  if (!serverMode.value) return grouping.totalCount.value
-  const raw = props.rowCount ?? 0
-  return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 0
+  const real = serverMode.value
+    ? (() => {
+        const raw = props.rowCount ?? 0
+        return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 0
+      })()
+    : grouping.totalCount.value
+
+  /*
+   * Esperando y sin una sola fila, hay que inventar cuántas dibujar.
+   *
+   * Es el caso de la primera carga: `rows` vacío y `rowCount` todavía sin
+   * responder. Sin un número no hay filas que pintar y el esqueleto no se vería
+   * —la tabla quedaría en blanco, que es justo lo que `loading` viene a evitar—.
+   *
+   * Se llena la pantalla y ni una fila más: el esqueleto es una señal de espera,
+   * no una promesa de cuántos resultados van a llegar. Inventar una barra de
+   * scroll larga y que después lleguen tres filas se lee como un error.
+   */
+  if (props.loading && real === 0) {
+    const alto = rowHeight.value
+    return alto > 0 ? Math.ceil(rowViewportHeight.value / alto) : 0
+  }
+  return real
 })
 
 /* ------------------------------------------------------------ Layout y scroll */
@@ -2406,6 +2427,7 @@ function paintFrame(): void {
     groupDepth: grouping.depth.value,
     showGroupCount: props.showGroupCount,
     placeholders: serverMode.value,
+    loading: props.loading,
     rowRange: rowVirtual.window.value,
     columns: visibleColumns.value,
     rowMetrics: rowMetrics.value,
@@ -2503,6 +2525,8 @@ watch(
     // sola vez. Durante el scroll no cambia, y por eso no agenda nada.
     grouping.flatRows,
     () => props.showGroupCount,
+    // Encender o apagar la espera cambia lo que se pinta en TODAS las filas.
+    () => props.loading,
   ],
   () => scroll.requestFrame(),
   { flush: 'post' },
@@ -3788,7 +3812,12 @@ function headerAlignClass(column: ResolvedColumn<TRow>): string | undefined {
       </div>
     </div>
 
-    <div v-if="rows.length === 0" class="dt-empty">{{ emptyText }}</div>
+    <!--
+      Esperando NO es "sin datos". Mientras `loading` esté encendido el mensaje se
+      calla: decir "no hay resultados" sobre una consulta que todavía no respondió
+      es afirmar algo que nadie sabe.
+    -->
+    <div v-if="rows.length === 0 && !loading" class="dt-empty">{{ emptyText }}</div>
 
     <!--
       Línea de caída: dónde va a quedar la columna que se está arrastrando.

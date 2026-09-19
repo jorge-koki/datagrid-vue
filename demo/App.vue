@@ -252,6 +252,7 @@ const variant = shallowRef<DataTableVariant>('default')
 const radiusBorder = shallowRef<DataTableRadius>('lg')
 const showRowNumbers = shallowRef(true)
 const selectionColumn = shallowRef(false)
+const loading = shallowRef(false)
 const selectedRows = shallowRef<RowSelectionState>({ mode: 'some', keys: [] })
 
 /**
@@ -593,6 +594,7 @@ function onAfterEdit(event: AfterEditEvent<ProjectRow>): void {
             v-model:crosshair="crosshair"
             v-model:show-row-numbers="showRowNumbers"
             v-model:selection-column="selectionColumn"
+            v-model:loading="loading"
             v-model:column-reorder="columnReorder"
             v-model:column-visibility="columnVisibility"
             :columns="projectColumns"
@@ -632,6 +634,7 @@ function onAfterEdit(event: AfterEditEvent<ProjectRow>): void {
             :radius-border="radiusBorder"
             :show-row-numbers="showRowNumbers"
             :selection-column="selectionColumn"
+            :loading="loading"
             v-model:selected-rows="selectedRows"
             @row-selection-change="onRowSelectionChange"
             :column-reorder="columnReorder"
