@@ -64,8 +64,15 @@ export type DataTableTheme = 'light' | 'dark' | 'auto'
  *   `stripe` y `bordered`.
  * - `cells` fuerza una grilla completa de celda a celda, sin importar `stripe`
  *   ni `bordered`.
+ * - `rows` va al otro extremo: SOLO separa las filas, con una línea horizontal
+ *   y ninguna vertical.
+ *
+ * Los dos últimos son presets y no combinaciones: pisan a `stripe` y a
+ * `bordered` en lugar de sumarse a ellos. Lo que eligen no es cuánta decoración
+ * poner sino QUÉ estructura se lee primero —la grilla de celdas o la secuencia
+ * de filas—, y eso no se puede expresar sumando dos interruptores sueltos.
  */
-export type DataTableVariant = 'default' | 'cells'
+export type DataTableVariant = 'default' | 'cells' | 'rows'
 
 /**
  * Redondeo de las esquinas de la tabla.

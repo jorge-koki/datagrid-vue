@@ -204,6 +204,7 @@ const columnVisibility = defineModel<ColumnVisibilityState>('columnVisibility', 
         <select v-model="variant">
           <option value="default">Predeterminado</option>
           <option value="cells">Celdas</option>
+          <option value="rows">Filas</option>
         </select>
       </label>
 

@@ -31,6 +31,10 @@ editando con el teclado en modo fila, y con la mayor en `0` eso sube la minor. T
   una columna ancha de texto, donde el clic se da sin querer al ir a redimensionarla o arrastrarla. La
   flecha del sentido aparece igual: dice cómo está ordenada la tabla, no cómo se la ordenó.
 - **`pinnable: 'menu'`**: la columna se ancla, pero sin botón en el encabezado.
+- **`variant: 'rows'`**, el extremo opuesto de `'cells'`: una línea entre filas y ninguna vertical,
+  tampoco en el encabezado. Pisa a `stripe` y a `bordered` como todo preset. La única vertical que
+  sobrevive es el corte del bloque anclado, que no es decoración sino la marca de dónde termina lo
+  fijo y empieza lo que scrollea.
 - **La fila bajo el puntero se realza, con `selectionMode: 'row'`.** Es el anticipo de lo que va a
   hacer el clic, así que no aparece en `'cell'` —donde lo que se elige es una celda— ni en `'none'`,
   y deja afuera la cabecera de grupo y el esqueleto de carga. La fila activa SÍ se realza: el tinte

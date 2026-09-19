@@ -426,7 +426,7 @@ repositorio está todo cableado a la vez sobre un dataset de hasta 50.000 filas.
 | `defaultColumnWidth`    | `number`                                                         | `150`                         | Ancho en px para las columnas que no declaran el suyo.                                                                                                                                                                                                   |
 | `virtualizeColumns`     | `boolean`                                                        | `true`                        | Pinta solo las columnas visibles en horizontal. Conviene apagarlo en tablas angostas donde la fila entera entra: ahí el cálculo de ventana es overhead puro.                                                                                             |
 | `theme`                 | `'light' \| 'dark' \| 'auto'`                                    | `'auto'`                      | Esquema de color. Ver [Temas](#temas).                                                                                                                                                                                                                   |
-| `variant`               | `'default' \| 'cells'`                                           | `'default'`                   | Preset visual. `'cells'` dibuja una grilla completa de celda a celda, sin importar `stripe` ni `bordered`.                                                                                                                                               |
+| `variant`               | `'default' \| 'cells' \| 'rows'`                                 | `'default'`                   | Preset visual. `'cells'` dibuja una grilla completa de celda a celda; `'rows'` solo separa las filas, sin ninguna vertical. Los dos pisan a `stripe` y a `bordered`.                                                                                     |
 | `radiusBorder`          | `'none' \| 'sm' \| 'md' \| 'lg' \| 'xl'`                         | `'none'`                      | Redondeo de las esquinas de la tabla, solo de la caja exterior. Ver [El redondeo de la caja](#el-redondeo-de-la-caja).                                                                                                                                   |
 | `showRowNumbers`        | `boolean`                                                        | `true`                        | Regleta de numeración fija a la izquierda. **No es una columna.** Ver [La regleta de numeración](#la-regleta-de-numeración).                                                                                                                             |
 | `columnReorder`         | `boolean`                                                        | `true`                        | Mover columnas arrastrando el encabezado. Escribe `columnOrder`. Ver [Mover columnas](#mover-columnas-arrastrando).                                                                                                                                      |
@@ -2675,9 +2675,23 @@ o un `headerHeight` explícitos siguen ganando.
 ### La prop `variant`
 
 `variant` es un preset, igual que `dense`: `'default'` es el aspecto de siempre, gobernado por
-`stripe` y `bordered`. `'cells'` fuerza una grilla completa —borde en los cuatro lados de cada
-celda— sin importar el valor de esas dos props, para el caso en el que se quiere que la tabla se
-lea como una hoja de cálculo.
+`stripe` y `bordered`. Los otros dos son los extremos, y **pisan** a esas dos props en lugar de
+sumarse a ellas:
+
+| Valor       | Qué dibuja                                                                           |
+| ----------- | ------------------------------------------------------------------------------------ |
+| `'default'` | Lo que digan `stripe` y `bordered`.                                                  |
+| `'cells'`   | Grilla completa, celda por celda. Para que la tabla se lea como una hoja de cálculo. |
+| `'rows'`    | Solo una línea entre filas. Ninguna vertical, tampoco en el encabezado.              |
+
+Que pisen y no se sumen es deliberado. Lo que elige un preset no es cuánta decoración poner sino
+**qué estructura se lee primero**: la grilla de celdas o la secuencia de filas. Eso no se puede
+expresar sumando dos interruptores sueltos, y con `variant: 'rows'` más `bordered` encendido habría
+que decidir quién gana en cada cruce.
+
+La única vertical que sobrevive a `'rows'` es el corte del bloque anclado. No es decoración: dice
+dónde termina lo que está fijo y empieza lo que scrollea, y sin él las dos partes se verían iguales
+hasta que alguien scrollee.
 
 ### La regleta de numeración
 

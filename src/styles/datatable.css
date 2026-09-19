@@ -2409,6 +2409,37 @@
   border-right: 1px solid var(--dt-border-accented);
 }
 
+/* -------------------------------------------------------------- Variante rows */
+
+/*
+ * `data-variant="rows"` es el extremo opuesto de `cells`: separa las FILAS y
+ * nada más. Ninguna línea vertical, ni entre columnas ni en el encabezado.
+ *
+ * Los ceros explícitos no son ruido, son la mitad del preset. `bordered` pone su
+ * borde derecho con el mismo peso de selector que esta regla —`.dt-root` más un
+ * atributo más `.dt-cell`—, así que sin decirlo el desempate quedaría en el
+ * orden del archivo y encender `bordered` traería de vuelta las verticales que
+ * esta variante existe para no tener. Un preset que depende de otra prop no es
+ * un preset.
+ *
+ * Solo `border-bottom`, nunca `top`, por la misma razón que en `cells`: el borde
+ * inferior de una fila y el superior de la siguiente serían LA MISMA línea
+ * dibujada dos veces, del doble de grosor que las demás.
+ *
+ * Una vertical sobrevive y no se toca: el corte del bloque anclado, que lo
+ * dibuja un pseudoelemento y no un borde. No es decoración sino estructura —dice
+ * dónde termina lo fijo y empieza lo que scrollea—, y sin él, justo en esta
+ * variante, un bloque anclado y uno suelto se verían iguales hasta scrollear.
+ */
+.dt-root[data-variant='rows'] .dt-cell {
+  border-right: 0;
+  border-bottom: 1px solid var(--dt-border);
+}
+
+.dt-root[data-variant='rows'] .dt-header-cell {
+  border-right: 0;
+}
+
 /* ------------------------------------------------------------------ Denso */
 
 /*
