@@ -199,6 +199,35 @@ describe('el mensaje de vacío — centrado y sin línea', () => {
   })
 })
 
+describe('esperando y vacía a la vez — nunca las dos señales', () => {
+  it.each(['skeleton', 'blank', true] as const)(
+    'con `loading: %s` y cero filas, el mensaje no aparece',
+    async (modo) => {
+      const harness = await mountWith({ rows: [], loading: modo, emptyText: 'Sin datos' })
+
+      // Las dos juntas se leen como un error: el esqueleto dice "ya viene" y el
+      // mensaje dice "no hay", y no pueden ser ciertas al mismo tiempo. Cada
+      // valor de `loading` se prueba por separado porque la condición mira si HAY
+      // espera, no cómo se dibuja, y confundirlas es justo el error a evitar.
+      expect(harness.wrapper.element.querySelector('.dt-empty')).toBeNull()
+
+      harness.unmount()
+    },
+  )
+
+  it('al terminar la espera, el mensaje aparece', async () => {
+    const harness = await mountWith({ rows: [], loading: 'skeleton', emptyText: 'Sin datos' })
+    expect(harness.wrapper.element.querySelector('.dt-empty')).toBeNull()
+
+    await harness.wrapper.setProps({ loading: false })
+    await harness.flush()
+
+    expect(harness.wrapper.element.querySelector('.dt-empty')?.textContent).toBe('Sin datos')
+
+    harness.unmount()
+  })
+})
+
 describe('loading — lo que no cambia', () => {
   it('viene apagado', async () => {
     const harness = await mountWith({ rows: rows(10) })

@@ -221,11 +221,18 @@ const LOCKED_EVERY = 12
  * arrancar. Una segunda copia se desincronizaría de esta en el primer cambio.
  */
 /*
- * El 0 está primero y a propósito: es el único camino para ver la tabla vacía,
- * que es un estado de la librería como cualquier otro y hasta ahora la demo no
- * sabía mostrar.
+ * El 0 va primero porque es el extremo de la escala, y con él la demo aprende a
+ * mostrar la tabla vacía: un estado de la librería como cualquier otro que hasta
+ * ahora no tenía forma de verse.
+ *
+ * Pero NO es el valor de arranque. Una demo que abre vacía no demuestra nada: lo
+ * primero que hay que ver es la tabla funcionando, y el estado vacío se elige.
+ * Ver {@link DEFAULT_ROW_COUNT}.
  */
 export const ROW_COUNTS = [0, 100, 1_000, 10_000, 50_000] as const
+
+/** Con cuántas filas abre la demo. No es `ROW_COUNTS[0]`, y eso es deliberado. */
+export const DEFAULT_ROW_COUNT = 100
 
 /**
  * Genera `count` filas deterministas.

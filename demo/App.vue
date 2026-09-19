@@ -27,7 +27,7 @@ import type {
   SelectionMode,
   SortState,
 } from 'vue-tablekit'
-import { createProjects, ROW_COUNTS } from './data'
+import { createProjects, DEFAULT_ROW_COUNT } from './data'
 import type { ProjectPriority, ProjectRow } from './data'
 import { fetchRows } from './server'
 import { projectColumns } from './columns'
@@ -81,7 +81,7 @@ const DOCS_URL = 'https://github.com/jorge-koki/vue-tablekit#readme'
 
 /* ------------------------------------------------------------------ Datos */
 
-const rowCount = shallowRef<number>(ROW_COUNTS[0])
+const rowCount = shallowRef<number>(DEFAULT_ROW_COUNT)
 
 /**
  * El dataset.
