@@ -7,6 +7,21 @@ Mientras la versión mayor sea `0`, un cambio incompatible sube la **minor**. La
 como pública es exactamente la que exporta [`src/index.ts`](./src/index.ts): lo que está bajo
 `internal/` y los composables pueden cambiar en cualquier versión sin aviso.
 
+## [0.3.1] — 2026-09-19
+
+Sube el PARCHE y no la minor porque solo agrega: `loading` es una prop nueva y nada de lo que
+existía cambia de comportamiento. Con la mayor en `0`, un cambio incompatible sube la minor y todo
+lo demás sube el parche.
+
+### Agregado
+
+- **`loading`**, para encender el esqueleto a mano. Ya existía, pero atado a una sola causa: en modo
+  servidor, una fila cuya página no había llegado. Eso dejaba fuera los dos momentos donde más falta
+  hace. En la **primera carga**, con `rows` vacío, la tabla mostraba `emptyText`, que afirma algo que
+  nadie sabe todavía. Y en una **reconsulta** —cambiar un filtro, reordenar contra el servidor—
+  `rows` sigue trayendo el resultado ANTERIOR, y pintarlo es mostrar datos viejos como si fueran los
+  nuevos: por eso `loading` gana sobre el dato en lugar de rellenar solo los huecos.
+
 ## [0.3.0] — 2026-09-18
 
 Sube la **minor** y no el parche por una sola línea de esta lista: en `selectionMode: 'row'`,
@@ -50,12 +65,6 @@ editando con el teclado en modo fila, y con la mayor en `0` eso sube la minor. T
   atada a la referencia de su objeto: alcanza para todo lo del lado del cliente, porque `filter` y
   `toSorted` devuelven los mismos objetos. **No alcanza en modo servidor**, donde cada página llega
   como objetos nuevos; ahí se avisa una vez por consola en lugar de perder la selección en silencio.
-- **`loading`**, para encender el esqueleto a mano. Ya existía, pero atado a una sola causa: en modo
-  servidor, una fila cuya página no había llegado. Eso dejaba fuera los dos momentos donde más falta
-  hace. En la **primera carga**, con `rows` vacío, la tabla mostraba `emptyText`, que afirma algo que
-  nadie sabe todavía. Y en una **reconsulta** —cambiar un filtro, reordenar contra el servidor—
-  `rows` sigue trayendo el resultado ANTERIOR, y pintarlo es mostrar datos viejos como si fueran los
-  nuevos: por eso `loading` gana sobre el dato en lugar de rellenar solo los huecos.
 - **`variant: 'rows'`, el extremo opuesto de `'cells'`: una línea entre filas y ninguna vertical,
   tampoco en el encabezado. Pisa a `stripe` y a `bordered` como todo preset. La única vertical que
   sobrevive es el corte del bloque anclado, que no es decoración sino la marca de dónde termina lo
