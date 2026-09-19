@@ -123,7 +123,7 @@ const crosshair = defineModel<boolean>('crosshair', { required: true })
 
 const showRowNumbers = defineModel<boolean>('showRowNumbers', { required: true })
 const selectionColumn = defineModel<boolean>('selectionColumn', { required: true })
-const loading = defineModel<boolean>('loading', { required: true })
+const loading = defineModel<'skeleton' | 'blank' | false>('loading', { required: true })
 const columnReorder = defineModel<boolean>('columnReorder', { required: true })
 const columnVisibility = defineModel<ColumnVisibilityState>('columnVisibility', { required: true })
 </script>
@@ -137,7 +137,7 @@ const columnVisibility = defineModel<ColumnVisibilityState>('columnVisibility', 
         <span>Filas</span>
         <select v-model.number="rowCount">
           <option v-for="count in ROW_COUNTS" :key="count" :value="count">
-            {{ count.toLocaleString('es-AR') }}
+            {{ count === 0 ? 'Vacía' : count.toLocaleString('es-MX') }}
           </option>
         </select>
       </label>
@@ -322,15 +322,23 @@ const columnVisibility = defineModel<ColumnVisibilityState>('columnVisibility', 
         <span>Casillas de selección</span>
       </label>
 
-      <label class="demo-field demo-field--inline">
-        <input v-model="loading" type="checkbox" />
+      <label class="demo-field">
         <span>Esperando datos</span>
+        <select v-model="loading">
+          <option :value="false">No</option>
+          <option value="skeleton">Con esqueleto</option>
+          <option value="blank">Sin mostrar nada</option>
+        </select>
       </label>
 
-      <p v-if="loading" class="demo-field-note">
-        El esqueleto: una barra por celda, en la posición de SU columna. Se enciende a mano para la
-        primera carga o una reconsulta; en modo servidor, una página que aún no llegó ya se pinta
-        así ella sola.
+      <p v-if="loading === 'skeleton'" class="demo-field-note">
+        Una barra por celda, en la posición de SU columna. En modo servidor, una página que aún no
+        llegó ya se pinta así ella sola; esto lo enciende a mano para la primera carga o una
+        reconsulta.
+      </p>
+      <p v-else-if="loading === 'blank'" class="demo-field-note">
+        Ni esqueleto ni mensaje ni los datos anteriores: el cuerpo queda vacío. Para cuando el
+        indicador de carga lo pones tú y dos señales a la vez se leerían como un error.
       </p>
 
       <p v-if="selectionColumn" class="demo-field-note">

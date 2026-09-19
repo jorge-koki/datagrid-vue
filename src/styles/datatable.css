@@ -2006,13 +2006,31 @@
 
 /* ------------------------------------------------------------------- Vacío */
 
+/*
+ * El mensaje de tabla vacía, centrado sobre el cuerpo.
+ *
+ * Va en CAPA y no en el flujo, y eso resuelve las dos cosas que estaban mal. En
+ * el flujo era hermano del viewport y quedaba debajo de él: una franja pegada al
+ * encabezado, con su `border-top` leído como un separador que no separaba nada.
+ * En capa ocupa todo el cuerpo y el centrado es de verdad, en los dos ejes.
+ *
+ * Arranca en `--dt-header-height` y no en 0 para no taparlo: los títulos de las
+ * columnas siguen ahí aunque no haya una sola fila, y esconderlos haría parecer
+ * que la tabla no terminó de armarse.
+ *
+ * `pointer-events: none` porque no es un control: sin esto se comería la rueda
+ * del mouse y el scroll horizontal de una tabla que todavía tiene encabezado.
+ */
 .dt-empty {
+  position: absolute;
+  inset: var(--dt-header-height) 0 0 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 2rem var(--dt-cell-px);
-  border-top: 1px solid var(--dt-border);
+  padding: var(--dt-cell-px);
   color: var(--dt-text-dimmed);
+  text-align: center;
+  pointer-events: none;
 }
 
 /* ------------------------------------------------- Renderers de celda */

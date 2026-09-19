@@ -16,6 +16,9 @@
  *   `loading` gana sobre el dato en lugar de rellenar solo los huecos.
  */
 
+import { readFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { mountTable } from './harness'
 import type { GridRow } from './harness'
@@ -137,6 +140,62 @@ describe('la tabla vacía — sin texto, sin caja', () => {
     expect(harness.wrapper.element.querySelector('.dt-empty')?.textContent).toBe('Sin resultados')
 
     harness.unmount()
+  })
+})
+
+describe("loading: 'blank' — esperando, sin mostrar nada", () => {
+  it('no pinta esqueleto ni mensaje', async () => {
+    const harness = await mountWith({ rows: [], loading: 'blank' })
+
+    // Sigue siendo "estoy esperando", así que el mensaje de vacío tampoco aparece:
+    // eso afirmaría algo que nadie sabe todavía. Simplemente no hay nada que ver.
+    expect(harness.canvas.querySelectorAll('.dt-cell--placeholder')).toHaveLength(0)
+    expect(harness.wrapper.element.querySelector('.dt-empty')).toBeNull()
+
+    harness.unmount()
+  })
+
+  it('tampoco muestra los datos viejos de una reconsulta', async () => {
+    const harness = await mountWith({ rows: rows(20), loading: 'blank' })
+
+    // Lo mismo que con el esqueleto: `rows` trae el resultado anterior y
+    // mostrarlo sería mentir. La diferencia es qué se pone en su lugar, no si se
+    // tapa o no.
+    expect(harness.canvas.textContent).not.toContain('Fila 0')
+    expect(harness.canvas.querySelectorAll('.dt-cell--placeholder')).toHaveLength(0)
+
+    harness.unmount()
+  })
+
+  it("`'skeleton'` es el nombre largo de `true`", async () => {
+    const harness = await mountWith({ rows: [], loading: 'skeleton' })
+
+    expect(harness.canvas.querySelectorAll('.dt-cell--placeholder').length).toBeGreaterThan(0)
+
+    harness.unmount()
+  })
+})
+
+describe('el mensaje de vacío — centrado y sin línea', () => {
+  it('no dibuja ningún borde', () => {
+    const hoja = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), '..', 'styles', 'datatable.css'),
+      'utf8',
+    ).replace(/\/\*[\s\S]*?\*\//g, '')
+    const cuerpo = /\.dt-empty\s*\{([^}]*)\}/.exec(hoja)?.[1] ?? ''
+
+    // El `border-top` se leía como un separador que no separaba nada: el mensaje
+    // no es una sección de la tabla, es lo único que hay.
+    expect(cuerpo).not.toMatch(/border/)
+    // Y va en capa sobre el cuerpo, que es lo que lo centra de verdad en los dos
+    // ejes. En el flujo quedaba pegado abajo del viewport.
+    expect(cuerpo).toContain('position: absolute')
+    expect(cuerpo).toContain('align-items: center')
+    expect(cuerpo).toContain('justify-content: center')
+    // Empieza bajo el encabezado: los títulos siguen ahí aunque no haya filas.
+    expect(cuerpo).toContain('var(--dt-header-height)')
+    // Y no se come la rueda del mouse.
+    expect(cuerpo).toContain('pointer-events: none')
   })
 })
 

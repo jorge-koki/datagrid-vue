@@ -444,6 +444,19 @@ const headerHeight = computed(() => {
 const serverMode = computed(() => props.rowCount !== undefined)
 
 /**
+ * ¿La tabla está esperando datos? Cualquiera de las tres formas de decirlo.
+ *
+ * Separado de {@link showLoadingSkeleton} a propósito: "estoy esperando" y "lo
+ * muestro con esqueleto" son dos preguntas distintas, y `'blank'` responde sí a
+ * la primera y no a la segunda. Mezclarlas haría que con `'blank'` apareciera el
+ * mensaje de tabla vacía, que es justo lo que no corresponde mientras se espera.
+ */
+const isLoading = computed(() => props.loading !== false)
+
+/** ¿Y se pinta el esqueleto? Con `'blank'` no se pinta nada. */
+const showLoadingSkeleton = computed(() => props.loading === true || props.loading === 'skeleton')
+
+/**
  * Agrupar y modo servidor son excluyentes.
  *
  * Armar el árbol de grupos exige recorrer el dataset ENTERO —hay que leer la
@@ -525,7 +538,18 @@ const visibleRowCount = computed(() => {
    * no una promesa de cuántos resultados van a llegar. Inventar una barra de
    * scroll larga y que después lleguen tres filas se lee como un error.
    */
-  if (props.loading && real === 0) {
+  /*
+   * `'blank'` no pinta NADA, y eso incluye las filas que ya estuvieran.
+   *
+   * Es la misma razón por la que el esqueleto tapa el dato: en una reconsulta
+   * `rows` sigue trayendo el resultado anterior. Quitar el esqueleto y dejar las
+   * filas viejas sería lo peor de los dos mundos —datos que no son, sin ninguna
+   * señal de que algo está pasando—. Sin filas visibles, el cuerpo queda vacío,
+   * que es lo que `'blank'` promete.
+   */
+  if (props.loading === 'blank') return 0
+
+  if (showLoadingSkeleton.value && real === 0) {
     const alto = rowHeight.value
     return alto > 0 ? Math.ceil(rowViewportHeight.value / alto) : 0
   }
@@ -1069,7 +1093,7 @@ function onHeaderSelectionToggle(): void {
  * texto de puros espacios no se ve y de todas formas arrastraría la caja.
  */
 const showEmptyMessage = computed(
-  () => props.rows.length === 0 && !props.loading && props.emptyText.trim().length > 0,
+  () => props.rows.length === 0 && !isLoading.value && props.emptyText.trim().length > 0,
 )
 
 /** Valor actual de una celda, para poder alternarlo desde el teclado. */
@@ -2439,7 +2463,7 @@ function paintFrame(): void {
     groupDepth: grouping.depth.value,
     showGroupCount: props.showGroupCount,
     placeholders: serverMode.value,
-    loading: props.loading,
+    loading: showLoadingSkeleton.value,
     rowRange: rowVirtual.window.value,
     columns: visibleColumns.value,
     rowMetrics: rowMetrics.value,

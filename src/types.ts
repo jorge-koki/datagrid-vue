@@ -1147,8 +1147,22 @@ export interface DataTableProps<TRow> {
    *
    * No hace falta en modo servidor para el scroll normal: una página que aún no
    * llegó ya se pinta como esqueleto ella sola.
+   *
+   * ## Qué se muestra mientras espera
+   *
+   * | Valor         | Qué se ve                                          |
+   * | ------------- | --------------------------------------------------- |
+   * | `false`       | Nada especial: la tabla normal.                     |
+   * | `true`        | El esqueleto. Igual que `'skeleton'`.               |
+   * | `'skeleton'`  | Lo mismo, dicho por su nombre.                      |
+   * | `'blank'`     | **Nada**: ni esqueleto ni mensaje. El cuerpo queda vacío. |
+   *
+   * `'blank'` es para cuando el indicador de carga lo pones tú —un spinner
+   * propio encima, una barra en otro lado— y dos señales de espera a la vez se
+   * leen como un error. Sigue siendo "estoy esperando": el mensaje de tabla
+   * vacía tampoco aparece, porque eso afirmaría algo que nadie sabe todavía.
    */
-  loading?: boolean
+  loading?: boolean | 'skeleton' | 'blank'
   /**
    * Mensaje mostrado cuando `rows` está vacío. Por defecto `'No data'`.
    *

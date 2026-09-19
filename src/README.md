@@ -275,7 +275,7 @@ const rows = shallowRef<readonly Invoice[]>([
 
 // A nivel de módulo, no adentro de `formatAggregate`: construir un
 // `Intl.NumberFormat` por llamada se paga en el camino de pintado de la cabecera.
-const money = new Intl.NumberFormat('es-AR', {
+const money = new Intl.NumberFormat('es-MX', {
   style: 'currency',
   currency: 'USD',
   maximumFractionDigits: 0,
@@ -2792,6 +2792,17 @@ Cubre los dos momentos que el automático no alcanza:
 ```vue
 <DataTable :rows="rows" :columns="columns" :loading="cargando" />
 ```
+
+| Valor        | Qué se ve                                                    |
+| ------------ | ------------------------------------------------------------ |
+| `false`      | Nada especial: la tabla normal.                              |
+| `true`       | El esqueleto. Igual que `'skeleton'`.                        |
+| `'skeleton'` | Lo mismo, dicho por su nombre.                               |
+| `'blank'`    | **Nada**: ni esqueleto, ni mensaje, ni los datos anteriores. |
+
+`'blank'` es para cuando el indicador de carga lo pones tú —un spinner propio encima, una barra en
+otro lado— y dos señales de espera a la vez se leen como un error. Sigue siendo "estoy esperando",
+así que tampoco aparece el mensaje de tabla vacía.
 
 | Momento       | Qué pasa sin `loading`                                                                  |
 | ------------- | --------------------------------------------------------------------------------------- |

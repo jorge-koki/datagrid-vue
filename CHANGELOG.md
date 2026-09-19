@@ -9,8 +9,20 @@ como pública es exactamente la que exporta [`src/index.ts`](./src/index.ts): lo
 
 ## [0.3.2] — 2026-09-19
 
+### Agregado
+
+- **`loading: 'blank'`**, para esperar SIN mostrar nada: ni esqueleto, ni mensaje, ni los datos
+  anteriores. Es para cuando el indicador de carga lo pone el consumidor —un spinner propio encima,
+  una barra en otro lado— y dos señales de espera a la vez se leen como un error. `loading` pasa a
+  aceptar `boolean | 'skeleton' | 'blank'`, donde `true` y `'skeleton'` son lo mismo.
+
 ### Corregido
 
+- **El mensaje de tabla vacía va centrado y sin línea.** Estaba en el flujo, como hermano del
+  viewport, así que quedaba debajo de él: una franja pegada al encabezado con un `border-top` que se
+  leía como un separador sin nada que separar. Ahora va en capa sobre el cuerpo, centrado en los dos
+  ejes y sin borde. Arranca bajo el encabezado para no taparlo —los títulos siguen ahí aunque no haya
+  filas— y no recibe punteros, para no comerse la rueda del mouse.
 - **`emptyText` vacío ya no deja una franja.** La caja del mensaje dibuja una línea arriba y reserva
   2rem de aire a cada lado, y eso se pintaba igual con la cadena vacía: quedaba una franja de 4rem
   cruzada por un separador que no separaba nada. Ahora "sin texto" significa "sin elemento". Un

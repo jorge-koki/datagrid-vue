@@ -252,7 +252,7 @@ const variant = shallowRef<DataTableVariant>('default')
 const radiusBorder = shallowRef<DataTableRadius>('lg')
 const showRowNumbers = shallowRef(true)
 const selectionColumn = shallowRef(false)
-const loading = shallowRef(false)
+const loading = shallowRef<'skeleton' | 'blank' | false>(false)
 const selectedRows = shallowRef<RowSelectionState>({ mode: 'some', keys: [] })
 
 /**
@@ -392,7 +392,7 @@ watch(rowCount, (count) => {
   // podría quedar fuera de rango. Como aquí la selección está controlada, basta
   // con limpiarla.
   activeCell.value = null
-  logEvent('info', `Dataset regenerado con ${count.toLocaleString('es-AR')} filas`)
+  logEvent('info', `Dataset regenerado con ${count.toLocaleString('es-MX')} filas`)
 })
 
 /** Un clic simple selecciona; el editor lo abren el doble clic, Enter y F2. */

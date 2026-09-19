@@ -220,7 +220,12 @@ const LOCKED_EVERY = 12
  * controles para armar el desplegable, y `App.vue` para saber con cuántas filas
  * arrancar. Una segunda copia se desincronizaría de esta en el primer cambio.
  */
-export const ROW_COUNTS = [100, 1_000, 10_000, 50_000] as const
+/*
+ * El 0 está primero y a propósito: es el único camino para ver la tabla vacía,
+ * que es un estado de la librería como cualquier otro y hasta ahora la demo no
+ * sabía mostrar.
+ */
+export const ROW_COUNTS = [0, 100, 1_000, 10_000, 50_000] as const
 
 /**
  * Genera `count` filas deterministas.
