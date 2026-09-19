@@ -868,6 +868,20 @@ const activeColumnIndex = computed(() => {
 const rangeEnabled = computed(() => props.rangeSelection && props.selectionMode === 'cell')
 
 /**
+ * En modo fila la unidad elegida es la FILA, y la columna deja de ser parte de
+ * la selección.
+ *
+ * Adentro sigue habiendo una celda activa —el teclado necesita una posición y el
+ * editor necesita saber qué se edita—, pero su columna no se pinta. Todo lo que
+ * la exponía o actuaba sobre ella cuelga de esta bandera: si el usuario no puede
+ * VER en qué columna está, ninguna tecla puede moverlo por ellas ni decidir
+ * según cuál sea. Lo contrario es lo que había: el encabezado marcaba una
+ * columna que la fila no decía, las flechas la corrían sin que se viera nada
+ * moverse, y `Enter` abría el editor de una celda que el usuario no eligió.
+ */
+const rowMode = computed(() => props.selectionMode === 'row')
+
+/**
  * El rango, con la celda activa como ancla.
  *
  * No es un segundo estado de selección: el ancla ES `activeCell`, y aquí solo
@@ -1646,8 +1660,10 @@ function onViewportKeyDown(event: KeyboardEvent): void {
       // lo abre en lugar de moverse. Sobre uno ya abierto no hay nada que abrir
       // y la tecla vuelve a significar lo de siempre.
       const group = activeGroupRow()
+      // Plegar y desplegar NO es moverse entre columnas: sigue valiendo en los
+      // dos modos, porque actúa sobre la fila en la que uno ya está parado.
       if (group && !group.expanded) grouping.toggleGroup(group.groupId)
-      else moveOrExtendBy(shift, 0, 1)
+      else if (!rowMode.value) moveOrExtendBy(shift, 0, 1)
       return
     }
     case 'ArrowUp':
@@ -1658,10 +1674,14 @@ function onViewportKeyDown(event: KeyboardEvent): void {
       event.preventDefault()
       const group = activeGroupRow()
       if (group && group.expanded) grouping.toggleGroup(group.groupId)
-      else moveOrExtendBy(shift, 0, -1)
+      else if (!rowMode.value) moveOrExtendBy(shift, 0, -1)
       return
     }
     case 'Tab':
+      // En modo fila no hay celdas que recorrer, y tabular por ellas sería
+      // moverse a ciegas. Sin `preventDefault` la tecla vuelve a significar lo
+      // que significa en toda la página: salir de la tabla.
+      if (rowMode.value) return
       event.preventDefault()
       // `Shift`+`Tab` es "la celda anterior" y no "extender": es la única tecla
       // donde `Shift` ya significaba otra cosa, y esa otra cosa la espera todo
@@ -1670,7 +1690,10 @@ function onViewportKeyDown(event: KeyboardEvent): void {
       return
     case 'Home':
       event.preventDefault()
-      if (ctrl) moveOrExtendTo(shift, 0, 0)
+      // En modo fila `Home` es la PRIMERA FILA, que es lo único que puede
+      // significar donde no hay columnas que recorrer: sin esto quedaría
+      // llevándote a una columna invisible y se vería como una tecla muerta.
+      if (ctrl || rowMode.value) moveOrExtendTo(shift, 0, 0)
       // Absoluto, igual que `End` aquí abajo, y no un delta negativo enorme que
       // `moveActiveTo` termine acotando. Expresado como delta, `Home` sería un
       // movimiento "hacia la izquierda" y sin celda activa entraría por el borde
@@ -1679,7 +1702,7 @@ function onViewportKeyDown(event: KeyboardEvent): void {
       return
     case 'End':
       event.preventDefault()
-      if (ctrl) moveOrExtendTo(shift, lastRow, lastColumn)
+      if (ctrl || rowMode.value) moveOrExtendTo(shift, lastRow, lastColumn)
       else moveOrExtendTo(shift, rowForAbsoluteJump(shift), lastColumn)
       return
     case 'PageDown':
@@ -1697,7 +1720,10 @@ function onViewportKeyDown(event: KeyboardEvent): void {
       // compite con la edición porque un grupo no tiene ninguna celda que editar.
       const group = activeGroupRow()
       if (group) grouping.toggleGroup(group.groupId)
-      else editActiveCell()
+      // En modo fila no se edita desde el teclado: `Enter` abriría el editor de
+      // una celda que el usuario no eligió ni puede ver. Editar sigue estando,
+      // pero por doble clic, que es el gesto donde se señala una celda concreta.
+      else if (!rowMode.value) editActiveCell()
       return
     }
     case ' ': {
@@ -1724,6 +1750,9 @@ function onViewportKeyDown(event: KeyboardEvent): void {
   // —menos Shift, que solo cambia el carácter— para no secuestrar los atajos
   // del navegador.
   if (event.key.length !== 1 || ctrl || event.altKey) return
+  // Misma razón que `Enter`: sin una columna a la vista, escribir no puede
+  // decidir dónde escribe.
+  if (rowMode.value) return
   const position = activeCell.value
   if (!position) return
   event.preventDefault()
@@ -1757,10 +1786,38 @@ function onViewportKeyDown(event: KeyboardEvent): void {
  * seleccionó adentro del `<input>`. Robarle ese copiado para pegarle el
  * contenido de la grilla sería exactamente lo contrario de lo que pidió.
  */
+/**
+ * Qué abarca el copiado.
+ *
+ * En modo celda es el rango, que sin arrastre colapsa en la celda activa. En
+ * modo fila es LA FILA ENTERA, de la primera a la última columna visible: ahí la
+ * unidad elegida es la fila, y devolver una sola celda copiaba algo que el
+ * usuario nunca seleccionó —ni podía ver cuál era—.
+ *
+ * Se arma con las columnas VISIBLES y en el orden en que están, no con las
+ * declaradas: lo que se pega tiene que corresponderse con lo que se ve, igual
+ * que ya hacía el copiado de un rango.
+ */
+function copyRect(): RangeRect | null {
+  if (!rowMode.value) return cellRange.rect.value
+
+  const position = activeCell.value
+  if (!position) return null
+  const lastColumn = resolvedColumns.value.length - 1
+  if (lastColumn < 0) return null
+
+  return {
+    rowStart: position.rowIndex,
+    rowEnd: position.rowIndex,
+    columnStart: 0,
+    columnEnd: lastColumn,
+  }
+}
+
 function onViewportCopy(event: ClipboardEvent): void {
   if (editor.editing.value) return
 
-  const rect = cellRange.rect.value
+  const rect = copyRect()
   if (!rect) return
 
   const data = event.clipboardData
@@ -3179,7 +3236,9 @@ function headerAlignClass(column: ResolvedColumn<TRow>): string | undefined {
               :aria-colindex="column.index + 1"
               :class="[
                 headerAlignClass(column),
-                { 'dt-header-cell--active': column.key === activeCell?.columnKey },
+                {
+                  'dt-header-cell--active': !rowMode && column.key === activeCell?.columnKey,
+                },
                 { 'dt-header-cell--range': isColumnInRange(column.index) },
                 { 'dt-header-cell--dragging': columnDrag?.key === column.key },
                 { 'dt-header-cell--fixed': columnReorder && !column.reorderable },

@@ -614,15 +614,45 @@ posición activa sobrevive a cualquier repintado.
 
 ### `selectionMode`
 
-| Valor    | Comportamiento                                                                                                                                                                                                    |
-| -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `'cell'` | Por defecto. La **celda** activa recibe `.dt-cell--active` y `aria-selected`; su fila recibe además `.dt-row--active`.                                                                                            |
-| `'row'`  | La **fila** activa es la unidad seleccionada: recibe el anillo y `aria-selected`, y la celda no recibe ninguno de los dos. La celda activa se sigue registrando, para que las flechas sepan en qué columna están. |
-| `'none'` | Sin selección por puntero, sin ningún manejador de teclado registrado, y el viewport deja de ser enfocable (`tabindex="-1"`).                                                                                     |
+| Valor    | Comportamiento                                                                                                                                                                                                                                                             |
+| -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `'cell'` | Por defecto. La **celda** activa recibe `.dt-cell--active` y `aria-selected`; su fila recibe además `.dt-row--active`.                                                                                                                                                     |
+| `'row'`  | La **fila** activa es la unidad seleccionada: recibe el anillo y `aria-selected`, y la celda no recibe ninguno de los dos. Adentro sigue habiendo una celda activa, pero su columna deja de decidir nada visible. Ver [Qué cambia en modo fila](#qué-cambia-en-modo-fila). |
+| `'none'` | Sin selección por puntero, sin ningún manejador de teclado registrado, y el viewport deja de ser enfocable (`tabindex="-1"`).                                                                                                                                              |
 
 `'none'` no es un early return dentro de un manejador: el objeto de listeners viene vacío y Vue no
 registra nada. El `selectCell()` expuesto sigue escribiendo el estado si se lo llama, así que una
 selección por código sigue siendo posible; lo que desaparece son las vías de entrada del usuario.
+
+#### Qué cambia en modo fila
+
+La regla es una sola: **si el usuario no puede ver en qué columna está, nada puede moverlo por ellas
+ni decidir según cuál sea.** Adentro sigue existiendo una celda activa —el teclado necesita una
+posición y el editor necesita saber qué abre—, pero su columna no se pinta y por lo tanto tampoco
+manda.
+
+| Gesto                  | En `'cell'`                        | En `'row'`                                     |
+| ---------------------- | ---------------------------------- | ---------------------------------------------- |
+| Encabezado de columna  | Marca la columna activa            | No marca ninguna                               |
+| `←` `→`                | Mueven de columna                  | No hacen nada                                  |
+| `Home` / `End`         | Primera / última **columna**       | Primera / última **fila**                      |
+| `Tab`                  | Recorre celdas en orden de lectura | Sale de la tabla, como en cualquier otra parte |
+| `Ctrl`+`C`             | La celda o el rango                | La **fila entera**, en TSV                     |
+| `Enter`, `F2`, teclear | Abren el editor                    | No abren nada                                  |
+| Doble clic             | Abre el editor                     | Abre el editor                                 |
+
+Plegar y desplegar un grupo con `←` y `→` **sigue funcionando** en los dos modos: no es moverse entre
+columnas, es actuar sobre la fila donde uno ya está parado.
+
+**Editar sigue estando, y a propósito.** Lo único que se va son las vías ciegas: `Enter` abría el
+editor de una celda que el usuario no eligió ni podía ver. El doble clic se queda porque ahí sí se
+señala una celda concreta. Quien quiera una tabla de solo lectura tiene `editable: false` por
+columna y el veto de `beforeEdit`, que es donde esa decisión pertenece —si el modo la quitara por su
+cuenta, no habría forma de recuperarla—.
+
+Para reaccionar a la fila elegida está `rowClick`, que emite `{ row, rowIndex }` con el objeto
+completo y el índice dentro de tu propio array. No hace falta modo fila para recibirlo: se emite en
+los tres modos.
 
 ### El anillo de foco del viewport
 

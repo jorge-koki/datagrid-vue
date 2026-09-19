@@ -32,6 +32,18 @@ como pública es exactamente la que exporta [`src/index.ts`](./src/index.ts): lo
   contra uno se pierde contra el otro. Va detrás de `@media (hover: hover)` para que en una pantalla
   táctil no se quede pegado después de tocar.
 
+### Corregido
+
+- **`selectionMode: 'row'` era una piel, no un modo.** Adentro la selección seguía siendo una celda
+  —fila más columna— y todo lo que leía ese estado seguía comportándose como en modo celda; solo dos
+  reglas de CSS escondían la celda. El resultado era lo peor de los dos mundos: la columna no se
+  veía, pero la columna seguía decidiendo. Ahora, con la fila como unidad: el encabezado no marca
+  ninguna columna, `←` y `→` no corren un cursor invisible, `Home` y `End` van a la primera y la
+  última FILA, `Tab` sale de la tabla y `Ctrl`+`C` copia la fila entera en lugar de una sola celda.
+  Editar sigue estando pero solo por doble clic: `Enter`, `F2` y teclear abrían el editor de una
+  celda que el usuario no eligió ni podía ver. Plegar grupos con las flechas no cambia, que no es
+  moverse entre columnas.
+
 ### Cambiado
 
 - **El menú de columna ofrece ahora los DOS bordes para anclar**, no solo el declarado en `pinnable`.

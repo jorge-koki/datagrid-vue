@@ -1317,7 +1317,13 @@ export interface RangeSelectEvent<TRow> {
  * texto es exactamente el que se copió.
  */
 export interface RangeCopyEvent {
-  /** El rango copiado, o `null` si era una sola celda. */
+  /**
+   * El rango copiado, o `null` cuando no hubo uno.
+   *
+   * Es `null` en los dos casos donde el usuario no arrastró nada: una sola celda
+   * en modo celda, y la fila entera en modo fila. `rowCount` y `columnCount`
+   * dicen cuál de los dos fue.
+   */
   readonly range: CellRange | null
   /** El texto escrito en el portapapeles: TSV, una línea por fila. */
   readonly text: string
