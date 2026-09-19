@@ -53,6 +53,7 @@ import {
   setRowNumberLabel,
   setRowNumberOffset,
   setRowNumberRange,
+  setRowNumberHover,
   setRowNumberStripe,
   setRowHeight,
   setRowOffset,
@@ -60,6 +61,7 @@ import {
   setRowWidth,
 } from '../internal/dom'
 import {
+  HOVERED_ROW_SELECTOR,
   ROW_KIND_DATA,
   ROW_KIND_GROUP,
   ROW_POOL_SLACK,
@@ -458,6 +460,12 @@ export function useRowPool<TRow extends Record<string, unknown>>(
     // La regleta es otro contenedor, así que necesita su propio listener. Sigue
     // siendo uno solo para todos los números, que es la regla de siempre.
     gutterHost?.addEventListener('pointerdown', handleGutterPointerDown)
+    // El realce de la fila bajo el puntero lo pinta el CSS, menos en la regleta:
+    // el número no es hijo de su fila y ningún selector llega hasta él. Estos dos
+    // son ese puente. `mouseover` y no `mousemove`: se dispara al ENTRAR a un
+    // elemento, así que pasear el mouse a lo largo de una fila no cuesta nada.
+    container.addEventListener('mouseover', handleRowHover)
+    container.addEventListener('mouseleave', clearRowHover)
   }
 
   /**
@@ -488,12 +496,49 @@ export function useRowPool<TRow extends Record<string, unknown>>(
       container.removeEventListener('click', handleClick)
       container.removeEventListener('pointerdown', handlePointerDown)
       container.removeEventListener('change', handleChange)
+      container.removeEventListener('mouseover', handleRowHover)
+      container.removeEventListener('mouseleave', clearRowHover)
       gutterHost?.removeEventListener('pointerdown', handleGutterPointerDown)
       for (const row of rows) releaseRow(row)
     }
     rows.length = 0
+    hoveredRow = null
     container = null
     gutterHost = null
+  }
+
+  /**
+   * La fila que el puntero tiene encima, para espejar su realce en la regleta.
+   *
+   * Se guarda el NODO y no el índice, y en eso está todo. Las filas se reciclan
+   * al scrollear: un índice guardado apuntaría a la fila de antes en cuanto el
+   * contenido corra bajo un puntero quieto. El nodo, en cambio, sigue siendo el
+   * que el puntero tiene encima, y su número es el mismo de siempre —nacen
+   * juntos y comparten slot para toda la vida, ver `growRows`—.
+   */
+  let hoveredRow: PooledRowElement | null = null
+
+  /** Pasa la marca de un número al otro. Dos escrituras en el peor caso. */
+  function paintRowHover(row: PooledRowElement | null): void {
+    if (hoveredRow === row) return
+    const anterior = hoveredRow?.__dtNumber
+    if (anterior) setRowNumberHover(anterior, false)
+    hoveredRow = row
+    const actual = row?.__dtNumber
+    if (actual) setRowNumberHover(actual, true)
+  }
+
+  function handleRowHover(event: Event): void {
+    const target = event.target
+    if (!(target instanceof Element)) return
+    const row = target.closest('.dt-row')
+    // Qué filas se realzan lo decide la hoja y nadie más: se le pregunta a ella
+    // con su propio selector en lugar de repetir aquí la lista de excepciones.
+    paintRowHover(row?.matches(HOVERED_ROW_SELECTOR) ? (row as PooledRowElement) : null)
+  }
+
+  function clearRowHover(): void {
+    paintRowHover(null)
   }
 
   function invalidate(): void {
@@ -846,6 +891,30 @@ export function useRowPool<TRow extends Record<string, unknown>>(
       }
 
       paintPinnedCells(rowNode, pinnedColumns, pinnedRenderers, row, rowIndex, frame)
+    }
+
+    /*
+     * Reconciliar el realce con lo que quedó pintado.
+     *
+     * `mouseover` avisa cuando el puntero ENTRA a otro elemento, y hay dos
+     * formas de que lo que corresponde cambie sin que el puntero se mueva:
+     *
+     * - el nodo que tenía encima pasó a ser una cabecera de grupo, un esqueleto
+     *   o la fila activa, y entonces ya no le toca realce;
+     * - al revés: la tabla recién pasó a modo fila con el puntero quieto sobre
+     *   una fila, y nadie va a avisar que ahora sí le toca.
+     *
+     * Es UNA consulta por pintado. Y cae del lado barato: mientras haya algo
+     * realzado no se busca nada, y para scrollear con la rueda hay que tener el
+     * puntero sobre la tabla, así que en el camino caliente siempre hay algo
+     * realzado. La búsqueda solo corre con el puntero fuera de las filas, que es
+     * justo cuando casi no se pinta.
+     */
+    if (hoveredRow) {
+      if (!hoveredRow.matches(HOVERED_ROW_SELECTOR)) paintRowHover(null)
+    } else {
+      const bajoElPuntero = container.querySelector(HOVERED_ROW_SELECTOR)
+      if (bajoElPuntero) paintRowHover(bajoElPuntero as PooledRowElement)
     }
   }
 

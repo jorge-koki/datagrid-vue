@@ -26,6 +26,21 @@
   --dt-bg-elevated: var(--ui-bg-elevated, #f3f4f6);
   --dt-bg-accented: var(--ui-bg-accented, #e5e7eb);
 
+  /*
+   * El realce de la fila bajo el puntero.
+   *
+   * Es un TINTE y no una superficie, y no es una preferencia de estilo: la banda
+   * cruza dos fondos distintos —el de las celdas y el de la regleta, que está un
+   * escalón más arriba— y cualquier color fijo que se vea sobre uno se pierde
+   * contra el otro. Elegir `--dt-bg-elevated` lo dejó EXACTAMENTE INVISIBLE en la
+   * regleta, que ya se pinta con ese mismo color. Un tinte aclara lo que tenga
+   * debajo, sea lo que sea.
+   *
+   * Sale del color de texto y no de uno fijo para que siga al tema solo: aclara
+   * en oscuro y oscurece en claro, sin una segunda declaración.
+   */
+  --dt-row-tint-hover: color-mix(in srgb, var(--dt-text) 8%, transparent);
+
   /* Bordes */
   --dt-border: var(--ui-border, #e5e7eb);
   --dt-border-accented: var(--ui-border-accented, #d1d5db);
@@ -1209,6 +1224,64 @@
 /* Fila que contiene la celda activa. */
 .dt-row--active {
   --dt-row-bg: var(--dt-bg-accented);
+}
+
+/*
+ * La fila bajo el puntero, SOLO con la selección por fila.
+ *
+ * El realce cuelga de `data-selection='row'` porque no es decoración: es el
+ * anticipo de lo que va a hacer el clic. Donde la unidad que se elige es la
+ * celda, realzar la fila entera prometería algo que el clic no cumple, y en modo
+ * `none` no hay nada que prometer.
+ *
+ * Son DOS reglas y no una porque la fila no pinta —ver `.dt-row`—: la primera
+ * dice de qué color queda la fila, la segunda lo pinta celda por celda. Mover
+ * `--dt-row-bg` es lo que hace que las columnas ancladas acompañen solas: se
+ * pintan opacas con esa misma variable, y con cualquier otro camino quedarían
+ * como huecos sin realzar sobre la banda.
+ *
+ * El realce se apoya en `:hover` y no en un índice guardado en JS. No es pereza:
+ * las filas se reciclan al scrollear, así que un índice guardado apuntaría al
+ * nodo de antes, mientras que el navegador vuelve a resolver qué hay debajo del
+ * puntero él solo. Y no cuesta una sola escritura en el pintado.
+ *
+ * Quedan afuera la fila activa —el realce es más tenue y la vería soltarse—, la
+ * cabecera de grupo —que no se selecciona: su clic pliega— y el esqueleto de
+ * carga, que todavía no es ninguna fila.
+ */
+@media (hover: hover) {
+  .dt-root[data-selection='row']
+    .dt-row:not(.dt-row--active, .dt-group-row, .dt-row--placeholder):hover {
+    cursor: pointer;
+  }
+
+  /*
+   * El tinte va como CAPA DE IMAGEN, por lo mismo que en `.dt-cell--range`:
+   * `background-color` es el canal que una celda anclada necesita OPACO para
+   * tapar lo que scrollea por debajo, y meterle ahí algo semitransparente la
+   * volvería traslucida. En una capa aparte, las dos cosas conviven.
+   */
+  .dt-root[data-selection='row']
+    .dt-row:not(.dt-row--active, .dt-group-row, .dt-row--placeholder):hover
+    .dt-cell {
+    background-image: linear-gradient(var(--dt-row-tint-hover), var(--dt-row-tint-hover));
+  }
+
+  /*
+   * La regleta, que no es hija de la fila y por eso no le alcanza ningún
+   * selector: la marca se la pone el pool, ver `HOVERED_ROW_SELECTOR`. Va detrás
+   * de la misma `@media` que las otras dos para que en una pantalla táctil no se
+   * encienda ella sola.
+   *
+   * El MISMO tinte que las celdas, aunque el fondo de abajo sea otro: de eso se
+   * trata que sea un tinte y no un color. Y por ser una capa aparte no borra
+   * nada, se suma: si alguna vez cae sobre un número ya marcado, ese número se
+   * ve marcado Y apuntado, que es lo correcto. Un color de fondo, en cambio,
+   * habría tapado la marca de abajo.
+   */
+  .dt-root[data-selection='row'] .dt-row-number--hover {
+    background-image: linear-gradient(var(--dt-row-tint-hover), var(--dt-row-tint-hover));
+  }
 }
 
 .dt-cell {

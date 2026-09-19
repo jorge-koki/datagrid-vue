@@ -23,6 +23,13 @@ como pública es exactamente la que exporta [`src/index.ts`](./src/index.ts): lo
   una columna ancha de texto, donde el clic se da sin querer al ir a redimensionarla o arrastrarla. La
   flecha del sentido aparece igual: dice cómo está ordenada la tabla, no cómo se la ordenó.
 - **`pinnable: 'menu'`**: la columna se ancla, pero sin botón en el encabezado.
+- **La fila bajo el puntero se realza, con `selectionMode: 'row'`.** Es el anticipo de lo que va a
+  hacer el clic, así que no aparece en `'cell'` —donde lo que se elige es una celda— ni en `'none'`,
+  y deja afuera la fila activa, la cabecera de grupo y el esqueleto de carga. Nuevo token
+  `--dt-row-tint-hover`, un tinte semitransparente y no un color: la banda cruza el fondo de las
+  celdas y el de la regleta, que está un escalón más arriba, y cualquier color fijo que se vea
+  contra uno se pierde contra el otro. Va detrás de `@media (hover: hover)` para que en una pantalla
+  táctil no se quede pegado después de tocar.
 
 ### Cambiado
 

@@ -314,6 +314,8 @@ export interface PooledRowNumberElement extends HTMLElement {
   __dtNumberActive: boolean
   /** Último estado de fila dentro del rango aplicado. */
   __dtNumberRange: boolean
+  /** Último estado de fila bajo el puntero aplicado. */
+  __dtNumberHover: boolean
 }
 
 /**
@@ -655,6 +657,7 @@ export function createRowNumberElement(): PooledRowNumberElement {
     __dtNumberStripe: false,
     __dtNumberActive: false,
     __dtNumberRange: false,
+    __dtNumberHover: false,
   })
 }
 
@@ -677,6 +680,21 @@ export function setRowNumberStripe(node: PooledRowNumberElement, stripe: boolean
   if (node.__dtNumberStripe === stripe) return
   node.__dtNumberStripe = stripe
   node.classList.toggle('dt-row-number--stripe', stripe)
+}
+
+/**
+ * Marca el número de la fila que está bajo el puntero.
+ *
+ * Es el puente que le falta al CSS: el realce de la fila lo resuelve `:hover` en
+ * la hoja, pero el número vive en otro carril y ningún selector llega desde una
+ * cosa a la otra. Esto solo PONE LA MARCA; si se pinta o no lo sigue decidiendo
+ * la hoja, que tiene la regla detrás de la misma consulta `@media` —en una
+ * pantalla táctil no se pinta ninguno de los dos.
+ */
+export function setRowNumberHover(node: PooledRowNumberElement, hovered: boolean): void {
+  if (node.__dtNumberHover === hovered) return
+  node.__dtNumberHover = hovered
+  node.classList.toggle('dt-row-number--hover', hovered)
 }
 
 /** Marca el número de la fila que contiene la celda activa. */

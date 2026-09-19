@@ -138,3 +138,19 @@ export const ROW_KIND_GROUP = 'group'
 
 /** Sangría en px que suma cada nivel de anidamiento de grupo. */
 export const GROUP_INDENT_STEP = 16
+
+/**
+ * La fila que tiene que verse realzada bajo el puntero.
+ *
+ * Está DUPLICADO en `styles/datatable.css`, y a propósito: la hoja decide si se
+ * pinta y con qué color, y esto sirve para una sola cosa, saber a qué número de
+ * la regleta hay que pasarle la marca. El número no es hijo de su fila —vive en
+ * su propio carril, que no scrollea en horizontal—, así que ningún selector
+ * puede alcanzarlo desde ella y hace falta un puente en JS.
+ *
+ * Que la copia no se despegue del original lo vigila `row-hover.test.ts`, que
+ * busca esta misma cadena dentro de la hoja.
+ */
+export const HOVERED_ROW_SELECTOR =
+  ".dt-root[data-selection='row'] " +
+  '.dt-row:not(.dt-row--active, .dt-group-row, .dt-row--placeholder):hover'
