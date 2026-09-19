@@ -2725,25 +2725,32 @@ es el token que se puede pisar desde afuera.
 La selección no introduce ningún token nuevo: se dibuja enteramente con `--dt-primary` y
 `--dt-bg-accented`, así que re-estilar el acento re-estila la selección.
 
-| Enganche                         | Qué hace                                                                                                                                                                                          |
-| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `.dt-cell--active`               | La celda activa. `box-shadow: inset 0 0 0 var(--dt-selection-width) var(--dt-primary)` más `z-index: 1`.                                                                                          |
-| `.dt-row--active`                | La fila que contiene la celda activa, en **los dos** modos. Pone `--dt-row-bg` en `--dt-bg-accented`; quien lo pinta es la regleta y las celdas ancladas. También aplica a una cabecera de grupo. |
-| `.dt-header-cell--active`        | El header de la columna activa. Fondo acentuado. La línea de color la agrega `crosshair`.                                                                                                         |
-| `.dt-row-number--active`         | El número de la fila activa. Fondo acentuado y negrita. La línea de color la agrega `crosshair`.                                                                                                  |
-| `[data-crosshair]` en `.dt-root` | Replica `crosshair` (`'true'` / `'false'`). Es de lo único que cuelgan las dos líneas.                                                                                                            |
-| `[data-selection]` en `.dt-root` | Replica `selectionMode` (`none` / `cell` / `row`). En modo `'row'` ninguna celda se marca: quien señala la fila activa es su número en la regleta.                                                |
-| `.dt-row-number--hover`          | El número de la fila bajo el puntero. Lo pone el pool, no el CSS: ver [El realce de la fila](#el-realce-de-la-fila).                                                                              |
+| Enganche                           | Qué hace                                                                                                                                                                                          |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.dt-cell--active`                 | La celda activa. `box-shadow: inset 0 0 0 var(--dt-selection-width) var(--dt-primary)` más `z-index: 1`.                                                                                          |
+| `.dt-row--active`                  | La fila que contiene la celda activa, en **los dos** modos. Pone `--dt-row-bg` en `--dt-bg-accented`; quien lo pinta es la regleta y las celdas ancladas. También aplica a una cabecera de grupo. |
+| `.dt-header-cell--active`          | El header de la columna activa. Fondo acentuado. La línea de color la agrega `crosshair`.                                                                                                         |
+| `.dt-row-number--active`           | El número de la fila activa. Fondo acentuado y negrita. La línea de color la agrega `crosshair`.                                                                                                  |
+| `[data-crosshair]` en `.dt-root`   | Replica `crosshair` (`'true'` / `'false'`). Es de lo único que cuelgan las dos líneas.                                                                                                            |
+| `[data-selection]` en `.dt-root`   | Replica `selectionMode` (`none` / `cell` / `row`). En modo `'row'` ninguna celda se marca: quien señala la fila activa es su número en la regleta.                                                |
+| `[data-focus-ring]` en `.dt-root`  | Replica `focusRing` (`'true'` / `'false'`). Es la primera de las dos condiciones del anillo del viewport.                                                                                         |
+| `[data-active-cell]` en `.dt-root` | `'true'` mientras hay una celda marcada **en pantalla**. Es la segunda condición: con una celda marcada, el anillo del viewport se suprime.                                                       |
+| `.dt-row-number--hover`            | El número de la fila bajo el puntero. Lo pone el pool, no el CSS: ver [El realce de la fila](#el-realce-de-la-fila).                                                                              |
 
 #### El realce de la fila
 
 Con `selectionMode: 'row'` la fila bajo el puntero se tiñe y el cursor pasa a `pointer`. No es
 decoración: es el anticipo de lo que va a hacer el clic, y por eso **no** aparece en `'cell'` —donde
-lo que se elige es una celda— ni en `'none'`. Queda fuera la fila activa, la cabecera de grupo y el
+lo que se elige es una celda— ni en `'none'`. Queda fuera la cabecera de grupo y el
 esqueleto de carga.
 
 Va detrás de `@media (hover: hover)`: en una pantalla táctil `:hover` se queda pegado después de
 tocar, y el realce sobreviviría al toque leído como una selección que no es.
+
+La fila activa **sí** se realza. El tinte se suma al color que ella ya tiene, así que se lee como
+elegida Y apuntada; un color que la reemplazara la habría hecho ver soltarse, que es lo que hacía
+falta evitar. Excluirla dejaba la fila que uno acababa de tocar como la única que no responde al
+puntero, y eso se lee como una fila trabada.
 
 Dos detalles que importan si vas a re-estilarlo:
 
@@ -2753,8 +2760,6 @@ Dos detalles que importan si vas a re-estilarlo:
 - **La regleta no la alcanza ningún selector.** El número no es hijo de su fila —vive en un carril
   que no scrollea en horizontal—, así que el pool le pasa `.dt-row-number--hover` a mano y el CSS
   decide si lo pinta. Sin ese puente la banda queda cortada justo en el borde de la regleta.
-  | `[data-focus-ring]` en `.dt-root` | Replica `focusRing` (`'true'` / `'false'`). Es la primera de las dos condiciones del anillo del viewport. |
-  | `[data-active-cell]` en `.dt-root` | `'true'` mientras hay una celda marcada **en pantalla**. Es la segunda condición: con una celda marcada, el anillo del viewport se suprime. |
 
 El anillo del viewport sale de una sola regla, y las dos condiciones son literales del selector:
 

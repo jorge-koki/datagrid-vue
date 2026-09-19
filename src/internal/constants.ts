@@ -152,5 +152,4 @@ export const GROUP_INDENT_STEP = 16
  * busca esta misma cadena dentro de la hoja.
  */
 export const HOVERED_ROW_SELECTOR =
-  ".dt-root[data-selection='row'] " +
-  '.dt-row:not(.dt-row--active, .dt-group-row, .dt-row--placeholder):hover'
+  ".dt-root[data-selection='row'] " + '.dt-row:not(.dt-group-row, .dt-row--placeholder):hover'

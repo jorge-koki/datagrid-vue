@@ -1245,13 +1245,18 @@
  * nodo de antes, mientras que el navegador vuelve a resolver qué hay debajo del
  * puntero él solo. Y no cuesta una sola escritura en el pintado.
  *
- * Quedan afuera la fila activa —el realce es más tenue y la vería soltarse—, la
- * cabecera de grupo —que no se selecciona: su clic pliega— y el esqueleto de
- * carga, que todavía no es ninguna fila.
+ * La fila activa SÍ entra, y estuvo afuera por error. La exclusión tenía sentido
+ * mientras el realce era un color que REEMPLAZABA al suyo: uno más tenue encima
+ * de la fila elegida la habría hecho ver soltarse. Un tinte no reemplaza, se
+ * suma, así que la activa apuntada se ve un punto más clara y se lee como lo que
+ * es: elegida Y apuntada. Al cambiar el mecanismo quedó una exclusión sin
+ * motivo, y con ella la fila recién tocada era la única que dejaba de responder.
+ *
+ * Quedan afuera la cabecera de grupo —que no se selecciona: su clic pliega— y el
+ * esqueleto de carga, que todavía no es ninguna fila.
  */
 @media (hover: hover) {
-  .dt-root[data-selection='row']
-    .dt-row:not(.dt-row--active, .dt-group-row, .dt-row--placeholder):hover {
+  .dt-root[data-selection='row'] .dt-row:not(.dt-group-row, .dt-row--placeholder):hover {
     cursor: pointer;
   }
 
@@ -1261,9 +1266,7 @@
    * tapar lo que scrollea por debajo, y meterle ahí algo semitransparente la
    * volvería traslucida. En una capa aparte, las dos cosas conviven.
    */
-  .dt-root[data-selection='row']
-    .dt-row:not(.dt-row--active, .dt-group-row, .dt-row--placeholder):hover
-    .dt-cell {
+  .dt-root[data-selection='row'] .dt-row:not(.dt-group-row, .dt-row--placeholder):hover .dt-cell {
     background-image: linear-gradient(var(--dt-row-tint-hover), var(--dt-row-tint-hover));
   }
 

@@ -25,7 +25,8 @@ como pública es exactamente la que exporta [`src/index.ts`](./src/index.ts): lo
 - **`pinnable: 'menu'`**: la columna se ancla, pero sin botón en el encabezado.
 - **La fila bajo el puntero se realza, con `selectionMode: 'row'`.** Es el anticipo de lo que va a
   hacer el clic, así que no aparece en `'cell'` —donde lo que se elige es una celda— ni en `'none'`,
-  y deja afuera la fila activa, la cabecera de grupo y el esqueleto de carga. Nuevo token
+  y deja afuera la cabecera de grupo y el esqueleto de carga. La fila activa SÍ se realza: el tinte
+  se suma al color que ya tiene y se lee como elegida Y apuntada. Nuevo token
   `--dt-row-tint-hover`, un tinte semitransparente y no un color: la banda cruza el fondo de las
   celdas y el de la regleta, que está un escalón más arriba, y cualquier color fijo que se vea
   contra uno se pierde contra el otro. Va detrás de `@media (hover: hover)` para que en una pantalla

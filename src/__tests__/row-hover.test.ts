@@ -250,13 +250,22 @@ describe('el realce de la fila — pesa menos que la selección', () => {
     expect(token).toContain('color-mix')
   })
 
-  it('no alcanza a la fila activa, que se marca con otra cosa', () => {
-    const activa = ruleBody('.dt-row--active') ?? ''
+  it('SÍ alcanza a la fila activa: el tinte se suma, no la reemplaza', () => {
+    // Una regresión con nombre. La fila activa estuvo excluida mientras el realce
+    // era un color que reemplazaba al suyo —uno más tenue encima de la elegida la
+    // habría hecho ver soltarse—. Al pasar a un tinte, que se SUMA, la exclusión
+    // se quedó sin motivo y con ella la fila que uno acababa de tocar era la única
+    // que dejaba de responder al puntero. Se veía como una fila trabada.
+    expect(HOVERED_ROW_SELECTOR).not.toContain('.dt-row--active')
+    // Y sigue marcándose como activa: el tinte se apoya encima, no la borra.
+    expect(ruleBody('.dt-row--active')).toContain('var(--dt-bg-accented)')
+  })
 
-    // La jerarquía: la fila elegida pesa más que la fila apuntada. El selector la
-    // deja afuera; si entrara, apuntar a lo ya elegido lo aclararía todavía más y
-    // se leería como que se soltó.
-    expect(activa).toContain('var(--dt-bg-accented)')
-    expect(HOVERED_ROW_SELECTOR).toContain(':not(.dt-row--active')
+  it('deja afuera solo lo que no es una fila que se elija', () => {
+    // La cabecera de grupo no se selecciona —su clic pliega— y el esqueleto de
+    // carga todavía no es ninguna fila. Prometer un clic que no llega es el único
+    // motivo válido para excluir algo de aquí.
+    expect(HOVERED_ROW_SELECTOR).toContain('.dt-group-row')
+    expect(HOVERED_ROW_SELECTOR).toContain('.dt-row--placeholder')
   })
 })
