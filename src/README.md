@@ -1159,11 +1159,11 @@ interface DataTableColumn<TRow> {
 | `width`                 | `defaultColumnWidth` (150)                     | Siempre acotado a `[max(32, minWidth), min(4000, maxWidth)]`.                                                                                                                                                             |
 | `minWidth` / `maxWidth` | `32` / `4000`                                  | Se aplican al resolver el ancho y durante el redimensionado.                                                                                                                                                              |
 | `resizable`             | `false`                                        | Muestra un handle de arrastre en el borde del header.                                                                                                                                                                     |
-| `sortable`              | `false`                                        | El encabezado responde al clic y muestra la flecha del sentido. Ver [Ordenamiento](#ordenamiento).                                                                                                                        |
+| `sortable`              | `false`                                        | `true`: el clic en el encabezado ordena, y el menú también. `'menu'`: **solo desde el menú**, el clic no hace nada. Ver [Ordenamiento](#ordenamiento).                                                                    |
 | `comparator`            | —                                              | Comparador propio en sentido ascendente, `(a, b) => number`. Solo lo usa `sortRows`. Hace falta cuando el orden natural del valor no es el que el usuario espera.                                                         |
 | `menu`                  | `true`                                         | En `false`, la columna no muestra el menú de tres puntos aunque la tabla lo tenga encendido.                                                                                                                              |
 | `pinned`                | —                                              | `'start'` o `'end'` anclan la columna a un borde: se queda a la vista mientras el resto scrollea. Manda sobre el orden y desactiva el arrastre de esa columna. Ver [Columnas ancladas](#columnas-ancladas).               |
-| `pinnable`              | `false`                                        | Pone un botón de anclar en el encabezado. El valor dice a qué borde lleva: `true` y `'start'` al izquierdo, `'end'` al derecho. Ver [Anclar desde el encabezado](#anclar-desde-el-encabezado).                            |
+| `pinnable`              | `false`                                        | A qué borde lleva el **botón**: `true` y `'start'` al izquierdo, `'end'` al derecho, `'menu'` sin botón. El **menú ofrece siempre los dos**. Ver [Anclar desde el encabezado](#anclar-desde-el-encabezado).               |
 | `reorderable`           | `true`                                         | `false` ancla la columna: no se la puede agarrar para moverla y ninguna otra puede cruzarla, así que se queda donde está. Solo interviene con `columnReorder` encendido.                                                  |
 | `align`                 | el `defaultAlign` del renderer, si no `'left'` | Un `align` explícito siempre gana. Se aplica como clase, no como estilo inline.                                                                                                                                           |
 | `editable`              | `false`                                        | Tiene que ser exactamente `true` para que la celda se pueda editar.                                                                                                                                                       |
@@ -2868,13 +2868,13 @@ const columns = [
 ```
 
 `pinned` es el estado **inicial**; `pinnable` es el **permiso**, y su valor dice a qué borde lleva el
-botón: `true` y `'start'` son lo mismo. El botón **alterna**: ancla si está suelta y suelta si está
-anclada, a cualquiera de los dos bordes.
+**botón**: `true` y `'start'` son lo mismo, y `'menu'` significa "se puede anclar, pero sin botón". El
+botón **alterna**: ancla si está suelta y suelta si está anclada, a cualquiera de los dos bordes.
 
-**El lado se declara y no se elige en caliente.** En la práctica es una propiedad de la columna: una
-de identificación va a la izquierda y una de acciones a la derecha, y nadie ancla "Nombre" al borde
-derecho. Un menú de tres opciones por columna resolvería un caso que casi no existe a cambio de un
-gesto más en el que sí.
+**El menú, en cambio, ofrece siempre los dos bordes**, sea cual sea el valor. La asimetría sale de lo
+que cada control puede hacer: un botón es un gesto y solo puede significar una cosa, así que se le
+declara cuál; un menú tiene lugar para preguntar, así que pregunta. Es también la única forma de
+mover una columna de un borde al otro sin soltarla primero.
 
 El botón se ve al pasar el mouse por el encabezado, al recibir el foco, y **siempre que la columna
 está anclada** —si desapareciera, una columna anclada quedaría sin nada que explique por qué no
@@ -3269,8 +3269,14 @@ filas cargadas y absurdo respecto de las 100.000 que hay.
 { key: 'name', label: 'Proyecto', sortable: true }
 ```
 
-Con `sortable`, el encabezado responde al clic —**ascendente → descendente → sin orden**— y muestra
-la flecha del sentido. `Shift`+clic **suma** un criterio en lugar de reemplazarlo, que es lo que
+`sortable: true` hace que el encabezado responda al clic —**ascendente → descendente → sin orden**— y
+muestre la flecha del sentido.
+
+**`sortable: 'menu'` ordena la columna solo desde su menú**: el clic en el encabezado no hace nada, y
+el encabezado tampoco cambia el cursor, para no prometer un gesto que no tiene. Sirve en una columna
+ancha de texto —donde el clic se da sin querer al ir a redimensionarla o arrastrarla— o allí donde
+reordenar cien mil filas por accidente es una molestia. La flecha del sentido aparece igual: dice cómo
+está ordenada la tabla, no cómo se la ordenó. `Shift`+clic **suma** un criterio en lugar de reemplazarlo, que es lo que
 permite "por estado, y dentro de cada estado por fecha"; con más de uno, cada flecha lleva su número
 de prioridad.
 
@@ -3346,6 +3352,14 @@ El menú muestra **solo lo aplicable**: una columna que no ordena no trae las en
 la que ya está en ascendente no ofrece "ordenar ascendente". Un menú con la mitad de las opciones
 deshabilitadas obliga a leerlo entero para descubrir que no servían.
 
+Para anclar **ofrece los dos bordes**, no el declarado en `pinnable`: un botón es un gesto y solo
+puede significar una cosa, y un menú tiene lugar para preguntar. Es también la única forma de mover
+una columna de un borde al otro sin soltarla primero.
+
+Con `sortable: 'menu'` y `pinnable: 'menu'` el menú pasa a ser la **única** vía: el encabezado deja
+de responder al clic y de mostrar el botón de anclar. Es lo que conviene en una columna ancha de
+texto, donde el clic se da sin querer al ir a redimensionarla o arrastrarla.
+
 El panel sigue el aspecto de la tabla: su redondeo sale de `radiusBorder` —no del radio del tema— y
 el de sus opciones se deriva restándole el padding, para que las dos curvas queden concéntricas. Con
 el preset `cells` se cuadricula, con una línea entre todas las opciones.
@@ -3359,10 +3373,14 @@ camino caliente del scroll para algo que dura dos segundos—.
 Sobre el encabezado hay dos acciones posibles y no caben en el mismo clic. **Se la queda ordenar**, y
 seleccionar la columna entera pasa a `Ctrl`/`Cmd`+clic:
 
-| Columna      | Clic       | `Ctrl`/`Cmd`+clic |
-| ------------ | ---------- | ----------------- |
-| Ordenable    | Ordena     | Selecciona        |
-| No ordenable | Selecciona | Selecciona        |
+| Columna            | Clic       | `Ctrl`/`Cmd`+clic |
+| ------------------ | ---------- | ----------------- |
+| `sortable: true`   | Ordena     | Selecciona        |
+| `sortable: 'menu'` | Selecciona | Selecciona        |
+| Sin `sortable`     | Selecciona | Selecciona        |
+
+Solo compite con el clic la columna que ordena **al clic**. Con `'menu'` el gesto está libre, así que
+la selección se lo queda sin pedir modificador.
 
 No es una convención nueva: es el mismo modificador de `Ctrl`/`Cmd`+`A`, `Ctrl`/`Cmd`+`C` y
 `Ctrl`/`Cmd`+`Home`. `Shift` no servía porque lo usa el orden multinivel.

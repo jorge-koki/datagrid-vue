@@ -189,16 +189,27 @@ export interface DataTableColumn<TRow> {
   /**
    * Si la columna se puede ordenar. Por defecto `false`.
    *
-   * Encendida, el encabezado muestra la flecha del sentido vigente y responde al
-   * clic: ascendente, descendente y de vuelta a sin orden. **La tabla no ordena
-   * `rows`**: escribe el estado en `sort` y lo anuncia; quién reordena el array
-   * —o consulta al servidor— sigue siendo el consumidor.
+   * - `true`: el encabezado responde al clic —ascendente, descendente y de
+   *   vuelta a sin orden— y el menú trae las mismas opciones.
+   * - `'menu'`: **el clic no ordena**. La columna se ordena solo desde el menú,
+   *   y el encabezado no cambia el cursor ni promete un gesto que no tiene.
+   *
+   * La flecha del sentido vigente aparece en los dos casos: dice cómo está
+   * ordenada la tabla, no cómo se la ordenó.
+   *
+   * `'menu'` sirve cuando el clic del encabezado ya significa otra cosa en esa
+   * aplicación, o en una columna donde ordenar es una acción rara y un clic
+   * accidental reordenando cien mil filas es una molestia.
+   *
+   * **La tabla no ordena `rows`** en ningún caso: escribe el estado en `sort` y
+   * lo anuncia; quién reordena el array —o consulta al servidor— sigue siendo el
+   * consumidor.
    *
    * Con `columnSelection` encendida el clic pelado sigue siendo para ordenar, y
    * seleccionar la columna entera pasa a `Ctrl`/`Cmd`+clic. Ver
    * {@link DataTableProps.columnSelection}.
    */
-  sortable?: boolean
+  sortable?: boolean | 'menu'
   /**
    * Comparador propio para esta columna, en sentido ASCENDENTE.
    *
@@ -229,22 +240,26 @@ export interface DataTableColumn<TRow> {
    * Si el usuario puede anclar y desanclar la columna desde su encabezado.
    * Por defecto `false`: **sin esto no aparece ningún botón**.
    *
-   * El valor dice a qué BORDE la lleva el botón, no si empieza anclada —eso
-   * sigue siendo {@link DataTableColumn.pinned}—:
+   * El valor dice a qué BORDE la lleva el BOTÓN del encabezado, no si empieza
+   * anclada —eso sigue siendo {@link DataTableColumn.pinned}—:
    *
-   * - `true` y `'start'` son lo mismo: la ancla al borde izquierdo.
-   * - `'end'` la ancla al derecho.
-   *
-   * El lado se declara y no se elige en caliente porque en la práctica es una
-   * propiedad de la columna: una de identificación va a la izquierda y una de
-   * acciones a la derecha, y nadie ancla "Nombre" al borde derecho. Un menú de
-   * tres opciones por columna resolvería un caso que casi no existe a cambio de
-   * un gesto más en el caso que sí.
+   * - `true` y `'start'` son lo mismo: el botón la ancla al borde izquierdo.
+   * - `'end'`: el botón la ancla al derecho.
+   * - `'menu'`: **sin botón**. Solo se ancla desde el menú de la columna.
    *
    * El botón alterna: si la columna está suelta la ancla a ese borde, y si está
    * anclada —a cualquiera de los dos— la suelta.
+   *
+   * ## El menú ofrece SIEMPRE los dos lados
+   *
+   * Sea cual sea el valor, el menú de la columna muestra "anclar al inicio" y
+   * "anclar al final". La asimetría es deliberada y sale de lo que cada control
+   * puede hacer: un botón es un gesto y solo puede significar una cosa, así que
+   * se le declara cuál; un menú tiene lugar para preguntar, así que pregunta.
+   *
+   * Por eso `'menu'` es la forma de decir "que el usuario elija el lado".
    */
-  pinnable?: boolean | ColumnPin
+  pinnable?: boolean | ColumnPin | 'menu'
   /**
    * Si esta columna muestra el menú de tres puntos. Por defecto `true`, pero
    * solo cuenta con {@link DataTableProps.columnMenu} encendido.

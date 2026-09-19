@@ -447,6 +447,132 @@ async function clickItem(harness: TableHarness, text: string): Promise<void> {
   await harness.flush()
 }
 
+describe('ordenar SOLO desde el menú', () => {
+  async function mountMenuOnly(): Promise<TableHarness> {
+    return mountGrid({
+      columnMenu: true,
+      columns: [
+        { key: 'id', width: COLUMN_WIDTH },
+        { key: 'name', width: COLUMN_WIDTH, sortable: 'menu', pinnable: 'menu' },
+        { key: 'amount', width: COLUMN_WIDTH, sortable: true },
+      ],
+    })
+  }
+
+  it('el clic en el encabezado no ordena', async () => {
+    const harness = await mountMenuOnly()
+
+    await clickHeader(harness, 'name')
+
+    expect(lastSort(harness)).toBeNull()
+    harness.unmount()
+  })
+
+  it('pero el menú sí la ordena', async () => {
+    const harness = await mountMenuOnly()
+    await openMenu(harness, 'name')
+
+    expect(menuItems(harness)).toContain('Sort ascending')
+    await clickItem(harness, 'Sort ascending')
+
+    expect(lastSort(harness)).toEqual([{ columnKey: 'name', direction: 'asc' }])
+    harness.unmount()
+  })
+
+  it('el encabezado no promete un gesto que no tiene', async () => {
+    const harness = await mountMenuOnly()
+
+    // La clase es la que pone el cursor de mano. Sin este detalle el encabezado
+    // invita a un clic que no hace nada.
+    expect(header(harness, 'name').classList.contains('dt-header-cell--sortable')).toBe(false)
+    expect(header(harness, 'amount').classList.contains('dt-header-cell--sortable')).toBe(true)
+    harness.unmount()
+  })
+
+  it('sigue anunciando el orden vigente', async () => {
+    const harness = await mountMenuOnly()
+    await openMenu(harness, 'name')
+    await clickItem(harness, 'Sort ascending')
+
+    // La flecha dice CÓMO está ordenada la tabla, no cómo se la ordenó.
+    expect(header(harness, 'name').getAttribute('aria-sort')).toBe('ascending')
+    expect(header(harness, 'name').querySelector('.dt-sort-indicator')).not.toBeNull()
+    harness.unmount()
+  })
+
+  it('con `pinnable: menu` no hay botón de alfiler', async () => {
+    const harness = await mountMenuOnly()
+
+    expect(header(harness, 'name').querySelector('.dt-pin-button')).toBeNull()
+    harness.unmount()
+  })
+
+  it('le deja el clic pelado a la selección de columna, sin modificador', async () => {
+    const harness = await mountGrid({
+      columnSelection: true,
+      columns: [
+        { key: 'id', width: COLUMN_WIDTH },
+        { key: 'name', width: COLUMN_WIDTH, sortable: 'menu' },
+      ],
+    })
+    const node = header(harness, 'name')
+
+    node.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, button: 0 }))
+    await harness.flush()
+
+    // Solo compite con el clic la columna que ordena AL CLIC: acá el gesto está
+    // libre y no hay motivo para pedir `Ctrl`.
+    expect(harness.wrapper.emitted('rangeSelect')).toBeTruthy()
+    harness.unmount()
+  })
+})
+
+describe('el menú ofrece los dos bordes para anclar', () => {
+  async function mountPinnable(pinned?: 'start' | 'end'): Promise<TableHarness> {
+    return mountGrid({
+      columnMenu: true,
+      columns: [
+        { key: 'id', width: COLUMN_WIDTH },
+        { key: 'name', width: COLUMN_WIDTH, pinnable: 'menu', pinned },
+      ],
+    })
+  }
+
+  it('ofrece inicio y final, no solo el lado declarado', async () => {
+    const harness = await mountPinnable()
+    await openMenu(harness, 'name')
+
+    // Un botón es un gesto y solo puede significar una cosa; un menú tiene lugar
+    // para preguntar, así que pregunta.
+    expect(menuItems(harness)).toContain('Pin to start')
+    expect(menuItems(harness)).toContain('Pin to end')
+    harness.unmount()
+  })
+
+  it('no ofrece el borde donde la columna YA está', async () => {
+    const harness = await mountPinnable('start')
+    await openMenu(harness, 'name')
+
+    expect(menuItems(harness)).not.toContain('Pin to start')
+    expect(menuItems(harness)).toContain('Pin to end')
+    expect(menuItems(harness)).toContain('Unpin column')
+    harness.unmount()
+  })
+
+  it('mueve la columna de un borde al otro sin soltarla', async () => {
+    const harness = await mountPinnable('start')
+    await openMenu(harness, 'name')
+
+    await clickItem(harness, 'Pin to end')
+
+    // Es lo único que el botón del encabezado no puede hacer: alterna entre un
+    // lado y nada.
+    const events = harness.wrapper.emitted('update:columnPinning')
+    expect(events?.[events.length - 1]?.[0]).toEqual({ name: 'end' })
+    harness.unmount()
+  })
+})
+
 describe('el menú de la columna', () => {
   it('no existe sin la prop', async () => {
     const harness = await mountGrid()

@@ -113,8 +113,10 @@ export function resolveColumns(
       resizable: column.resizable ?? false,
       reorderable: column.reorderable ?? true,
       pinned: column.pinned ?? null,
-      pinnable: null,
-      sortable: column.sortable ?? false,
+      pinnable: false,
+      pinSide: null,
+      sortable: column.sortable !== undefined && column.sortable !== false,
+      sortOnHeaderClick: column.sortable === true,
     })
     offset += width
   }

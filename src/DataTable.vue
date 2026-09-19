@@ -1125,7 +1125,9 @@ let headerClickWasDrag = false
  */
 function headerGestureIsSelection(event: MouseEvent, column: ResolvedColumn<TRow>): boolean {
   if (!props.columnSelection) return false
-  if (!column.sortable) return true
+  // Solo compite con el clic la columna que ordena AL CLIC: con `sortable:
+  // 'menu'` el gesto está libre y la selección se lo queda sin modificador.
+  if (!column.sortOnHeaderClick) return true
   return event.ctrlKey || event.metaKey
 }
 
@@ -1152,6 +1154,8 @@ function onHeaderClick(event: MouseEvent, column: ResolvedColumn<TRow>): void {
   // El `pointerdown` ya seleccionó la columna: este `click` es la cola del mismo
   // gesto y no tiene que ordenar además.
   if (headerGestureIsSelection(event, column)) return
+  // Con `sortable: 'menu'` la columna se ordena, pero no desde acá.
+  if (!column.sortOnHeaderClick) return
 
   toggleSort(column, event.shiftKey)
 }
@@ -2492,7 +2496,7 @@ function startColumnDrag(event: PointerEvent, column: ResolvedColumn<TRow>): voi
 const warnedAboutPinnedAggregate = new Set<string>()
 
 function toggleColumnPinned(column: ResolvedColumn<TRow>): void {
-  const side = column.pinnable
+  const side = column.pinSide
   if (side === null) return
 
   const next = column.pinned === null ? side : null
@@ -2631,23 +2635,45 @@ const columnMenuItems = computed<ColumnMenuItem[]>(() => {
     }
   }
 
-  if (column.pinnable !== null) {
-    const side = column.pinnable
-    if (column.pinned !== side) {
-      items.push({
-        id: 'pin',
-        label: side === 'start' ? text.pinStart : text.pinEnd,
-        icon: side === 'start' ? 'pinStart' : 'pinEnd',
-        separated: items.length > 0,
-        run: () => pinColumnTo(column, side),
+  if (column.pinnable) {
+    /*
+     * Los DOS lados, no el declarado.
+     *
+     * `pinnable` declara a qué borde lleva el BOTÓN del encabezado, porque un
+     * botón es un gesto y solo puede significar una cosa. El menú no tiene esa
+     * limitación: tiene lugar para preguntar, así que pregunta. Es la única
+     * forma de que el usuario mueva una columna de un borde al otro sin pasar
+     * por soltarla.
+     */
+    // Solo la PRIMERA entrada del grupo lleva separador, y solo si hubo algo
+    // antes. Calcularlo con el largo de la lista en cada `push` era correcto y
+    // no se entendía.
+    const grupoEmpiezaEn = items.length
+    const agregar = (item: Omit<ColumnMenuItem, 'separated'>): void => {
+      items.push({ ...item, separated: items.length === grupoEmpiezaEn && grupoEmpiezaEn > 0 })
+    }
+
+    if (column.pinned !== 'start') {
+      agregar({
+        id: 'pin-start',
+        label: text.pinStart,
+        icon: 'pinStart',
+        run: () => pinColumnTo(column, 'start'),
+      })
+    }
+    if (column.pinned !== 'end') {
+      agregar({
+        id: 'pin-end',
+        label: text.pinEnd,
+        icon: 'pinEnd',
+        run: () => pinColumnTo(column, 'end'),
       })
     }
     if (column.pinned !== null) {
-      items.push({
+      agregar({
         id: 'unpin',
         label: text.unpin,
         icon: 'unpin',
-        separated: items.length > 0 && column.pinned === side,
         run: () => pinColumnTo(column, null),
       })
     }
@@ -3158,9 +3184,9 @@ function headerAlignClass(column: ResolvedColumn<TRow>): string | undefined {
                 { 'dt-header-cell--dragging': columnDrag?.key === column.key },
                 { 'dt-header-cell--fixed': columnReorder && !column.reorderable },
                 { 'dt-header-cell--pinned': column.pinned !== null },
-                { 'dt-header-cell--pinnable': column.pinnable !== null },
+                { 'dt-header-cell--pinnable': column.pinSide !== null },
                 { 'dt-header-cell--menu': hasColumnMenu(column) },
-                { 'dt-header-cell--sortable': column.sortable && !columnSelection },
+                { 'dt-header-cell--sortable': column.sortOnHeaderClick && !columnSelection },
                 { 'dt-header-cell--sorted': sortFor(column.key) !== null },
               ]"
               :style="{
@@ -3208,7 +3234,7 @@ function headerAlignClass(column: ResolvedColumn<TRow>): string | undefined {
                 cambio en vez de leer un botón nuevo.
               -->
               <button
-                v-if="column.pinnable"
+                v-if="column.pinSide"
                 type="button"
                 class="dt-pin-button"
                 :class="{ 'dt-pin-button--on': column.pinned !== null }"

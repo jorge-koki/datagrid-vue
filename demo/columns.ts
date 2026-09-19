@@ -108,6 +108,24 @@ export const projectColumns: readonly DataTableColumn<ProjectRow>[] = [
     // Texto libre: agrupar por esta columna produciría un grupo por fila. La
     // bandera lo impide aunque alguien meta la clave en `groupBy` a mano.
     groupable: false,
+    /*
+     * El ejemplo de "solo desde el menú".
+     *
+     * `'menu'` en las dos: el encabezado de esta columna NO ordena al clic ni
+     * muestra botón de alfiler —ni siquiera cambia el cursor, para no prometer
+     * un gesto que no tiene—, y las dos acciones viven únicamente en su menú de
+     * tres puntos.
+     *
+     * Es el caso de una columna ancha de texto, donde el clic del encabezado se
+     * da sin querer al ir a redimensionarla o a arrastrarla, y reordenar cien
+     * mil filas por accidente es una molestia.
+     *
+     * Y como el menú tiene lugar para preguntar, ofrece los DOS bordes: desde
+     * acá se puede llevar la columna a la izquierda o a la derecha, cosa que el
+     * botón del encabezado —que es un solo gesto— no puede hacer.
+     */
+    sortable: 'menu',
+    pinnable: 'menu',
   },
   {
     key: 'status',

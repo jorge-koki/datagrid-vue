@@ -22,15 +22,16 @@ import { clamp } from '../internal/values'
 const EMPTY_PINNING: ColumnPinState = Object.freeze({})
 
 /**
- * A qué borde llevaría el botón del encabezado a esta columna, o `null` si no
+ * A qué borde llevaría el BOTÓN del encabezado a esta columna, o `null` si no
  * lleva botón.
  *
  * `true` y `'start'` son lo mismo: el borde izquierdo es a donde se ancla en la
  * enorme mayoría de los casos, así que es lo que significa decir "sí" sin más.
+ * `'menu'` es "se puede anclar, pero sin botón".
  */
-function pinnableSideOf<TRow>(column: DataTableColumn<TRow>): ColumnPin | null {
+function pinButtonSideOf<TRow>(column: DataTableColumn<TRow>): ColumnPin | null {
   const declared = column.pinnable
-  if (declared === undefined || declared === false) return null
+  if (declared === undefined || declared === false || declared === 'menu') return null
   if (declared === true) return 'start'
   return declared
 }
@@ -59,21 +60,34 @@ export interface ResolvedColumn<TRow> {
   align: CellAlign
   /** Si el header muestra un handle de redimensionado. */
   resizable: boolean
-  /** Si la columna participa del ordenamiento. */
+  /** Si la columna participa del ordenamiento, por el gesto que sea. */
   sortable: boolean
+  /**
+   * Si el CLIC en el encabezado la ordena.
+   *
+   * Es una decisión aparte de `sortable`: una columna puede ordenarse solo desde
+   * el menú. Separarlas es lo que impide que el encabezado prometa un gesto que
+   * no tiene —cursor de mano incluido—.
+   */
+  sortOnHeaderClick: boolean
   /** Si la columna se puede mover arrastrando su encabezado. */
   reorderable: boolean
   /** Borde al que está anclada, o `null` si scrollea con el resto. */
   pinned: ColumnPin | null
+  /** Si la columna se puede anclar, por el gesto que sea. */
+  pinnable: boolean
   /**
-   * Borde al que el botón del encabezado la anclaría, o `null` si no lleva
+   * Borde al que el BOTÓN del encabezado la anclaría, o `null` si no lleva
    * botón.
    *
    * Es el lado DECLARADO, no el vigente: una columna con `pinnable: 'start'`
    * conserva `'start'` acá aunque ahora mismo esté suelta. Lo que decide si el
    * botón ancla o desancla es {@link ResolvedColumn.pinned}.
+   *
+   * El menú no lo usa: ofrece los dos lados siempre. Ver
+   * {@link DataTableColumn.pinnable}.
    */
-  pinnable: ColumnPin | null
+  pinSide: ColumnPin | null
 }
 
 /** Tramo de columnas a pintar. `end` es exclusivo. */
@@ -299,7 +313,8 @@ export function useColumnLayout<TRow>(
         // a la derecha). Un `align` explícito de la columna siempre gana.
         align: column.align ?? defaultAlignFor(column.renderer) ?? 'left',
         resizable: column.resizable ?? false,
-        sortable: column.sortable ?? false,
+        sortable: column.sortable !== undefined && column.sortable !== false,
+        sortOnHeaderClick: column.sortable === true,
         // Al revés que `resizable`: mover es lo normal, anclar es la excepción.
         // Redimensionar cambia cómo se ve una columna y puede arruinar un layout
         // pensado; moverla solo cambia el orden, que ya es estado del usuario.
@@ -307,7 +322,8 @@ export function useColumnLayout<TRow>(
         // significaría desanclarla.
         reorderable: pinnedOf(column) === null && (column.reorderable ?? true),
         pinned: pinnedOf(column),
-        pinnable: pinnableSideOf(column),
+        pinnable: column.pinnable !== undefined && column.pinnable !== false,
+        pinSide: pinButtonSideOf(column),
       })
 
       offset += width

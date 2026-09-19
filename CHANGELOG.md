@@ -7,6 +7,26 @@ Mientras la versión mayor sea `0`, un cambio incompatible sube la **minor**. La
 como pública es exactamente la que exporta [`src/index.ts`](./src/index.ts): lo que está bajo
 `internal/` y los composables pueden cambiar en cualquier versión sin aviso.
 
+## [0.2.1] — 2026-09-18
+
+### Agregado
+
+- **`sortable: 'menu'`**: la columna se ordena **solo desde su menú**. El clic en el encabezado no
+  hace nada y el encabezado tampoco cambia el cursor, para no prometer un gesto que no tiene. Sirve en
+  una columna ancha de texto, donde el clic se da sin querer al ir a redimensionarla o arrastrarla. La
+  flecha del sentido aparece igual: dice cómo está ordenada la tabla, no cómo se la ordenó.
+- **`pinnable: 'menu'`**: la columna se ancla, pero sin botón en el encabezado.
+
+### Cambiado
+
+- **El menú de columna ofrece ahora los DOS bordes para anclar**, no solo el declarado en `pinnable`.
+  La asimetría con el botón sale de lo que cada control puede hacer: un botón es un gesto y solo puede
+  significar una cosa, así que se le declara cuál; un menú tiene lugar para preguntar. Es además la
+  única forma de mover una columna de un borde al otro sin soltarla primero.
+- Con `sortable: 'menu'` y `columnSelection` encendida, el clic pelado del encabezado vuelve a
+  seleccionar la columna sin pedir `Ctrl`/`Cmd`: solo compite con el clic la columna que ordena AL
+  CLIC.
+
 ## [0.2.0] — 2026-09-17
 
 ### Agregado
