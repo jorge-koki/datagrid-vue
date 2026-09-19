@@ -228,6 +228,47 @@ describe('esperando y vacía a la vez — nunca las dos señales', () => {
   })
 })
 
+describe('modo servidor — `rows` vacío no es "no hay datos"', () => {
+  it('no muestra el mensaje mientras las páginas viajan', async () => {
+    // EL caso que trajo el reporte: origen servidor y cambiar la cantidad de
+    // filas. El consumidor reemplaza `rows` por uno vacío y vuelve a pedir; ahí
+    // `rows.length` es 0 pero `rowCount` dice 500, y quien sabe cuántas filas hay
+    // es el segundo. Con la cuenta equivocada salía el mensaje ENCIMA del
+    // esqueleto: dos señales que se contradicen.
+    const harness = await mountWith({ rows: [], rowCount: 500, emptyText: 'Sin datos' })
+
+    expect(harness.wrapper.element.querySelector('.dt-empty')).toBeNull()
+    expect(harness.canvas.querySelectorAll('.dt-cell--placeholder').length).toBeGreaterThan(0)
+
+    harness.unmount()
+  })
+
+  it('con `rowCount` en 0 sí lo muestra: ahí el servidor ya respondió', async () => {
+    // La otra cara. `rowCount: 0` no es "no sé", es "el servidor contestó y no
+    // hay ninguna": eso sí merece el mensaje.
+    const harness = await mountWith({ rows: [], rowCount: 0, emptyText: 'Sin datos' })
+
+    expect(harness.wrapper.element.querySelector('.dt-empty')?.textContent).toBe('Sin datos')
+    expect(harness.canvas.querySelectorAll('.dt-cell--placeholder')).toHaveLength(0)
+
+    harness.unmount()
+  })
+
+  it('al cambiar de dataset no parpadea el mensaje', async () => {
+    const harness = await mountWith({ rows: [], rowCount: 100, emptyText: 'Sin datos' })
+    expect(harness.wrapper.element.querySelector('.dt-empty')).toBeNull()
+
+    // Cambiar la cantidad: `rows` se vacía y `rowCount` salta. En ningún momento
+    // de esa transición la tabla tiene derecho a decir que no hay datos.
+    await harness.wrapper.setProps({ rows: [], rowCount: 5000 })
+    await harness.flush()
+
+    expect(harness.wrapper.element.querySelector('.dt-empty')).toBeNull()
+
+    harness.unmount()
+  })
+})
+
 describe('loading — lo que no cambia', () => {
   it('viene apagado', async () => {
     const harness = await mountWith({ rows: rows(10) })

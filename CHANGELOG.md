@@ -18,6 +18,11 @@ como pública es exactamente la que exporta [`src/index.ts`](./src/index.ts): lo
 
 ### Corregido
 
+- **El mensaje de tabla vacía ya no aparece encima del esqueleto.** La condición miraba
+  `rows.length`, y en modo servidor eso no dice lo que parece: `rows` llega vacío o lleno de huecos
+  mientras las páginas viajan, y quien sabe cuántas filas hay es `rowCount`. Cambiar el dataset
+  dejaba "no hay datos" pintado sobre el esqueleto —dos señales que se contradicen: una dice "ya
+  viene" y la otra "no hay"—. Ahora se pregunta por la cuenta real de filas.
 - **El mensaje de tabla vacía va centrado y sin línea.** Estaba en el flujo, como hermano del
   viewport, así que quedaba debajo de él: una franja pegada al encabezado con un `border-top` que se
   leía como un separador sin nada que separar. Ahora va en capa sobre el cuerpo, centrado en los dos

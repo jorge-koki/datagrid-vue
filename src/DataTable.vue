@@ -1088,12 +1088,21 @@ function onHeaderSelectionToggle(): void {
  * ¿Se muestra el mensaje de tabla vacía?
  *
  * Tres condiciones, y cada una descarta un estado que NO es "no hay datos":
- * que haya filas, que se esté esperando —ver `loading`— y que el consumidor
- * tenga algo que decir. El último se mide con la cadena ya recortada, porque un
- * texto de puros espacios no se ve y de todas formas arrastraría la caja.
+ * que la tabla tenga filas, que se esté esperando —ver `loading`— y que el
+ * consumidor tenga algo que decir. El último se mide con la cadena ya recortada,
+ * porque un texto de puros espacios no se ve y de todas formas arrastraría la
+ * caja.
+ *
+ * La primera se pregunta por `visibleRowCount` y NO por `rows.length`, y ahí
+ * está la diferencia que importa. En modo servidor `rows` llega vacío o lleno de
+ * huecos mientras las páginas viajan, y eso no significa "no hay datos" sino
+ * "todavía no llegó ninguno": quien sabe cuántas filas hay es `rowCount`. Con
+ * `rows.length` el mensaje aparecía encima del esqueleto cada vez que cambiaba
+ * el dataset —dos señales que se contradicen: una dice "ya viene" y la otra "no
+ * hay"—.
  */
 const showEmptyMessage = computed(
-  () => props.rows.length === 0 && !isLoading.value && props.emptyText.trim().length > 0,
+  () => visibleRowCount.value === 0 && !isLoading.value && props.emptyText.trim().length > 0,
 )
 
 /** Valor actual de una celda, para poder alternarlo desde el teclado. */
