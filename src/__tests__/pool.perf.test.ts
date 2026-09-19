@@ -62,7 +62,7 @@ describe('paint cache — repainting with identical inputs writes nothing', () =
       const fixture = createPoolFixture({ columns: [column], visibleRows: 12 })
 
       // Dos pintados previos: el primero construye los nodos, el segundo deja el
-      // caché de cada renderer ya sincronizado. Recién el tercero es el que
+      // caché de cada renderer ya sincronizado. Solo el tercero es el que
       // puede —y debe— no escribir absolutamente nada.
       fixture.paint()
       fixture.paint()
@@ -361,7 +361,7 @@ describe('scroll cost — writes per frame track the rows that entered, not the 
  * indexarla, o si aplanar ocurriera por frame— la tabla se vería exactamente
  * igual y scrollearía mucho peor.
  *
- * Por eso lo que se mide acá es que el presupuesto de un paso de scroll sea el
+ * Por eso lo que se mide aquí es que el presupuesto de un paso de scroll sea el
  * MISMO que sin grupos: seis escrituras por fila entrante, con las otras nueve
  * filas visibles —cabeceras incluidas— atravesando el pintado sin tocar el DOM.
  *
@@ -518,7 +518,7 @@ describe('grouping — a scroll step still costs only the rows that entered', ()
     // un salto de ventana equivalente, y el motivo es que la posición vertical no
     // cambió: ni el `transform` ni el `aria-rowindex` de ninguna fila se tocan,
     // porque siguen estando donde estaban. El caché de `internal/dom.ts` separa
-    // "esta fila muestra otra cosa" de "esta fila se movió", y acá solo pasó lo
+    // "esta fila muestra otra cosa" de "esta fila se movió", y aquí solo pasó lo
     // primero.
     expect(measured.counts.total, measured.report).toBe(40)
     expect(measured.counts.textContent, measured.report).toBe(30)
@@ -1124,7 +1124,7 @@ describe('ARIA — index writes stay per row during vertical scroll', () => {
  * al lector de pantalla la misma asociación por `aria-colindex`, que ya se
  * escribía.
  *
- * Por eso lo que se mide acá no es el header en sí sino su costo: **cero**. Los
+ * Por eso lo que se mide aquí no es el header en sí sino su costo: **cero**. Los
  * atributos de estructura son estáticos y Vue los escribe una vez; el header solo
  * se vuelve a diferenciar cuando cambia la configuración de columnas, que no
  * ocurre durante el scroll.

@@ -10,13 +10,13 @@ import type { RowsRequestEvent, VirtualWindow } from '../types'
  *
  * La tabla ya tenía separadas las dos cosas que el modo servidor necesita
  * separadas: **cuántas filas hay** —que dimensiona la barra de scroll— y **qué
- * hay en el índice `i`** —que decide qué se pinta—. Hasta acá las dos salían de
+ * hay en el índice `i`** —que decide qué se pinta—. Hasta aquí las dos salían de
  * `props.rows`. Este composable las desacopla: el largo lo dice `rowCount` y el
  * contenido lo dice `rows`, que puede tener huecos.
  *
  * ## La tabla nunca pide datos
  *
- * Acá no hay `fetch`, ni adapter, ni una sola función asíncrona. Este módulo
+ * Aquí no hay `fetch`, ni adapter, ni una sola función asíncrona. Este módulo
  * calcula qué páginas faltan y avisa; el transporte, la caché, los reintentos y
  * la cancelación son del consumidor. Es la misma decisión que hace que `rows`
  * sea controlada para editar: la librería no es dueña de los datos de nadie.
@@ -56,7 +56,7 @@ import type { RowsRequestEvent, VirtualWindow } from '../types'
 export interface UseRemoteRowsOptions<TRow> {
   /**
    * `true` cuando el consumidor declaró `rowCount`. Es el único interruptor del
-   * módulo: apagado, acá no corre nada.
+   * módulo: apagado, aquí no corre nada.
    */
   enabled: MaybeRefOrGetter<boolean>
   /**
@@ -64,7 +64,7 @@ export interface UseRemoteRowsOptions<TRow> {
    *
    * Lo calcula el componente y no este módulo, y no es un detalle: es el MISMO
    * número que dimensiona la ventana virtual, y la ventana es una de las
-   * entradas de acá. Calcularlo dos veces abriría la puerta a que las dos cuentas
+   * entradas de aquí. Calcularlo dos veces abriría la puerta a que las dos cuentas
    * discrepen por un redondeo y se pidan páginas que la tabla nunca pinta.
    */
   total: MaybeRefOrGetter<number>
@@ -112,7 +112,7 @@ export function useRemoteRows<TRow>(options: UseRemoteRowsOptions<TRow>): UseRem
    *
    * Guardar la referencia y no solo el número de página es lo que distingue "el
    * consumidor invalidó" de "todavía no contestó". Las dos situaciones se ven
-   * igual desde acá —el lugar sigue vacío—, y sin ese testigo la única regla
+   * igual desde aquí —el lugar sigue vacío—, y sin ese testigo la única regla
    * disponible sería mirar el largo del array: con `rows = []` eso da "se
    * acortó" para TODAS las páginas, en cada barrido, y el mismo pedido saldría
    * una y otra vez mientras la respuesta no llegue.
@@ -142,7 +142,7 @@ export function useRemoteRows<TRow>(options: UseRemoteRowsOptions<TRow>): UseRem
       const start = page * size
 
       // El consumidor reemplazó el array por uno que ni siquiera llega hasta
-      // acá: es el gesto de invalidar, `rows = []` al cambiar un filtro o un
+      // aquí: es el gesto de invalidar, `rows = []` al cambiar un filtro o un
       // orden. La comparación de identidad es imprescindible —sin ella, el mismo
       // `[]` que todavía está esperando respuesta se leería como una
       // invalidación nueva en cada barrido—.

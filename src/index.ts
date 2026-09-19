@@ -129,7 +129,7 @@ export { groupId } from './internal/aggregations'
 /**
  * Ordena un array de filas según los criterios que produjo la tabla.
  *
- * Sale de acá y no de una utilidad aparte porque la tabla NO ordena `rows`: el
+ * Sale de aquí y no de una utilidad aparte porque la tabla NO ordena `rows`: el
  * estado del orden lo administra ella y reordenar es del consumidor. Esta
  * función es para que eso sean dos líneas en el caso en memoria. En modo
  * servidor no se usa: ahí el orden viaja en la consulta.

@@ -4,7 +4,7 @@
  * Los casos que importan no son los felices sino los estados que el navegador
  * produce de forma normal y que un cálculo ingenuo convierte en índices
  * inválidos: el rebote elástico de iOS manda scroll negativo, un resize puede
- * dejar el scroll más allá del contenido, y el primer frame ocurre antes de que
+ * dejar el scroll más allí del contenido, y el primer frame ocurre antes de que
  * el `ResizeObserver` haya medido nada.
  */
 
@@ -196,7 +196,7 @@ describe('useVirtualWindow — boundary alignment', () => {
       const { start, end } = window.value
 
       // Invariante: toda fila que intersecte el viewport tiene que estar dentro
-      // del tramo pintado. Un fallo acá se ve en pantalla como una franja en
+      // del tramo pintado. Un fallo aquí se ve en pantalla como una franja en
       // blanco durante el scroll.
       const firstVisible = Math.floor(offset / ROW)
       const lastVisible = Math.floor((offset + viewport - 1) / ROW)

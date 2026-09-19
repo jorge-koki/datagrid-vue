@@ -117,7 +117,7 @@ function compareText(a: string, b: string): number {
  * para leer, no para comparar.
  *
  * Los vacíos —`null`, `undefined`, `NaN`— van SIEMPRE al final, sin importar el
- * sentido. Es lo que hace un usuario de planilla: ordenar para ver los valores,
+ * sentido. Es lo que hace un usuario de hoja de cálculo: ordenar para ver los valores,
  * no para ver primero los huecos.
  */
 function defaultComparatorFor<TRow extends Record<string, unknown>>(
@@ -163,7 +163,7 @@ function isEmpty(value: unknown): boolean {
 }
 
 /**
- * El criterio siguiente al apretar el encabezado de una columna.
+ * El criterio siguiente al presionar el encabezado de una columna.
  *
  * El ciclo es **ascendente → descendente → sin orden**. La tercera vuelta
  * importa: sin ella, una vez ordenada una tabla no hay forma de volver al orden

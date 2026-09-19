@@ -375,7 +375,7 @@ describe('no grouping — the empty groupBy path costs nothing', () => {
   it('returns null instead of wrapping every row', () => {
     const fixture = createGrouping()
 
-    // `null` no es "todavía no": es la respuesta. Construir 7 envoltorios acá
+    // `null` no es "todavía no": es la respuesta. Construir 7 envoltorios aquí
     // sería, con 50k filas, 50k asignaciones por una función que nadie pidió.
     expect(fixture.grouping.flatRows.value).toBeNull()
     expect(fixture.grouping.active.value).toBe(false)
@@ -1095,7 +1095,7 @@ function callImperative(harness: TableHarness, method: string): void {
   fn.call(instance)
 }
 
-/** Confirma una edición abierta escribiendo un valor y apretando Enter. */
+/** Confirma una edición abierta escribiendo un valor y presionando Enter. */
 async function commitEdit(harness: TableHarness, value: string): Promise<void> {
   const control = harness.editor()
   if (!control) throw new Error('[test] no se abrió el editor')
@@ -1595,7 +1595,7 @@ describe('pool — the data row / group row slot hazard', () => {
     expect(firstFlip.counts.createNode, firstFlip.report).toBeGreaterThan(0)
 
     // Vuelta a datos y otra vez a grupos: la estructura ya existe y se turna con
-    // `hidden`. Reconstruirla acá significaría crear y destruir cinco nodos —uno
+    // `hidden`. Reconstruirla aquí significaría crear y destruir cinco nodos —uno
     // de ellos un SVG— por cada ida y vuelta, en mitad del scroll.
     fixture.paint({ flatRows: null, groupDepth: 0, start: 0, end: 6 })
     const secondFlip = measureDomWrites(fixture.container, () =>
@@ -1650,7 +1650,7 @@ describe('pool — the data row / group row slot hazard', () => {
 /**
  * El formateador propio de los agregados.
  *
- * `column.format` no se puede aplicar acá y no es un descuido: su firma pide una
+ * `column.format` no se puede aplicar aquí y no es un descuido: su firma pide una
  * fila y un índice, y una cabecera de grupo no pertenece a ninguna fila. El
  * resultado era que una columna de moneda mostraba `1234.5` pelado en la cabecera
  * y un `avg` mostraba `47.31818181818182`.

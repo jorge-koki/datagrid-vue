@@ -23,7 +23,7 @@ import type { AnyCellRenderer } from './shared'
  * estado visual en el acto y manda la intención por la tubería normal de
  * edición: `beforeEdit` (cancelable) -> `editCommit` -> `afterEdit`. Si un
  * listener veta, o si el padre ignora `editCommit`, la casilla no cambia. Así el
- * componente sigue siendo controlado y el veto no se puede esquivar por acá.
+ * componente sigue siendo controlado y el veto no se puede esquivar por aquí.
  */
 
 interface CheckboxState {
@@ -83,7 +83,7 @@ export const checkboxRenderer: AnyCellRenderer = {
   /**
    * `true` / `false`, y vacío para el estado indeterminado.
    *
-   * Una casilla no muestra texto, así que acá no hay "lo que se ve" que copiar y
+   * Una casilla no muestra texto, así que aquí no hay "lo que se ve" que copiar y
    * se copia lo que la casilla SIGNIFICA. El vacío para nulo no es un descuido:
    * una casilla indeterminada dice justamente que no hay dato, y `false` diría
    * algo distinto.

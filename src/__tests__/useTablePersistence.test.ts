@@ -1,7 +1,7 @@
 /**
  * Persistencia del layout entre sesiones.
  *
- * Dos cosas se verifican acá y ninguna es el camino feliz.
+ * Dos cosas se verifican aquí y ninguna es el camino feliz.
  *
  * La primera es el ORDEN: primero se carga, después se empieza a guardar. Si el
  * watcher de guardado estuviera vivo desde el montaje, el estado inicial por
@@ -270,7 +270,7 @@ describe('useTablePersistence — debounce', () => {
     resolveLoad({ version: 1, columnVisibility: { a: false }, columnWidths: {}, columnOrder: [] })
     await vi.advanceTimersByTimeAsync(0)
 
-    // Aplicar acá escribiría sobre un componente que ya no existe.
+    // Aplicar aquí escribiría sobre un componente que ya no existe.
     expect(harness.loaded).toHaveLength(0)
   })
 })

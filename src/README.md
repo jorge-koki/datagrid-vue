@@ -148,7 +148,7 @@ Por esta vía no hace falta importar la hoja de estilos: `DataTable.vue` importa
 
 ## Uso
 
-Dos ejemplos completos, sin recortes: se copian, se pegan y andan. El primero es una grilla
+Dos ejemplos completos, sin recortes: se copian, se pegan y funcionan. El primero es una grilla
 virtualizada con edición; el segundo agrega agrupación, agregados y persistencia encima del primero.
 
 Los dos importan desde `vue-tablekit`. Si el código se copió al proyecto (la [opción
@@ -319,7 +319,7 @@ const columns: readonly DataTableColumn<Invoice>[] = [
  * Dos niveles: primero por región y, dentro de cada una, por estado.
  *
  * Se controla con v-model porque la persistencia devuelve la agrupación guardada
- * por esta misma vía, y porque `resetLayout()` la vacía: tener el estado acá es lo
+ * por esta misma vía, y porque `resetLayout()` la vacía: tener el estado aquí es lo
  * que permite que un `<select>` de la aplicación siga reflejando la verdad.
  */
 const groupBy = shallowRef<readonly string[]>(['region', 'status'])
@@ -329,7 +329,7 @@ const groupBy = shallowRef<readonly string[]>(['region', 'status'])
  *
  * Los ids se construyen con el helper `groupId(...)` y no a mano: el formato es
  * interno y un id mal escrito no produce ningún error, solo un grupo que no abre.
- * Controlado, esta lista es la verdad LITERAL: un id que no está acá está
+ * Controlado, esta lista es la verdad LITERAL: un id que no está aquí está
  * colapsado y `groupsDefaultExpanded` deja de intervenir, así que los grupos de
  * segundo nivel arrancan cerrados hasta que alguien los abra.
  */
@@ -599,12 +599,12 @@ así que cerrar el editor no puede reabrirlo en el acto.
 
 ## Selección y navegación con el teclado
 
-El modelo es el de una planilla de cálculo: **un clic selecciona, dos clics editan.** Seleccionar
+El modelo es el de una hoja de cálculo: **un clic selecciona, dos clics editan.** Seleccionar
 para leer un valor o para empezar a navegar es mucho más frecuente que editar, y exigir doble clic
 para eso costaría un gesto de más en el caso común.
 
 La selección es una `CellPosition` (`{ rowIndex, columnKey }`) que guarda el componente, no el foco
-del DOM. Acá eso importa más que en una tabla común: los nodos del pool se reciclan al scrollear, así
+del DOM. Aquí eso importa más que en una tabla común: los nodos del pool se reciclan al scrollear, así
 que el elemento enfocado no es un lugar confiable donde guardar "dónde está parado el usuario". La
 posición activa sobrevive a cualquier repintado.
 
@@ -650,7 +650,7 @@ está parado el usuario y el anillo vuelve a sobrar.
 
 > **El costo de accesibilidad del valor por defecto, dicho de frente.** Con `focusRing: false` y sin
 > celda activa —el estado en el que arranca la tabla—, quien llega con `Tab` no recibe ninguna señal
-> visual de que el foco entró en la grilla. Recién la primera flecha marca una celda y aparece una
+> visual de que el foco entró en la grilla. Solo la primera flecha marca una celda y aparece una
 > referencia. Si los usuarios de la aplicación navegan sobre todo por teclado, **`focusRing: true` es
 > la opción accesible** y alcanza con encenderla:
 >
@@ -696,7 +696,7 @@ Dos asimetrías deliberadas:
 
 - **Las flechas se acotan, `Tab` da la vuelta.** Las flechas son espaciales: pasarse del borde
   derecho y reaparecer en la fila siguiente desorienta. `Tab` es secuencial, que es lo que significa
-  en un formulario y en una planilla, y es lo que permite recorrer la grilla entera sin soltar el
+  en un formulario y en una hoja de cálculo, y es lo que permite recorrer la grilla entera sin soltar el
   teclado.
 - **`Escape` sin editor abierto conserva la selección.** Perder de vista dónde estaba parado uno es
   más molesto que seguir seleccionado.
@@ -720,19 +720,19 @@ a un borde avanza exactamente una fila o una columna.
 
 ### Selección de un rango de celdas
 
-Arrastrar sobre la tabla selecciona un **rectángulo de celdas**, como en una planilla, y `Ctrl`+`C`
+Arrastrar sobre la tabla selecciona un **rectángulo de celdas**, como en una hoja de cálculo, y `Ctrl`+`C`
 lo copia. Está encendido por defecto y se apaga con `:range-selection="false"`. Solo rige con
 `selectionMode: 'cell'`: en `'row'` la unidad seleccionada es la fila entera y un rectángulo de
 celdas no significaría nada.
 
-| Gesto                                                  | Qué hace                                                                       |
-| ------------------------------------------------------ | ------------------------------------------------------------------------------ |
-| Arrastrar con el botón primario                        | Selecciona desde la celda donde se apretó hasta la que está debajo del puntero |
-| `Shift`+clic                                           | Extiende hasta la celda clickeada, sin mover la celda activa                   |
-| `Shift`+ flecha / `Inicio` / `Fin` / `RePág` / `AvPág` | Extiende con el teclado                                                        |
-| `Ctrl`/`Cmd`+`A`                                       | Selecciona la grilla entera                                                    |
-| `Ctrl`/`Cmd`+`C`                                       | Copia la selección como TSV                                                    |
-| Un clic simple, una flecha sin `Shift`, `Tab`          | **Colapsa** el rango: vuelve a una sola celda                                  |
+| Gesto                                                  | Qué hace                                                                         |
+| ------------------------------------------------------ | -------------------------------------------------------------------------------- |
+| Arrastrar con el botón primario                        | Selecciona desde la celda donde se presionó hasta la que está debajo del puntero |
+| `Shift`+clic                                           | Extiende hasta la celda clickeada, sin mover la celda activa                     |
+| `Shift`+ flecha / `Inicio` / `Fin` / `RePág` / `AvPág` | Extiende con el teclado                                                          |
+| `Ctrl`/`Cmd`+`A`                                       | Selecciona la grilla entera                                                      |
+| `Ctrl`/`Cmd`+`C`                                       | Copia la selección como TSV                                                      |
+| Un clic simple, una flecha sin `Shift`, `Tab`          | **Colapsa** el rango: vuelve a una sola celda                                    |
 
 `Shift`+`Tab` queda afuera a propósito: es la única tecla donde `Shift` ya significaba otra cosa —"la
 celda anterior"—, y esa otra cosa la espera todo el mundo.
@@ -750,7 +750,7 @@ resuelve contra las columnas visibles en el momento de pintarlo: ocultar una col
 angosta, ocultar una de las puntas lo deja sin dibujar —igual que la celda activa deja de pintarse
 cuando ocultan su columna— y volver a mostrarla lo devuelve intacto.
 
-`Ctrl`+`A` es la única diferencia con una planilla: lleva la celda activa a la esquina superior
+`Ctrl`+`A` es la única diferencia con una hoja de cálculo: lleva la celda activa a la esquina superior
 izquierda. El rectángulo se define entre las dos puntas, así que dejar el ancla donde estaba habría
 seleccionado solo el cuadrante que le queda por delante.
 
@@ -758,7 +758,7 @@ seleccionado solo el cuadrante que le queda por delante.
 
 | Enganche                     | Qué es                                                                                                                                    |
 | ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `.dt-cell--range`            | Tinte de una celda del rango. La celda **ancla no lo lleva**, igual que en una planilla.                                                  |
+| `.dt-cell--range`            | Tinte de una celda del rango. La celda **ancla no lo lleva**, igual que en una hoja de cálculo.                                           |
 | `.dt-range-box`              | Un solo nodo con las cuatro líneas del contorno y el cuadradito de la esquina inferior derecha.                                           |
 | `.dt-copy-flash`             | Confirma un copiado: la línea va del acento a `--dt-copy-flash-color` y vuelve. Existe solo mientras dura. Ver [el copiado](#el-copiado). |
 | `[data-range]` en `.dt-root` | `'true'` mientras hay un rectángulo. Es lo que apaga el anillo de la celda activa y el realce de su fila.                                 |
@@ -772,7 +772,7 @@ Con un rango vivo, la celda activa pierde su anillo y su fila el realce: serían
 una selección que ya tiene la suya, y un anillo dibujado adentro del rectángulo es justo lo que
 confunde sobre dónde empieza y dónde termina lo seleccionado.
 
-El cuadradito de la esquina —el _fill handle_ de una planilla— **es una marca de extremo y nada
+El cuadradito de la esquina —el _fill handle_ de una hoja de cálculo— **es una marca de extremo y nada
 más**: señala dónde termina el rango cuando el borde inferior queda fuera de pantalla. No arrastra.
 
 #### El copiado
@@ -889,7 +889,7 @@ En una columna **ordenable** ese clic se lo queda el orden, y seleccionarla pasa
 
 **Lo que producen es un rango normal**, y de ahí sale todo lo demás sin una línea de código propia:
 se copia con `Ctrl`+`C`, se extiende con `Shift`+flechas —bajar el foco de una fila entera la
-convierte en un bloque de dos filas por todo el ancho, igual que en una planilla— y se colapsa con un
+convierte en un bloque de dos filas por todo el ancho, igual que en una hoja de cálculo— y se colapsa con un
 clic en cualquier celda. Por eso **necesitan `rangeSelection` encendido y `selectionMode: 'cell'`**:
 sin rango no hay forma de expresar "esta columna entera", y el gesto no hace nada en lugar de
 seleccionar media cosa. `rowSelection` necesita además `showRowNumbers`, porque si no no hay dónde
@@ -911,7 +911,7 @@ cada resize.
 
 - **Arrastrar no auto-scrollea.** El rango crece hasta la celda que esté debajo del puntero, y si el
   puntero se va del viewport el rango se queda donde estaba. Para seleccionar más de lo que entra en
-  pantalla: scrollear y `Shift`+clic, que es el camino corto incluso en una planilla.
+  pantalla: scrollear y `Shift`+clic, que es el camino corto incluso en una hoja de cálculo.
 - **No hay pegado.** La tabla es controlada y nunca escribe sobre `rows`; un pegado tendría que pasar
   por la tubería de edición celda por celda, y eso todavía no existe.
 - **El fill handle no arrastra**, como dice más arriba.
@@ -954,7 +954,7 @@ Ninguno de los dos se emite cuando la selección se fija en la celda que ya esta
 
 - Seleccionar nunca abre un editor, y abrir un editor nunca mueve la selección.
 - El editor sigue pasando por `beforeEdit`, así que un veto lo detiene y deja la celda seleccionada.
-- `Enter` dentro del editor commitea **y baja la selección una fila**, como en una planilla. El
+- `Enter` dentro del editor commitea **y baja la selección una fila**, como en una hoja de cálculo. El
   movimiento ocurre persista o no el padre el valor: es navegación, no edición.
 - Sacar la fila editada de la ventana virtual commitea y cierra el editor; la selección se queda en
   esa celda.
@@ -1591,7 +1591,7 @@ props, un emit, sin slots, sin `computed` y sin store inyectado. Los 137 µs de 
 celda de acción realista —un menú desplegable, un chequeo de permisos, un ícono, un tooltip, i18n—
 puede pesar entre tres y diez veces más por montaje, y **B paga ese peso por fila entrante mientras C
 lo paga una vez al arrancar**: la relación B/A escala con el peso del componente y la relación C/A
-prácticamente no. Lo mismo multiplica la cantidad de columnas interactivas, y acá se midió una. Todo
+prácticamente no. Lo mismo multiplica la cantidad de columnas interactivas, y aquí se midió una. Todo
 esto es además con el build de **producción** de Vue: en modo desarrollo B se ve bastante peor, y ese
 número no se puede citar como un número de producción. Por último, la dispersión entre corridas es
 grande frente a la diferencia entre A y C —A osciló entre 9,80 y 15,52 ms sobre un escritorio Windows
@@ -1689,7 +1689,7 @@ const host = useTemplateRef<HTMLElement>('host')
 
 const columns: readonly DataTableColumn<Invoice>[] = [
   { key: 'customer', label: 'Cliente', width: 220 },
-  // Sin `editable`: es un botón, no una celda que se edite. Un doble clic acá no
+  // Sin `editable`: es un botón, no una celda que se edite. Un doble clic aquí no
   // abre ningún editor.
   { key: 'id', label: '', width: 120, renderer: actionRenderer, align: 'center' },
 ]
@@ -1736,7 +1736,7 @@ frame. Pero la delegación cuesta exactamente cero y no hay que acordarse de des
 ### Camino 2 — el slot `#editor`
 
 Es el camino para lo que solo hace falta **mientras se edita**: el desplegable de un design system,
-un selector de fecha con calendario, un buscador con autocompletado. Acá sí entra un componente Vue
+un selector de fecha con calendario, un buscador con autocompletado. Aquí sí entra un componente Vue
 del consumidor, y entra con una regla: **uno montado a la vez, sobre la celda en edición**, no uno
 por celda.
 
@@ -1817,7 +1817,7 @@ function onEditCommit(event: EditCommitEvent<Invoice>): void {
 </template>
 ```
 
-> **NuxtUI no es una dependencia de esta librería.** `<USelect>` aparece acá porque es el ejemplo con
+> **NuxtUI no es una dependencia de esta librería.** `<USelect>` aparece aquí porque es el ejemplo con
 > el que llega la pregunta; el slot no sabe ni le importa de dónde sale el componente. Los nombres
 > exactos de sus props cambian entre versiones de cualquier design system: lo que no cambia es que el
 > control avisa con `commit(valor)` y se retira con `cancel()`. En `demo/DemoStatusPicker.vue` de
@@ -1868,7 +1868,7 @@ cierra limpia y no se escribe nada.
   una tabla que no declara `#editor` no renderiza ni siquiera la caja que lo contendría, así que
   produce exactamente el mismo DOM que antes de que esta función existiera.
 - **El valor viaja sin coacción.** El editor incluido recibe un string de un control del DOM y tiene
-  que devolverlo al tipo original; acá el consumidor ya tiene el valor tipado y tocarlo sería
+  que devolverlo al tipo original; aquí el consumidor ya tiene el valor tipado y tocarlo sería
   corromperlo.
 - **`CellValue` no puede expresar una lista ni un objeto.** Un editor de selección múltiple sigue sin
   poder commitear su array por esta vía, igual que con los editores incluidos: lo que se puede es
@@ -2124,7 +2124,7 @@ el comportamiento correcto cuando el consumidor no tiene una unión que ofrecer.
 
 **Es la misma función que construye los ids del árbol.** No es una reimplementación del formato para
 el consumidor: `groupId` y la construcción de la vista aplanada pasan por las mismas dos primitivas
-internas, así que un id construido acá es el string que la tabla le puso a ese grupo por definición y
+internas, así que un id construido aquí es el string que la tabla le puso a ese grupo por definición y
 no por coincidencia. Dos implementaciones del mismo formato terminan desincronizándose, y el síntoma
 de esa desincronización sería otra vez un grupo que no abre y no avisa.
 
@@ -2216,7 +2216,7 @@ la diferencia. Con un grupo `open` que tiene tres filas de `10` en `priority: hi
 | `status:open`               | `(10+10+10+100)/4 = 32,5` | `(10+100)/2 = 55` |
 
 El promedio de los promedios de dos subgrupos de tamaños distintos no es el promedio del conjunto, y
-esa versión ingenua es la que aparece en más de una grilla del mercado. Acá cada fila alimenta a los
+esa versión ingenua es la que aparece en más de una grilla del mercado. Aquí cada fila alimenta a los
 acumuladores de todos los grupos de su camino, uno por nivel de anidamiento, así que cada grupo ve
 todas sus filas de primera mano. El costo total es O(filas × niveles) —niveles es 1, 2 o 3 en la
 práctica—, nunca O(filas × grupos).
@@ -2479,7 +2479,7 @@ tiene que quedarse quieto lo sostiene el compositor, nunca una corrección escri
 **Una columna anclada no pinta su agregado.** `aggregate` sobre una columna con `pinned` se ignora
 en silencio. Es una limitación conocida, y tiene un motivo además del técnico: un agregado se dibuja
 en el offset de SU columna, así que en una columna anclada al inicio caería justo encima del chevron,
-la etiqueta y el contador del grupo. Si necesitás la cifra de esa columna, la vía es no anclarla.
+la etiqueta y el contador del grupo. Si necesitas la cifra de esa columna, la vía es no anclarla.
 
 ### Qué cuesta agrupar
 
@@ -2583,7 +2583,7 @@ de la tabla: esos son los tokens que sí se heredan.
 celda activa, el recuadro del rango y el destello del copiado. Es un solo token porque las tres
 tienen que medir lo mismo —el destello se dibuja exactamente encima del recuadro— y vale `1px` para
 que la línea coincida con las de la grilla de `bordered` y del preset `cells`. Subirlo a `2px`
-devuelve el contorno más marcado que tenía antes. La única línea que NO sale de acá es el corte del
+devuelve el contorno más marcado que tenía antes. La única línea que NO sale de aquí es el corte del
 bloque anclado, que son 2px a propósito.
 
 La paleta de estados existe para que `CellOption.color` pueda ser un token del tema en lugar de un
@@ -2674,7 +2674,7 @@ salto: a 70px por paso, eso se ve como temblor. El mismo razonamiento vale para 
 [columnas ancladas](#columnas-ancladas), que se resuelven igual.
 
 **El ancho es un cuadrado.** Tan ancha como alta es la fila: es la forma que tiene la numeración en
-cualquier planilla, y la que hace que se lea como un margen y no como una columna más. Solo cuando el
+cualquier hoja de cálculo, y la que hace que se lea como un margen y no como una columna más. Solo cuando el
 número no entra en ese cuadrado —cinco dígitos o más— la regleta se ensancha, y lo justo. El lado se
 acota además a una banda, porque con filas muy bajas o muy altas el cuadrado dejaría de tener sentido:
 un borde grueso en un caso, una franja enorme en el otro.
@@ -2770,7 +2770,7 @@ costado del número** de su fila. Se cruzan en la celda donde está el usuario.
 ```
 
 Van juntas o no van: son la misma marca leída desde los dos bloques que **no scrollean**. Para qué
-sirven se ve recién cuando la tabla es grande: se marca una celda, se scrollea lejos, la celda se va
+sirven se ve solo cuando la tabla es grande: se marca una celda, se scrollea lejos, la celda se va
 de la pantalla —y el encabezado y la regleta siguen diciendo en qué columna y en qué fila estaba uno.
 En una tabla que entra entera no agregan nada sobre el anillo de la celda, y de ahí que vengan
 **apagadas**.
@@ -2795,7 +2795,7 @@ necesitan tapar lo que pasa por debajo —la celda de una columna anclada, el ag
 de grupo— y la regleta de numeración lleva su propio juego de clases.
 
 No es un capricho: la fila mide **el ancho entero de la tabla**, porque es el bloque contenedor de los
-carriles anclados y un `sticky` no se corre más allá del suyo. Si además pintara, cualquier fondo,
+carriles anclados y un `sticky` no se corre más allí del suyo. Si además pintara, cualquier fondo,
 raya o borde suyo cruzaría la tabla de punta a punta. Separar "de qué color soy" de "yo pinto" deja el
 ancho donde hace falta sin arrastrar decoración.
 
@@ -2915,7 +2915,7 @@ conviene conocer:
 | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
 | Salen de la ventana virtual | Se pintan siempre, sobre nodos propios. Si además cayeran en la ventana se verían DOS veces: la anclada quieta y la suelta pasando por debajo. |
 | No cuestan nada por frame   | Su posición no depende del scroll, así que un frame de scroll no las toca. Ni horizontal ni vertical.                                          |
-| La fila necesita ancho      | Es el bloque contenedor del carril, y un `sticky` no se corre más allá del suyo. Lo escribe el pool con el ancho de la tabla.                  |
+| La fila necesita ancho      | Es el bloque contenedor del carril, y un `sticky` no se corre más allí del suyo. Lo escribe el pool con el ancho de la tabla.                  |
 | Necesitan fondo opaco       | `.dt-cell--pinned` lo toma de `--dt-row-bg`, el color de su fila, así acompaña el realce sin repetirlo.                                        |
 
 **Por qué no se compensa desde JS.** Era la implementación anterior —correr cada celda anclada por el
@@ -3110,7 +3110,7 @@ significa otra cosa ahora, se rebalancearon los anchos—, hay que subir `persis
 
 ## Datos del servidor y scroll infinito
 
-Hasta acá `rows` era el dataset entero, en memoria. Eso funciona perfecto hasta las decenas de miles
+Hasta aquí `rows` era el dataset entero, en memoria. Eso funciona perfecto hasta las decenas de miles
 de filas, y para la mayoría de las tablas es lo correcto: una sola consulta, cero latencia al
 scrollear, y ordenar o filtrar es un `sort` o un `filter` que el consumidor ya sabe escribir.
 
@@ -3121,7 +3121,7 @@ quien no lo use.**
 ### La idea, en una frase
 
 La tabla ya tenía separadas las dos cosas que esto necesita separadas: **cuántas filas hay** —que
-dimensiona la barra de scroll— y **qué hay en el índice `i`** —que decide qué se pinta—. Hasta acá
+dimensiona la barra de scroll— y **qué hay en el índice `i`** —que decide qué se pinta—. Hasta aquí
 las dos salían de `rows`. Con `rowCount`, la primera la dice esa prop y `rows` queda libre para tener
 huecos.
 
@@ -3191,7 +3191,7 @@ async function onRowsRequest({ start, end }: RowsRequestEvent) {
 **La tabla nunca pide datos.** No hay `fetch`, ni adapter, ni una sola función asíncrona adentro. La
 tabla avisa qué tramo necesita y espera; el transporte, la caché, los reintentos y la cancelación son
 tuyos. Es la misma decisión que hace que `rows` sea controlada para editar: la librería no es dueña
-de tus datos. El costo es que manejás un array con huecos; lo que ganás es que invalidar al cambiar
+de tus datos. El costo es que manejas un array con huecos; lo que ganas es que invalidar al cambiar
 un filtro es `rows = []` y nada más, sin una API de caché que aprender.
 
 **Los pedidos se alinean a `pageSize`.** Una ventana visible `[137, 162)` no se pide tal cual: se
@@ -3201,7 +3201,7 @@ scroll generaría un tramo distinto y solapado, y del otro lado habría que reco
 pidió ya.
 
 **Una página se pide UNA vez.** La tabla lleva el registro de lo que está en vuelo. Es el punto
-entero de que ese registro viva acá y no en cada consumidor: un scroll rápido atraviesa la misma
+entero de que ese registro viva aquí y no en cada consumidor: un scroll rápido atraviesa la misma
 página decenas de veces por segundo, y sin el registro cada travesía sería una consulta más contra la
 base. La marca se levanta cuando las filas aparecen en `rows`.
 
@@ -3223,7 +3223,7 @@ concreto y equivocado sobre una fila que ni siquiera cargó.
 **Un marcador es navegable pero no editable.** La selección puede caer encima —y eso dispara la
 carga—, pero `beforeEdit` no dispara nunca sobre una fila que no llegó.
 
-### Si no conocés el total
+### Si no conoces el total
 
 Es el scroll infinito clásico, y sale de la misma máquina sin una segunda API. `rowCount` es "hasta
 dónde puede scrollear":
@@ -3239,7 +3239,7 @@ infinito. Cuando el servidor dice que se acabó, `rowCount` baja a lo cargado y 
 ### Lo que no se puede combinar
 
 **Agrupar.** Armar el árbol de grupos exige recorrer el dataset entero —hay que leer la clave de cada
-fila para saber a qué grupo va, y contar cuántas trae cada uno—, y acá la mayor parte no está.
+fila para saber a qué grupo va, y contar cuántas trae cada uno—, y aquí la mayor parte no está.
 Agrupar lo cargado produciría grupos que cambian de tamaño a medida que se scrollea, que es peor que
 no agrupar. Con `rowCount` y `groupBy` a la vez, la tabla avisa una vez por consola e ignora
 `groupBy`. La vía es agrupar del lado del servidor y mandar las filas ya ordenadas.
@@ -3251,7 +3251,7 @@ rectángulo entero, pero copia únicamente lo cargado.
 ### Ordenar y filtrar
 
 La librería no ordena ni filtra —nunca lo hizo, también en memoria—, así que del lado del servidor no
-hay nada nuevo que coordinar: cambiás la consulta, ponés `rows = []` y actualizás `rowCount`. La
+hay nada nuevo que coordinar: cambias la consulta, pones `rows = []` y actualizas `rowCount`. La
 tabla vuelve a pedir desde la ventana en la que esté.
 
 ---
@@ -3332,7 +3332,7 @@ observar el v-model, para quien no quiere tomar posesión del estado: llega con 
 columna que el usuario acaba de tocar.
 
 **Restaurar un layout guardado no dispara `sortChange`.** Aplicar el orden persistido no es que el
-usuario haya apretado un encabezado, y emitirlo ahí le dispararía una consulta al servidor a cada
+usuario haya presionado un encabezado, y emitirlo ahí le dispararía una consulta al servidor a cada
 montaje. El v-model sí se emite, que es lo que un padre controlado necesita para quedar en sincronía.
 
 ### El menú de la columna
@@ -3364,7 +3364,7 @@ El panel sigue el aspecto de la tabla: su redondeo sale de `radiusBorder` —no 
 el de sus opciones se deriva restándole el padding, para que las dos curvas queden concéntricas. Con
 el preset `cells` se cuadricula, con una línea entre todas las opciones.
 
-Se cierra con `Escape`, al apretar afuera, al elegir algo y **al scrollear en horizontal** —su
+Se cierra con `Escape`, al hacer clic afuera, al elegir algo y **al scrollear en horizontal** —su
 posición se resuelve una vez, al abrir, y seguir al encabezado frame a frame sería trabajo en el
 camino caliente del scroll para algo que dura dos segundos—.
 
@@ -3385,7 +3385,7 @@ la selección se lo queda sin pedir modificador.
 No es una convención nueva: es el mismo modificador de `Ctrl`/`Cmd`+`A`, `Ctrl`/`Cmd`+`C` y
 `Ctrl`/`Cmd`+`Home`. `Shift` no servía porque lo usa el orden multinivel.
 
-El reparto es ese y no el contrario por dos motivos. Apretar un encabezado para ordenar es la
+El reparto es ese y no el contrario por dos motivos. Presionar un encabezado para ordenar es la
 interacción más común que existe en una grilla, y seleccionar una columna para copiarla es ocasional:
 la acción frecuente tiene que llevarse el gesto frecuente. Y al revés quedaba un agujero —con
 `columnSelection` encendida y sin `columnMenu`, una columna con `sortable: true` no hacía
@@ -3551,7 +3551,7 @@ Estas son las formas realistas de devolver el rendimiento, más o menos en el or
    format: (value) => (typeof value === 'number' ? money.format(value) : '')
    ```
 
-   Lo mismo vale para `cellClass`: comparaciones y nada más, sin asignar y sin armar strings más allá
+   Lo mismo vale para `cellClass`: comparaciones y nada más, sin asignar y sin armar strings más allí
    de devolver una constante.
 
 2. **Un `ref()` sobre las filas en lugar de un `shallowRef()`.** Un `ref` profundo envuelve cada fila

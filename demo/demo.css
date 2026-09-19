@@ -214,7 +214,7 @@ body {
     /*
      * Cada panel mide lo suyo en vez de estirarse hasta el alto de la fila.
      *
-     * Estirar acá sería circular: el panel de la tabla crecería hasta igualar al
+     * Estirar aquí sería circular: el panel de la tabla crecería hasta igualar al
      * riel, la tabla adentro pediría `flex: 1` para llenarlo, y como a este
      * ancho la página todavía scrollea —la fila no está acotada por nada— ese
      * `flex: 1` resolvería contra el alto del canvas virtual entero. Con 100
@@ -270,7 +270,7 @@ body {
     grid-template-areas:
       'controls table'
       'state    state';
-    /* Acá las filas SÍ están acotadas —miden lo que la ventana—, así que estirar
+    /* Aquí las filas SÍ están acotadas —miden lo que la ventana—, así que estirar
        es seguro y es lo que hace que los paneles llenen su fila. */
     align-items: stretch;
   }
@@ -300,7 +300,7 @@ body {
     /*
      * El panel deja de scrollear ÉL.
      *
-     * Con el scroll acá, una bitácora larga se llevaba los contadores fuera de
+     * Con el scroll aquí, una bitácora larga se llevaba los contadores fuera de
      * la vista: para leer un evento había que perder de vista los números, que
      * son la mitad del punto de mirar este panel mientras se toca la tabla. El
      * scroll baja a la lista y nada más que a la lista.
@@ -449,7 +449,7 @@ body {
  *
  * El fieldset se deja como bloque y los hijos se separan con margen en lugar de
  * `gap`: un `<legend>` dentro de un contenedor flex se renderiza de forma
- * distinta según el navegador, y acá no hace falta correr ese riesgo.
+ * distinta según el navegador, y aquí no hace falta correr ese riesgo.
  */
 .demo-group {
   min-width: 0;
@@ -603,7 +603,7 @@ body {
 
 /*
  * El panel del selector de columnas se posiciona con `position: absolute`
- * respecto de su botón, así que un contenedor con scroll lo recorta. Acá se
+ * respecto de su botón, así que un contenedor con scroll lo recorta. Aquí se
  * abre hacia arriba porque el grupo "Columnas" es el último del riel: hacia
  * abajo no le quedaría lugar propio ni aunque el riel no scrolleara.
  */

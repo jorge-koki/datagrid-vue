@@ -17,7 +17,7 @@
  * `position: sticky`. Este archivo fija esa decisión desde dos lados:
  *
  * 1. **Nadie les escribe la posición.** Ni al montar ni después de scrollear, en
- *    ninguna dirección. Si alguien vuelve a "ayudar" con un `transform`, acá se
+ *    ninguna dirección. Si alguien vuelve a "ayudar" con un `transform`, aquí se
  *    nota.
  * 2. **La estructura que lo hace posible.** Estar en el flujo y dentro del
  *    scroller no es un detalle de maquetado: es la condición para que `sticky`
@@ -90,7 +90,7 @@ describe('what stays still — nobody writes its position', () => {
     await harness.scrollTo({ left: 400, top: 800 })
 
     // Lo único inline que lleva el encabezado es su ANCHO, que no es posición y
-    // no cambia al scrollear. Si acá aparece un `transform`, alguien volvió a
+    // no cambia al scrollear. Si aquí aparece un `transform`, alguien volvió a
     // espejar el scroll desde JS y el desfasaje de un frame volvió con él.
     expect(inlinePosition(header)).toBe('')
     expect(inlinePosition(gutter)).toBe('')
@@ -229,7 +229,7 @@ describe('what stays still — what the stylesheet has to guarantee', () => {
   it('lets the header scroll sideways on its own', () => {
     const body = /\.dt-header\s*\{([\s\S]*?)\n\}/.exec(STYLESHEET)?.[1] ?? ''
 
-    // Se planta arriba y NADA MÁS. Un `left` acá lo dejaría clavado también en
+    // Se planta arriba y NADA MÁS. Un `left` aquí lo dejaría clavado también en
     // horizontal y el encabezado dejaría de acompañar a las columnas.
     expect(body).not.toMatch(/\n\s*left:/)
     expect(body).not.toMatch(/\n\s*right:/)

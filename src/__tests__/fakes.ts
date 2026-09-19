@@ -7,7 +7,7 @@
  * `happy-dom` sí define `requestAnimationFrame`, pero lo resuelve con un timer
  * real. Un test que espere a que ese timer dispare depende del planificador del
  * sistema operativo, y eso produce exactamente la clase de test intermitente que
- * el siguiente desarrollador termina borrando. Acá la cola de frames se vacía a
+ * el siguiente desarrollador termina borrando. Aquí la cola de frames se vacía a
  * mano: `flushFrames()` ejecuta lo pendiente de forma sincrónica y el test sabe
  * con precisión cuántos frames ocurrieron.
  *

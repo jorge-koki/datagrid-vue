@@ -160,7 +160,7 @@ export function reconcileColumnPinning<TRow>(
  * Devuelve los anchos guardados, sin claves desconocidas y acotados a los
  * límites que la columna declara HOY.
  *
- * El acotado se hace acá y no solo al pintar porque el estado guardado es una
+ * El acotado se hace aquí y no solo al pintar porque el estado guardado es una
  * entrada externa: un `maxWidth` que el desarrollador bajó entre deploys, o un
  * valor editado a mano en las devtools, no deben poder reintroducir un layout
  * imposible. Los valores no finitos se descartan en lugar de acotarse, porque
@@ -232,7 +232,7 @@ export function reconcileCollapsedGroups(
 /**
  * Reconcilia un estado persistido completo contra las columnas actuales.
  *
- * La versión ya debe haberse validado antes de llamar acá: esta función asume
+ * La versión ya debe haberse validado antes de llamar aquí: esta función asume
  * que el payload es aplicable y solo se ocupa de ajustarlo a las columnas.
  *
  * Las claves de agrupación solo aparecen en la salida si aparecían en la

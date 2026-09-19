@@ -60,7 +60,7 @@ function toPercent(value: unknown): number {
 /**
  * Token de color según el avance.
  *
- * Los umbrales viven acá pero los colores son tokens del tema, así que la paleta
+ * Los umbrales viven aquí pero los colores son tokens del tema, así que la paleta
  * sigue siendo responsabilidad de la hoja de estilos.
  */
 function colorForPercent(percent: number): string {

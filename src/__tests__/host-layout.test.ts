@@ -14,7 +14,7 @@
  * inline y le daba alto de contenido al viewport, así que la tabla "andaba" por
  * accidente; apagarla la vaciaba.
  *
- * Acá se verifica que ese caso avisa, que avisa UNA sola vez, y que no avisa
+ * Aquí se verifica que ese caso avisa, que avisa UNA sola vez, y que no avisa
  * cuando la tabla simplemente está oculta —que se ve igual desde adentro y es
  * perfectamente normal—.
  *

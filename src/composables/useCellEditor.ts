@@ -42,7 +42,7 @@ export interface UseCellEditorOptions<TRow> {
    * Caja que envuelve al contenido del slot `#editor`, si la tabla lo declara.
    *
    * Este módulo no la crea ni la llena: la renderiza Vue y su contenido lo pone
-   * el consumidor. Acá solo se la POSICIONA sobre la celda en edición, con la
+   * el consumidor. Aquí solo se la POSICIONA sobre la celda en edición, con la
    * misma geometría y el mismo caché que los controles incluidos, y se mira si
    * el foco quedó adentro al cerrar. Sin esta referencia, una columna con
    * `editor: 'slot'` no abre nada.
@@ -66,7 +66,7 @@ export interface UseCellEditorOptions<TRow> {
    * Se invoca después de confirmar con Enter.
    *
    * Existe para que el componente pueda bajar la selección una fila, como hace
-   * una planilla de cálculo. El editor detiene la propagación de Enter, así que
+   * una hoja de cálculo. El editor detiene la propagación de Enter, así que
    * el manejador del viewport nunca lo ve: sin este callback no habría forma de
    * encadenar las dos acciones.
    */
@@ -312,7 +312,7 @@ export function useCellEditor<TRow extends Record<string, unknown>>(
     control.addEventListener('keydown', handleKeyDown)
     control.addEventListener('blur', handleBlur)
     // Elegir una opción confirma de inmediato: es lo que espera cualquiera que
-    // haya usado un desplegable en una planilla.
+    // haya usado un desplegable en una hoja de cálculo.
     if (control instanceof HTMLSelectElement) control.addEventListener('change', handleSelectChange)
 
     host.appendChild(control)
@@ -410,7 +410,7 @@ export function useCellEditor<TRow extends Record<string, unknown>>(
     if (type === 'checkbox') return false
 
     // Las dos ramas resuelven el mismo requisito —tener dónde dibujar el editor—
-    // contra fuentes distintas: el control incluido se construye acá, y la caja
+    // contra fuentes distintas: el control incluido se construye aquí, y la caja
     // del slot la renderiza Vue. Se resuelve ANTES de `runBeforeEdit` para no
     // emitir un veto sobre una edición que después no va a abrir.
     let control: EditorControl | null = null
@@ -436,7 +436,7 @@ export function useCellEditor<TRow extends Record<string, unknown>>(
     activeSlot = slotHost
     activeType = type
 
-    // El contenido del slot lo monta Vue al ver cambiar `editing`, así que acá no
+    // El contenido del slot lo monta Vue al ver cambiar `editing`, así que aquí no
     // hay ningún valor que sembrar ni ningún nodo que mostrar: solo se deja la
     // geometría aplicada para que la caja ya esté sobre la celda correcta cuando
     // el patch la haga visible. El foco lo toma el componente después del patch,
@@ -638,12 +638,12 @@ export function useCellEditor<TRow extends Record<string, unknown>>(
   /**
    * Cierra la sesión de edición en curso.
    *
-   * ## El foco se suelta acá, a propósito y en este orden
+   * ## El foco se suelta aquí, a propósito y en este orden
    *
    * Cerrar sin soltar el foco dejaba una carrera real al pasar de un editor a
    * otro. La secuencia era: `beginEdit` confirmaba el anterior, `close()` ocultaba
    * su control pero lo dejaba con el foco del DOM, `editing` pasaba a la celda
-   * nueva y recién entonces `control.focus()` sobre el control nuevo disparaba el
+   * nueva y solo entonces `control.focus()` sobre el control nuevo disparaba el
    * `blur` del viejo. Ese `blur` llamaba a `commit()`, que cerraba el editor
    * RECIÉN ABIERTO y emitía un `afterEdit` fantasma sobre una edición que el
    * usuario nunca terminó. La guarda `closing` no lo cubría porque el `blur`
@@ -674,7 +674,7 @@ export function useCellEditor<TRow extends Record<string, unknown>>(
    * grilla muda: después de un Escape, la flecha siguiente no llegaba a ningún
    * lado. Por eso la misma lectura que decide si hay que soltar el foco decide
    * si hay que pedir que lo recuperen, con {@link UseCellEditorOptions.onReleaseFocus}
-   * y recién al final, con `closing` ya bajado y el estado limpio.
+   * y solo al final, con `closing` ya bajado y el estado limpio.
    */
   function close(): void {
     closing = true
@@ -692,7 +692,7 @@ export function useCellEditor<TRow extends Record<string, unknown>>(
       control.hidden = true
       control.value = ''
     }
-    // El editor de slot no se oculta desde acá: su visibilidad la escribe Vue a
+    // El editor de slot no se oculta desde aquí: su visibilidad la escribe Vue a
     // partir de `editing`, y dos dueños para el mismo atributo terminan
     // pisándose. Lo único que le corresponde a este cierre es el foco, porque el
     // contenido está por desmontarse y soltarlo lo mandaría al `body` —fuera de
@@ -788,7 +788,7 @@ export function useCellEditor<TRow extends Record<string, unknown>>(
   }
 
   /**
-   * Salir del control confirma, como al dejar una celda de una planilla.
+   * Salir del control confirma, como al dejar una celda de una hoja de cálculo.
    *
    * Solo confirma el control que en este momento ES el activo. Un `blur` de
    * cualquier otro es el eco de una sesión que ya se cerró —el control anterior

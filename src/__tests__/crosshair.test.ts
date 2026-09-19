@@ -10,7 +10,7 @@
  * de la regleta inexistente—, y eso no se ve en ningún test de comportamiento:
  * las dos son reglas de la hoja de estilos.
  *
- * `happy-dom` no resuelve la cascada de una hoja externa, así que acá no se
+ * `happy-dom` no resuelve la cascada de una hoja externa, así que aquí no se
  * puede afirmar que la línea se PINTÓ. Lo que se verifica son las dos mitades
  * del contrato que la producen: que el componente escriba el atributo que la
  * enciende, y que la hoja de estilos cuelgue las dos reglas de ese atributo y de
@@ -119,7 +119,7 @@ describe('la cruz — las dos líneas van juntas o no van', () => {
 
   it('no deja ninguna línea suelta fuera del interruptor', () => {
     // Este es el corazón del archivo. La línea del encabezado estuvo puesta de
-    // fábrica durante toda la vida del componente; si alguien la devuelve acá,
+    // fábrica durante toda la vida del componente; si alguien la devuelve aquí,
     // `crosshair: false` deja de significar "ninguna línea".
     const header = ruleBody('.dt-header-cell--active') ?? ''
     const numero = ruleBody('.dt-row-number--active') ?? ''

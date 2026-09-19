@@ -205,8 +205,8 @@ describe('column reorder — the threshold between a click and a drag', () => {
     node.dispatchEvent(new MouseEvent('pointerup', { bubbles: true, clientX: 100 }))
     await harness.flush()
 
-    // Los dos gestos conviven sobre el mismo encabezado: apretar y soltar sin
-    // mover selecciona, apretar y arrastrar mueve.
+    // Los dos gestos conviven sobre el mismo encabezado: presionar y soltar sin
+    // mover selecciona, presionar y arrastrar mueve.
     expect(harness.wrapper.emitted('rangeSelect')).toBeTruthy()
     expect(lastOrder(harness)).toBeNull()
     harness.unmount()
@@ -400,7 +400,7 @@ describe('column reorder — it writes the state that already existed', () => {
     await dragHeader(harness, 'id', 2 * COLUMN_WIDTH + 70)
 
     // Las celdas las pinta el pool y los encabezados los pinta Vue: si el orden
-    // no saliera de una sola fuente, acá se vería el desfasaje.
+    // no saliera de una sola fuente, aquí se vería el desfasaje.
     const cell = harness.cell(0, 'id')
     const headerCell = header(harness, 'id')
     expect(cell?.style.transform).toBe(headerCell.style.transform)
@@ -435,7 +435,7 @@ describe('column reorder — the drag ghost', () => {
     node.dispatchEvent(new MouseEvent('pointermove', { bubbles: true, clientX: 103 }))
     await harness.flush()
 
-    // Mismo umbral que el resto del gesto: apretar y temblar es un clic, y un
+    // Mismo umbral que el resto del gesto: presionar y temblar es un clic, y un
     // clic no puede hacer aparecer una caja flotando.
     expect(ghost(harness)).toBeNull()
 

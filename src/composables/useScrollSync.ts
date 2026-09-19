@@ -78,7 +78,7 @@ export interface UseScrollSyncReturn {
  * va a componer. Un throttle de 16ms se desfasa y termina pintando entre frames,
  * lo que se ve como micro-tirones aunque el promedio de FPS sea correcto.
  *
- * ## Por qué acá no se mueve nada
+ * ## Por qué aquí no se mueve nada
  *
  * Este módulo **no escribe una sola propiedad en el DOM**, y es una decisión, no
  * una omisión. Durante un tiempo movió el encabezado y la regleta de numeración
@@ -92,7 +92,7 @@ export interface UseScrollSyncReturn {
  * El problema no era qué valor se leía sino QUIÉN aplica la posición. Todo lo que
  * tiene que quedarse quieto —encabezado, regleta, columnas ancladas— vive ahora
  * dentro del scroller con `position: sticky`, sostenido por el compositor. Lo
- * único que queda acá es medir, publicar y marcar el ritmo.
+ * único que queda aquí es medir, publicar y marcar el ritmo.
  */
 export function useScrollSync(options: UseScrollSyncOptions): UseScrollSyncReturn {
   /**
@@ -129,12 +129,12 @@ export function useScrollSync(options: UseScrollSyncOptions): UseScrollSyncRetur
   function runFrame(): void {
     frameHandle = 0
 
-    // 1. Publicar el espejo reactivo. A partir de acá los `computed` de ventana
+    // 1. Publicar el espejo reactivo. A partir de aquí los `computed` de ventana
     //    devuelven valores de este frame en cuanto alguien los lea.
     state.value = { ...live }
 
     // 2. Pintar. Y eso es todo: este módulo NO escribe una sola propiedad en el
-    //    DOM. Ver la nota "Por qué acá no se mueve nada" en la cabecera.
+    //    DOM. Ver la nota "Por qué aquí no se mueve nada" en la cabecera.
     options.onFrame()
   }
 

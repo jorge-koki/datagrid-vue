@@ -174,18 +174,18 @@ export interface PoolFixture {
  *
  * Llama al composable REAL en lugar de fabricar un objeto a mano: si la
  * aritmética de offsets cambiara, los tests del pool tienen que moverse con
- * ella. Un doble escrito acá seguiría dando verde mientras la tabla se rompe.
+ * ella. Un doble escrito aquí seguiría dando verde mientras la tabla se rompe.
  *
  * La cantidad de filas se toma por lo alto —el dataset, la secuencia aplanada y
  * el final del tramo pedido— porque `offsetOf` acota fuera de rango: con un
- * conteo corto, pintar una cabecera de grupo más allá del largo de `rows`
+ * conteo corto, pintar una cabecera de grupo más allí del largo de `rows`
  * devolvería el offset del último y apilaría las filas una sobre otra.
  */
 function metricsFor(
   rowHeight: number,
   heightAt: ((index: number) => number) | null,
   // `(DemoRow | undefined)[]` y no `DemoRow[]`: en modo servidor el dataset
-  // tiene huecos, y acá solo se mira el largo.
+  // tiene huecos, y aquí solo se mira el largo.
   rows: readonly (DemoRow | undefined)[],
   flatRows: readonly FlatRow<DemoRow>[] | null,
   end: number,
@@ -376,7 +376,7 @@ export interface TableHarness {
   /** Simula `Shift`+clic, que extiende el rango en vez de mover la selección. */
   shiftClickCell(rowIndex: number, columnKey: string): Promise<void>
   /**
-   * Simula un arrastre de selección: apretar sobre una celda, pasar por las
+   * Simula un arrastre de selección: presionar sobre una celda, pasar por las
    * intermedias y soltar sobre la última.
    *
    * Los movimientos se despachan sobre las celdas mismas y burbujean hasta el
@@ -470,7 +470,7 @@ function forceScrollable(element: HTMLElement): void {
  * Forma de fila usada en los tests de componente.
  *
  * `DataTable` es un SFC genérico: al montarlo con filas indexables por string,
- * `TRow` se infiere como este tipo. Fijarlo acá evita que cada test tenga que
+ * `TRow` se infiere como este tipo. Fijarlo aquí evita que cada test tenga que
  * repetir la instanciación del genérico.
  */
 export type GridRow = Record<string, unknown>
@@ -522,7 +522,7 @@ export interface MountTableOptions {
  *
  * El componente es un SFC genérico: `wrapper.vm` no arrastra el tipo de la API
  * imperativa, y afirmarlo sería exactamente el tipo de mentira que después tapa
- * un método que dejó de exponerse. Acá cada miembro se busca en tiempo de
+ * un método que dejó de exponerse. Aquí cada miembro se busca en tiempo de
  * ejecución y falla con un mensaje que nombra al método, mientras que el tipo de
  * retorno —{@link DataTableInstance}, el mismo que ve el consumidor— obliga a que
  * el envoltorio siga cubriendo la API entera: si mañana aparece un método nuevo,
@@ -574,7 +574,7 @@ export async function mountTable(options: MountTableOptions): Promise<TableHarne
    *
    * El encabezado vive dentro del viewport y se queda pegado arriba con
    * `position: sticky`: ocupa alto real y tapa esa franja, así que el scroller
-   * mide el alto de las filas MÁS el del encabezado. Se suma acá, en un solo
+   * mide el alto de las filas MÁS el del encabezado. Se suma aquí, en un solo
    * lugar, para que cada test pueda seguir diciendo "en 400px entran diez filas"
    * sin arrastrar una constante que no es lo que está protegiendo.
    */
@@ -691,7 +691,7 @@ export async function mountTable(options: MountTableOptions): Promise<TableHarne
       let last = start
       for (const [rowIndex, columnKey] of rest) {
         last = cellByPosition(canvas, rowIndex, columnKey)
-        // `buttons: 1` dice que el botón sigue apretado. Con cero, el pool da el
+        // `buttons: 1` dice que el botón sigue presionado. Con cero, el pool da el
         // arrastre por terminado, que es justamente lo que tiene que hacer.
         last.dispatchEvent(new MouseEvent('pointermove', { bubbles: true, buttons: 1 }))
         await harness.flush()

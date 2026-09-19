@@ -1,7 +1,7 @@
 /**
  * El editor por slot: un componente del consumidor sobre la celda en edición.
  *
- * Lo que se verifica acá es exactamente lo que hace que esta función no
+ * Lo que se verifica aquí es exactamente lo que hace que esta función no
  * contradiga la tesis del componente:
  *
  * 1. **Una sola tubería.** `commit()` y `cancel()` publican por el mismo camino
@@ -26,7 +26,7 @@ import type { CellEditorSlotProps, DataTableColumn } from '../types'
 /**
  * El mismo presupuesto por fila entrante que fija `pool.perf.test.ts`.
  *
- * Se repite acá como constante local en vez de importarse porque el número que
+ * Se repite aquí como constante local en vez de importarse porque el número que
  * este archivo tiene que defender es OTRO: que declarar el slot `#editor` no lo
  * mueva. Si alguna vez divergieran, el que manda es el de `pool.perf.test.ts`,
  * donde está derivado del contrato de `internal/dom.ts`.
@@ -284,7 +284,7 @@ describe('slot editor — commit() routes through the existing pipeline', () => 
 
     await harness.doubleClickCell(2, 'owner')
     // El editor incluido recibe un string de un control del DOM y tiene que
-    // devolverlo al tipo original. Acá el consumidor ya tiene el valor tipado:
+    // devolverlo al tipo original. Aquí el consumidor ya tiene el valor tipado:
     // coaccionarlo sería corromperlo.
     openProps(probe).commit(42)
     await harness.flush()

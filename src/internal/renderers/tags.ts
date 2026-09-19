@@ -82,7 +82,7 @@ function labelOf(option: CellOption | null, entry: unknown): string {
  * Las etiquetas visibles, separadas por coma.
  *
  * Es UNA sola celda del portapapeles: las etiquetas conviven en una celda de la
- * tabla, así que tienen que convivir en una celda de la planilla. Separarlas en
+ * tabla, así que tienen que convivir en una celda de la hoja de cálculo. Separarlas en
  * columnas correría todo lo que tengan a la derecha.
  */
 function textOf<TRow>(ctx: CellRenderContext<TRow>): string {

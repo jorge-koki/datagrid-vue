@@ -189,7 +189,7 @@ export const avatarRenderer: AnyCellRenderer = {
    *
    * Las iniciales son una abreviatura que la celda usa por falta de lugar, y la
    * foto no es texto. Lo que el avatar representa —y lo único que sirve pegado
-   * en una planilla— es el nombre completo.
+   * en una hoja de cálculo— es el nombre completo.
    */
   text<TRow>(ctx: CellRenderContext<TRow>): string {
     readAvatarValue(ctx.raw, ctx.value)

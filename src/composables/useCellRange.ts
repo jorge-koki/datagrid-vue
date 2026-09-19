@@ -4,13 +4,13 @@ import type { CellPosition, CellRange } from '../types'
 import type { ResolvedColumn } from './useColumnLayout'
 
 /**
- * Selección de un rango rectangular de celdas, como en una planilla.
+ * Selección de un rango rectangular de celdas, como en una hoja de cálculo.
  *
  * ## El rango no es un segundo estado de selección
  *
  * Es el mismo, con una punta más. El ancla del rango ES la celda activa, que ya
- * existía, y acá solo vive el FOCO: la punta que se mueve al arrastrar o al
- * apretar `Shift`+flecha. Esa decisión elimina de raíz el estado imposible que
+ * existía, y aquí solo vive el FOCO: la punta que se mueve al arrastrar o al
+ * presionar `Shift`+flecha. Esa decisión elimina de raíz el estado imposible que
  * tendría un `selectedRange` independiente —un rango que no contiene a la celda
  * activa— y hace que mover la selección colapse el rango sin que nadie tenga que
  * acordarse de sincronizar dos cosas.
@@ -103,7 +103,7 @@ export function useCellRange<TRow extends Record<string, unknown>>(
    * `activeCell` y la mueve por su cuenta. Sin el testigo, ese foco viejo se
    * combinaría con el ancla nueva y la tabla dibujaría un rectángulo que el
    * usuario nunca seleccionó; con él, un foco que ya no corresponde simplemente
-   * no cuenta. Los movimientos que sí pasan por acá colapsan el rango antes, así
+   * no cuenta. Los movimientos que sí pasan por aquí colapsan el rango antes, así
    * que la comparación solo descarta lo que vino de afuera.
    */
   const focus = shallowRef<{ from: CellPosition; to: CellPosition } | null>(null)
@@ -197,7 +197,7 @@ export function useCellRange<TRow extends Record<string, unknown>>(
     if (!next) return
 
     // Un arrastre dispara un evento por cada movimiento del puntero, y la mayoría
-    // cae sobre la misma celda que el anterior. Cortar acá es lo que evita
+    // cae sobre la misma celda que el anterior. Cortar aquí es lo que evita
     // agendar un repintado por cada píxel recorrido.
     const current = currentFocus()
     if (current && samePosition(current, next)) return
@@ -222,7 +222,7 @@ export function useCellRange<TRow extends Record<string, unknown>>(
     // El ancla va a la esquina superior izquierda porque el rectángulo se define
     // entre las dos puntas: dejar el ancla donde estaba seleccionaría solo el
     // cuadrante que le queda por delante. Es la única diferencia con una
-    // planilla, y a cambio el modelo sigue teniendo un solo estado.
+    // hoja de cálculo, y a cambio el modelo sigue teniendo un solo estado.
     const anchor: CellPosition = { rowIndex: 0, columnKey: first.key }
     options.setAnchor(anchor)
     focus.value = { from: anchor, to: { rowIndex: rowCount - 1, columnKey: last.key } }
@@ -241,7 +241,7 @@ export function useCellRange<TRow extends Record<string, unknown>>(
 
     options.setAnchor(anchor)
     // Se guarda como testigo el ancla que se PIDIÓ y no la vigente. Con
-    // `activeCell` controlada, el padre recién la aplica en el próximo tick, así
+    // `activeCell` controlada, el padre solo la aplica en el próximo tick, así
     // que leerla ahora dejaría guardada la anterior y el rango se descartaría
     // solo en cuanto el padre la moviera.
     focus.value = { from: anchor, to }

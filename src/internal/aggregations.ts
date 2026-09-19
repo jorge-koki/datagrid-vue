@@ -120,7 +120,7 @@ export function joinGroupId(parentId: string, segment: string): string {
  * convierte ese caso en un error de compilación.
  *
  * Comparte implementación con la construcción del árbol: los dos caminos pasan
- * por {@link groupSegment} y {@link joinGroupId}, así que un id construido acá es
+ * por {@link groupSegment} y {@link joinGroupId}, así que un id construido aquí es
  * el mismo string que produce `useRowGrouping` para ese grupo, por definición y
  * no por coincidencia.
  *

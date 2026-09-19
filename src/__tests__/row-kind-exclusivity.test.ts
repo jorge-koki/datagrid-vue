@@ -30,7 +30,7 @@
  * opuestas, así que ninguno sirve de testigo.
  *
  * La salida es no preguntarle al entorno y modelar las dos únicas reglas de
- * cascada que importan acá, leyendo la hoja como archivo igual que hace
+ * cascada que importan aquí, leyendo la hoja como archivo igual que hace
  * `cell-layout.test.ts`:
  *
  * 1. Un nodo con `hidden` se sigue pintando si alguna regla de la hoja le declara
@@ -632,7 +632,7 @@ describe('renderer axis — the same hazard one axis down', () => {
     })
     await harness.flush()
 
-    // `ensureRenderer` vacía el nodo, así que acá no hay nada que `hidden` tenga
+    // `ensureRenderer` vacía el nodo, así que aquí no hay nada que `hidden` tenga
     // que apagar: la píldora ya no existe. Es lo que distingue a este eje del
     // vertical, donde las dos estructuras conviven a propósito.
     expect(harness.canvas.querySelector('.dt-badge')).toBeNull()

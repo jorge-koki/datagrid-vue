@@ -66,7 +66,7 @@ export const MAX_COLUMN_WIDTH = 4000
  * Banda dentro de la que se acota el ancho CUADRADO de la regleta, en px.
  *
  * La regleta busca ser un cuadrado: tan ancha como alta es la fila. Es la forma
- * que tiene una numeración en cualquier planilla, y la que hace que se lea como
+ * que tiene una numeración en cualquier hoja de cálculo, y la que hace que se lea como
  * un margen y no como una columna más. Con filas muy bajas o muy altas ese
  * cuadrado dejaría de tener sentido —un borde grueso o una franja enorme—, y por
  * eso el lado se acota a esta banda.
@@ -77,7 +77,7 @@ export const ROW_NUMBER_MAX_WIDTH = 48
 /**
  * Cuánto suma cada dígito al ancho de la regleta, en px. Denso entre paréntesis.
  *
- * Solo interviene cuando el número NO entra en el cuadrado: recién ahí la
+ * Solo interviene cuando el número NO entra en el cuadrado: solo ahí la
  * regleta se ensancha, y lo hace lo justo. Es una aproximación del ancho de un
  * dígito en la tipografía de la tabla, deliberadamente en lugar de una medición
  * real: medir texto obliga a escribir en el DOM y leer layout, que es

@@ -6,7 +6,7 @@
  * La regla de oro es la primera y la más importante: **sin `rowCount` no cambia
  * absolutamente nada**. La tabla con sus datos en memoria no paga ni un pedido,
  * ni un marcador, ni una rama distinta en el camino de pintado. Todo lo demás de
- * acá abajo describe un modo que hay que encender a propósito.
+ * aquí abajo describe un modo que hay que encender a propósito.
  *
  * Lo segundo que protege es que la tabla **no pida dos veces lo mismo**. Es el
  * punto entero de que el registro de páginas en vuelo viva en la librería y no
@@ -120,7 +120,7 @@ describe('modo servidor — encenderlo es explícito', () => {
 
   it('sin rowCount, un hueco retira la fila en vez de marcarla', async () => {
     const rows = fill(emptyRows(60), 0, 60)
-    // `rows` se acortó: acá un `undefined` significa "no existe", no "no llegó".
+    // `rows` se acortó: aquí un `undefined` significa "no existe", no "no llegó".
     const short = rows.slice(0, 20)
 
     const harness = await mountTable({

@@ -72,7 +72,7 @@ export interface PooledRowElement extends HTMLDivElement {
    * Último ancho aplicado, en px.
    *
    * La fila necesita ancho REAL, y no por decoración: es el bloque contenedor de
-   * los carriles anclados, y `position: sticky` no puede correrse más allá de él.
+   * los carriles anclados, y `position: sticky` no puede correrse más allí de él.
    * Con la fila de ancho cero —su ancho natural, porque todos sus hijos son
    * absolutos— el carril no tendría hacia dónde moverse y el anclaje no
    * existiría. De paso, es lo que hace que el rayado y el realce de fila se vean
@@ -777,7 +777,7 @@ export function setCellLayout(node: PooledCellElement, layout: string): void {
  * Las mismas dos clases sirven a los DOS modos de maquetado: en modo texto la
  * hoja de estilos las resuelve con `text-align` y en modo caja con
  * `justify-content`, porque `text-align` no posiciona ítems flex. Que la fuente
- * de verdad sea una sola —el valor de `align`, escrito acá— es lo que garantiza
+ * de verdad sea una sola —el valor de `align`, escrito aquí— es lo que garantiza
  * que los tres estados no puedan significar cosas distintas según el modo.
  */
 export function setCellAlign(node: PooledCellElement, align: string): void {
@@ -811,7 +811,7 @@ export function setCellActive(node: PooledCellElement, active: boolean): void {
  * Marca una celda que cae dentro del rango seleccionado.
  *
  * Es el tinte, no el borde: el borde del rango lo dibuja un solo nodo por
- * encima del canvas, porque son cuatro líneas y no una por celda. Acá solo se
+ * encima del canvas, porque son cuatro líneas y no una por celda. Aquí solo se
  * pinta el fondo, que sí es por celda y tiene que quedar DEBAJO del contenido
  * para no velar el texto.
  *
@@ -1146,7 +1146,7 @@ export function setAggregateText(
  * hoja de la librería lo restituye para todo su subárbol con una única regla; ver
  * el bloque `.dt-root [hidden]` en `styles/datatable.css`. Sin esa regla, toda
  * clase con `display` propio —`.dt-group-header`, `.dt-cell--box`, `.dt-tag`—
- * seguiría pintando el nodo que acá se acaba de apagar.
+ * seguiría pintando el nodo que aquí se acaba de apagar.
  */
 export function setHidden(node: HTMLElement, hidden: boolean): void {
   if (node.hidden === hidden) return

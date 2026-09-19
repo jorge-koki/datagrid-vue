@@ -301,7 +301,7 @@ describe('useColumnLayout — lookups', () => {
   it('returns the same null for a hidden column and for an unknown one', () => {
     const { layout } = setup({ visibility: { b: false } })
 
-    // Los dos casos son indistinguibles desde acá, y es la decisión de diseño
+    // Los dos casos son indistinguibles desde aquí, y es la decisión de diseño
     // que sostiene todo lo que hay más arriba: para la geometría no hay
     // diferencia entre "está oculta" y "no existe", porque ninguna de las dos
     // tiene ancho ni offset que dar. Quien necesita distinguirlas mira

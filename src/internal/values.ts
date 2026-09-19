@@ -140,7 +140,7 @@ export function toEditString(value: CellValue): string {
 /**
  * Convierte un valor al formato `YYYY-MM-DD` que exige `<input type="date">`.
  *
- * Se usa UTC en las dos direcciones, acá y en {@link fromDateInputString}.
+ * Se usa UTC en las dos direcciones, aquí y en {@link fromDateInputString}.
  * Mezclar zona local y UTC es el origen clásico del bug de "la fecha se corre un
  * día": basta con que el navegador esté al oeste de Greenwich para que el
  * ida y vuelta pierda una jornada. Con UTC de punta a punta el round-trip es

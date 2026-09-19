@@ -8,11 +8,11 @@
  * entera ES un rango de la primera fila a la última; una fila entera ES un rango
  * de la primera columna visible a la última. Todo lo que ya sabía hacer el rango
  * —copiar, extender con `Shift`, colapsar con un clic— sigue funcionando sin que
- * nadie lo vuelva a implementar, y eso es exactamente lo que se verifica acá:
+ * nadie lo vuelva a implementar, y eso es exactamente lo que se verifica aquí:
  * después de cada gesto se copia, se colapsa y se mira el rectángulo.
  *
  * Y que los dos vienen APAGADOS. Una tabla que no los espera no debería empezar
- * a seleccionar de a columnas enteras porque alguien apretó un título.
+ * a seleccionar de a columnas enteras porque alguien presionó un título.
  */
 
 import { describe, expect, it } from 'vitest'
@@ -199,7 +199,7 @@ describe('column selection — clicking a header', () => {
     const event = await pressHeader(harness, 'name')
 
     // Sin esto el copiado queda roto, y de una forma que ningún test en un DOM
-    // simulado ve: apretar sobre un elemento no enfocable hace que el navegador
+    // simulado ve: presionar sobre un elemento no enfocable hace que el navegador
     // lleve el foco a su ancestro enfocable más cercano, y el del encabezado no
     // es el viewport —vive afuera— sino el `body`. Eso ocurre DESPUÉS de este
     // manejador, así que pisaba el foco que la tabla se acababa de dar y
@@ -294,7 +294,7 @@ describe('row selection — clicking a row number', () => {
 
     // El ancla quedó en la primera columna de la fila 2 y el foco en la última;
     // bajarlo una fila convierte la selección en un bloque de dos filas por todo
-    // el ancho, que es lo que hace una planilla. No hizo falta código propio:
+    // el ancho, que es lo que hace una hoja de cálculo. No hizo falta código propio:
     // una fila entera ya era un rango.
     expect(lastRange(harness)).toEqual({
       rowStart: 2,

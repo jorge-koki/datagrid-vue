@@ -520,7 +520,7 @@ describe('ordenar SOLO desde el menú', () => {
     node.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, button: 0 }))
     await harness.flush()
 
-    // Solo compite con el clic la columna que ordena AL CLIC: acá el gesto está
+    // Solo compite con el clic la columna que ordena AL CLIC: aquí el gesto está
     // libre y no hay motivo para pedir `Ctrl`.
     expect(harness.wrapper.emitted('rangeSelect')).toBeTruthy()
     harness.unmount()
@@ -686,7 +686,7 @@ describe('el menú de la columna', () => {
     harness.unmount()
   })
 
-  it('cierra al apretar afuera', async () => {
+  it('cierra al hacer clic afuera', async () => {
     const harness = await mountConMenu()
     await openMenu(harness, 'amount')
 

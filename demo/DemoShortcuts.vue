@@ -40,7 +40,7 @@
         <strong>Seleccionar un bloque.</strong> Arrastrar desde una celda, o <kbd>Shift</kbd>+clic,
         o <kbd>Shift</kbd> con las flechas; <kbd>Ctrl</kbd>+<kbd>A</kbd> selecciona todo. Con
         <kbd>Ctrl</kbd>+<kbd>C</kbd> el bloque va al portapapeles con el texto que se ve —la
-        etiqueta del estado, el importe con separadores— y se pega derecho en una planilla.
+        etiqueta del estado, el importe con separadores— y se pega derecho en una hoja de cálculo.
       </p>
 
       <p>

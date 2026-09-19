@@ -81,7 +81,7 @@ export interface ResolvedColumn<TRow> {
    * botón.
    *
    * Es el lado DECLARADO, no el vigente: una columna con `pinnable: 'start'`
-   * conserva `'start'` acá aunque ahora mismo esté suelta. Lo que decide si el
+   * conserva `'start'` aquí aunque ahora mismo esté suelta. Lo que decide si el
    * botón ancla o desancla es {@link ResolvedColumn.pinned}.
    *
    * El menú no lo usa: ofrece los dos lados siempre. Ver
@@ -94,7 +94,7 @@ export interface ResolvedColumn<TRow> {
 export interface ColumnRange {
   /** Primer índice de columna a pintar, inclusive. */
   start: number
-  /** Uno más allá del último índice de columna a pintar. */
+  /** Uno más allí del último índice de columna a pintar. */
   end: number
 }
 
@@ -121,7 +121,7 @@ export interface UseColumnLayoutOptions<TRow> {
   /**
    * Espacio reservado a la izquierda de la primera columna, en px.
    *
-   * Es el ancho de la regleta de numeración. Se suma acá y no en cada consumidor
+   * Es el ancho de la regleta de numeración. Se suma aquí y no en cada consumidor
    * porque el offset resuelto es la ÚNICA coordenada horizontal del componente:
    * la usan el header, las celdas, el editor, el recuadro del rango, la búsqueda
    * binaria de la ventana y los handles de redimensionado. Corriéndolo en el
@@ -268,7 +268,7 @@ export function useColumnLayout<TRow>(
      *
      * Se recorre tres veces —ancladas al inicio, sueltas, ancladas al final— en
      * lugar de ordenar con un comparador, y no es lo mismo: `sort` no promete
-     * estabilidad entre motores para las claves iguales, y acá el orden RELATIVO
+     * estabilidad entre motores para las claves iguales, y aquí el orden RELATIVO
      * de las columnas que comparten anclaje es exactamente el que el usuario
      * eligió arrastrando. Tres pasadas sobre una lista de decenas de elementos
      * cuestan nada y no dependen de esa promesa.
@@ -382,7 +382,7 @@ export function useColumnLayout<TRow>(
        * Las dos tiras en una sola lista, en orden visual.
        *
        * Es lo que consume el pool: le da un índice estable por columna anclada,
-       * que es el mismo que el de su nodo de celda. Se materializa acá, una vez
+       * que es el mismo que el de su nodo de celda. Se materializa aquí, una vez
        * por cambio de layout, en vez de concatenarla por frame.
        */
       all: [...start, ...end],
@@ -390,7 +390,7 @@ export function useColumnLayout<TRow>(
       endWidth,
       /** Primer índice suelto. Igual a la cantidad de ancladas al inicio. */
       scrollFrom: start.length,
-      /** Uno más allá del último suelto. */
+      /** Uno más allí del último suelto. */
       scrollTo: resolvedColumns.value.length - end.length,
     }
   })

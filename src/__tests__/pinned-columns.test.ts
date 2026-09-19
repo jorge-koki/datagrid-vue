@@ -6,7 +6,7 @@
  * Anclar una columna es hacer que se quede quieta mientras el canvas se
  * desplaza, y eso lo resuelve UN carril `position: sticky` por fila del que
  * cuelgan las celdas ancladas. De ahí salen los cuatro invariantes que se
- * verifican acá:
+ * verifican aquí:
  *
  * 1. **El orden.** El anclaje manda sobre el orden de columnas: las de `start`
  *    van primero y las de `end` al final, sin importar dónde estaban.
@@ -197,7 +197,7 @@ describe('pinned columns — they stay put while the rest scrolls', () => {
     const row = harness.canvas.querySelector('.dt-row[data-row-key="0"]')
 
     // Una fila sin ancho propio mide cero —todos sus hijos son absolutos—, y un
-    // `sticky` no puede correrse más allá de su bloque contenedor: el carril se
+    // `sticky` no puede correrse más allí de su bloque contenedor: el carril se
     // quedaría clavado y no habría anclaje. Seis columnas de 120.
     expect(row instanceof HTMLElement && row.style.width).toBe('720px')
     harness.unmount()
@@ -405,7 +405,7 @@ describe('pinned columns — what the stylesheet has to guarantee', () => {
 
     // Sin fondo propio, las celdas que scrollean se verían A TRAVÉS de la
     // anclada. El color sale de `--dt-row-bg`, que es el de SU fila —normal,
-    // rayado o activo— y llega hasta acá por herencia.
+    // rayado o activo— y llega hasta aquí por herencia.
     expect(body).toContain('background: var(--dt-row-bg)')
   })
 

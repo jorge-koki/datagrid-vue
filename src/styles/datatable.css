@@ -42,7 +42,7 @@
   /*
    * Color al que viaja la línea que confirma un copiado. Ver `.dt-copy-flash`.
    *
-   * Vive acá, entre los tokens de la raíz, y no adentro de la regla que lo usa,
+   * Vive aquí, entre los tokens de la raíz, y no adentro de la regla que lo usa,
    * porque es el único lugar desde donde se puede elegir POR TEMA: los
    * selectores de tema apuntan a `.dt-root`, así que un consumidor escribe
    * `.dt-root[data-theme='light'] { --dt-copy-flash-color: #111827 }` y listo.
@@ -149,7 +149,7 @@
    * La grilla NO selecciona texto. Nunca.
    *
    * Arrastrar sobre una tabla significa "seleccionar estas celdas", igual que en
-   * cualquier planilla, y la selección de texto del navegador competía por el
+   * cualquier hoja de cálculo, y la selección de texto del navegador competía por el
    * mismo gesto: pintaba media tabla de azul, se llevaba el arrastre puesto y,
    * al copiar, mandaba al portapapeles el texto suelto de los nodos que
    * tocó —incluidas las etiquetas de las cabeceras de grupo— en vez de las
@@ -187,7 +187,7 @@
  * Ese mecanismo se apoyaba en `[hidden] { display: none }`, que NO es una regla
  * de esta hoja: vive en la hoja del navegador. Y una declaración de autor le gana
  * a una del navegador por ORIGEN, antes de que la especificidad llegue a
- * intervenir. Así que toda clase de acá que declare `display` —`.dt-group-header`
+ * intervenir. Así que toda clase de aquí que declare `display` —`.dt-group-header`
  * es flex, `.dt-cell--box` es flex, `.dt-badge` y `.dt-tag` son inline-block—
  * dejaba a `hidden` sin ningún efecto sobre los nodos que la llevan.
  *
@@ -338,7 +338,7 @@
  *
  * Se dibuja con un pseudoelemento y no con un `border` porque un borde cambia la
  * caja: en el encabezado ensancharía la tira y correría al resto del `flex`, y en
- * el cuerpo se comería dos píxeles del texto de la celda. Acá la línea se
+ * el cuerpo se comería dos píxeles del texto de la celda. Aquí la línea se
  * superpone y no le mueve nada a nadie.
  */
 .dt-header-pinned--start::after,
@@ -379,7 +379,7 @@
    * Flex, al revés que la celda del cuerpo.
    *
    * En el cuerpo el flex está prohibido porque rompe el recorte con puntos
-   * suspensivos del texto anónimo. Acá no hay texto anónimo: el título vive en
+   * suspensivos del texto anónimo. Aquí no hay texto anónimo: el título vive en
    * `.dt-header-label`, que recorta por su cuenta, y al lado puede haber una
    * flecha de orden que tiene que quedar a la vista.
    *
@@ -408,7 +408,7 @@
  *
  * Va ANTES que `--active` a propósito: las dos tienen la misma especificidad y
  * una columna seleccionada entera es además la columna activa, así que el orden
- * es lo único que decide. Gana "acá estás", que es la información más precisa.
+ * es lo único que decide. Gana "aquí estás", que es la información más precisa.
  */
 .dt-header-cell--range {
   background: color-mix(in srgb, var(--dt-primary) 16%, transparent);
@@ -472,7 +472,7 @@
  *
  * `move` gana sobre el `pointer` de la selección por orden, y es lo correcto:
  * mover es el gesto que el usuario puede descubrir solo, y el que necesita que
- * se lo anuncien antes de apretar. La columna anclada vuelve al cursor normal,
+ * se lo anuncien antes de presionar. La columna anclada vuelve al cursor normal,
  * así que la diferencia se ve sin tener que intentarlo.
  */
 .dt-root[data-reorder='true'] .dt-header-cell {
@@ -657,7 +657,7 @@
  * ícono de menú deformado se lee como un error, y el que tiene que recortarse es
  * el texto.
  *
- * El trazo va acá y no en cada `path` para que el peso de los ocho dibujos no
+ * El trazo va aquí y no en cada `path` para que el peso de los ocho dibujos no
  * pueda separarse, y `currentColor` los ata al color de la opción: en la que
  * está bajo el cursor se aclaran junto con su texto, sin una regla aparte.
  */
@@ -804,7 +804,7 @@
 /*
  * Encabezado de una columna ordenable.
  *
- * El cursor es lo único que lo anuncia antes de apretar, igual que con el
+ * El cursor es lo único que lo anuncia antes de presionar, igual que con el
  * anclaje y con el reordenamiento. No lleva subrayado ni color propio: la
  * columna ordenable es la norma en una tabla que usa la función, y marcarlas
  * todas sería marcar nada.
@@ -830,7 +830,7 @@
  * Va en flujo, al lado del título, y no absoluta como el botón de anclar: tiene
  * que empujar al texto en vez de taparlo, porque el título recorta con puntos
  * suspensivos y una flecha encima escondería la última letra justo cuando el
- * ancho aprieta.
+ * ancho presiona.
  */
 .dt-sort-indicator {
   display: inline-flex;
@@ -1158,10 +1158,10 @@
 /* -------------------------------------------------------------- Filas y celdas */
 
 /*
- * El ANCHO de la fila no está acá: lo escribe el pool, con el ancho total de la
+ * El ANCHO de la fila no está aquí: lo escribe el pool, con el ancho total de la
  * tabla, porque es el único que lo conoce. No es decoración: la fila es el
  * bloque contenedor de los carriles anclados, y `position: sticky` no puede
- * correrse más allá de él. Ver `.dt-pinned-lane`.
+ * correrse más allí de él. Ver `.dt-pinned-lane`.
  */
 .dt-row {
   /*
@@ -1252,7 +1252,7 @@
  * de la fila, así que el desfase entraba una vez al ubicar la lista dentro de la
  * celda y otra al ubicar cada píldora dentro de la lista.
  *
- * ## Por qué acá sí se puede usar flex
+ * ## Por qué aquí sí se puede usar flex
  *
  * La objeción que impide usarlo en `.dt-cell` es el recorte con puntos
  * suspensivos del texto anónimo, y en modo caja no hay texto anónimo: el
@@ -1317,10 +1317,10 @@
 /*
  * Celda de una columna ANCLADA.
  *
- * `--dt-row-bg` es el color de SU fila —normal, rayado, activo— y acá es lo que
+ * `--dt-row-bg` es el color de SU fila —normal, rayado, activo— y aquí es lo que
  * la vuelve opaca. Sin eso, las celdas que pasan por debajo se verían a través.
  * Se toma como token y no con `background: inherit` porque la fila no pinta: el
- * color viaja por herencia hasta acá, que es el único lugar que lo necesita.
+ * color viaja por herencia hasta aquí, que es el único lugar que lo necesita.
  *
  * El tinte del rango no puede vivir en `background-color` por esto mismo: es
  * semitransparente, y sobre una celda anclada dejaría ver lo que pasa debajo.
@@ -1469,7 +1469,7 @@
  * claro y en oscuro sin declarar dos colores.
  *
  * La celda ANCLA no lleva esta clase —la excluye el pool— y es deliberado: en
- * una planilla, la esquina desde donde se extendió la selección queda con el
+ * una hoja de cálculo, la esquina desde donde se extendió la selección queda con el
  * fondo normal.
  */
 .dt-cell--range {
@@ -1491,7 +1491,7 @@
 /*
  * Con un rango vivo, la celda activa pierde su anillo y su fila el realce.
  *
- * Son dos señales de "acá estás" para una selección que ya tiene la suya: el
+ * Son dos señales de "aquí estás" para una selección que ya tiene la suya: el
  * recuadro. Dejarlas encendidas dibujaba un anillo adentro del rectángulo y una
  * fila resaltada entre diez iguales, que es justo lo que confunde sobre dónde
  * empieza y dónde termina lo seleccionado.
@@ -1567,7 +1567,7 @@
 /*
  * Confirmación del copiado: la línea cambia de color y vuelve.
  *
- * El portapapeles no deja ninguna señal visible: sin esto, quien aprieta
+ * El portapapeles no deja ninguna señal visible: sin esto, quien presiona
  * `Ctrl`+`C` no puede distinguir "se copió" de "el atajo se lo comió otra cosa".
  *
  * Lo que cambia es el COLOR del contorno, no su opacidad. Un contorno que se
@@ -1638,7 +1638,7 @@
  * cada clic sobre una celda, y eso volvió alcanzable una regla que hasta
  * entonces no se disparaba nunca: antes el clic enfocaba la celda, así que el
  * viewport no recibía el foco y su anillo no existía en la práctica. Con el foco
- * puesto siempre acá, cada selección pasó a encerrar la tabla ENTERA en un borde
+ * puesto siempre aquí, cada selección pasó a encerrar la tabla ENTERA en un borde
  * del color de acento. Es el mismo error un nivel más arriba: dos señales para
  * una sola posición.
  *
@@ -1814,7 +1814,7 @@
  * El agregado se pinta sobre la cabecera, en la posición horizontal de SU
  * columna: es la única manera de que la cifra caiga debajo del encabezado al que
  * corresponde. `--dt-row-bg` es el color de la fila, y es lo que lo vuelve opaco
- * sobre la etiqueta sin tener que repetir el color acá ni saber si la fila está
+ * sobre la etiqueta sin tener que repetir el color aquí ni saber si la fila está
  * activa. La fila no pinta: ver `.dt-row`.
  */
 .dt-group-aggregate {
@@ -1887,7 +1887,7 @@
   font: inherit;
   will-change: transform;
   /*
-   * Acá adentro sí se selecciona texto.
+   * Aquí adentro sí se selecciona texto.
    *
    * `user-select: none` en `.dt-root` se hereda, y en Chrome eso alcanza para
    * que no se pueda seleccionar dentro de un `<input>` descendiente: se podría
@@ -1924,7 +1924,7 @@
   background: var(--dt-bg);
   will-change: transform;
   /* El control lo pone el consumidor y puede ser cualquier cosa, incluido un
-     campo de texto. La grilla no le impone su "acá no se selecciona". */
+     campo de texto. La grilla no le impone su "aquí no se selecciona". */
   user-select: text;
 }
 
@@ -2453,7 +2453,7 @@
   }
 
   /*
-   * La confirmación del copiado NO se suprime acá, y es a propósito: no hay nada
+   * La confirmación del copiado NO se suprime aquí, y es a propósito: no hay nada
    * que se mueva ni que parpadee. Es un cambio de color de ida y vuelta en medio
    * segundo —muy por debajo de cualquier umbral de destello— y es la única señal
    * de que el copiado ocurrió. `prefers-reduced-motion` pide menos movimiento,

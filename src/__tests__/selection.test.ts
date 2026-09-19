@@ -365,7 +365,7 @@ describe('selection ring — exactly one cell is ever painted', () => {
  * la hoja de estilos decide: las dos condiciones que la regla exige sobre
  * `.dt-root`. Por eso los tests preguntan por el selector completo y no por cada
  * atributo suelto: encender uno y olvidar el otro pasaría una aserción por
- * atributo y fallaría acá, que es donde importa.
+ * atributo y fallaría aquí, que es donde importa.
  */
 describe('focus ring — opt-in, and never a second ring', () => {
   /**
@@ -578,7 +578,7 @@ describe('keyboard — arrows clamp at the edges instead of wrapping', () => {
 
     // Sin celda activa no hay "donde está" al que aplicarle un desplazamiento,
     // así que la primera tecla SIEMBRA la posición en lugar de moverse desde un
-    // origen inventado. Antes se sembraba en (0, primera columna) y recién
+    // origen inventado. Antes se sembraba en (0, primera columna) y solo
     // después se aplicaba el delta, con lo cual la primera flecha hacia abajo
     // aterrizaba en la fila 1 y la fila 0 no había forma de alcanzarla con el
     // teclado sin pasar antes por otra.
@@ -902,7 +902,7 @@ describe('keyboard — editing', () => {
       columnKey: 'name',
       newValue: 'Edited',
     })
-    // Como en una planilla de cálculo: confirmar baja una fila.
+    // Como en una hoja de cálculo: confirmar baja una fila.
     expect(lastActiveCell(harness.wrapper)).toEqual({ rowIndex: 3, columnKey: 'name' })
     harness.unmount()
   })

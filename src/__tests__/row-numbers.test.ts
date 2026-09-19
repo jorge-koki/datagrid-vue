@@ -7,7 +7,7 @@
  * habría que excluirla a mano de la selección, del copiado, del reordenamiento,
  * del selector de columnas, de la navegación y del `aria-colcount`, y cada una
  * de esas exclusiones sería una oportunidad de olvidarse de una. Como carril
- * aparte no participa de nada de eso por construcción, y los tests de acá abajo
+ * aparte no participa de nada de eso por construcción, y los tests de aquí abajo
  * verifican justamente eso: que lo que se agregó a la izquierda no se metió en
  * ninguno de los otros sistemas.
  *
@@ -16,7 +16,7 @@
  * propaga a todas las coordenadas horizontales; los tests miden que así sea.
  *
  * El resto de la suite monta sin regleta —ver `mountTable`— para que sus cuentas
- * de píxeles no lleven sumado un ancho ajeno. Por eso el primer test de acá es
+ * de píxeles no lleven sumado un ancho ajeno. Por eso el primer test de aquí es
  * que el valor por defecto del componente es `true`.
  */
 
@@ -131,7 +131,7 @@ describe('row numbers — on by default', () => {
         columns: COLUMNS,
         rowKey: 'id',
         rowHeight: ROW_HEIGHT,
-        // `undefined` NO es lo mismo que omitirla acá: el andamiaje monta sin
+        // `undefined` NO es lo mismo que omitirla aquí: el andamiaje monta sin
         // regleta, así que hay que pisar ese default con el "sin valor" que hace
         // que Vue aplique el del componente, que es lo que este test mide.
         showRowNumbers: undefined,
@@ -272,7 +272,7 @@ describe('row numbers — what they stay out of', () => {
     const text = await harness.copy()
 
     // La posición de la fila no es un dato del consumidor: pegarla en una
-    // planilla metería una columna que nadie pidió.
+    // hoja de cálculo metería una columna que nadie pidió.
     expect(text).toBe(['1\tName 1', '2\tName 2'].join('\n'))
     harness.unmount()
   })

@@ -9,6 +9,13 @@ como pública es exactamente la que exporta [`src/index.ts`](./src/index.ts): lo
 
 ## [0.2.1] — 2026-09-18
 
+### Documentación
+
+- **Toda la documentación y los comentarios pasan a español de México.** Lo que más importaba no era
+  el registro sino una palabra: `planilla`, que en México significa nómina o lista de candidatos y no
+  hoja de cálculo. Además se fue el voseo, `acá` pasó a `aquí` y `apretar` a `presionar` o `hacer
+  clic` —salvo donde de verdad significaba estrujar—.
+
 ### Agregado
 
 - **`sortable: 'menu'`**: la columna se ordena **solo desde su menú**. El clic en el encabezado no
@@ -58,7 +65,7 @@ como pública es exactamente la que exporta [`src/index.ts`](./src/index.ts): lo
   Al cambiar el orden la tabla vuelve al principio del dataset.
 - **Menú de columna.** `columnMenu` pone un botón de tres puntos en cada encabezado con lo que la
   columna puede hacer: ordenar, anclar, ocultarse y restablecer el layout. No agrega capacidades —es
-  otra vía al mismo estado— y muestra solo lo aplicable. Se cierra con `Escape`, al apretar afuera, al
+  otra vía al mismo estado— y muestra solo lo aplicable. Se cierra con `Escape`, al hacer clic afuera, al
   elegir y al scrollear. Una columna se queda afuera con `column.menu: false`.
 
   Es además el único lugar donde viven juntas las cuatro operaciones de una columna.
@@ -108,7 +115,7 @@ como pública es exactamente la que exporta [`src/index.ts`](./src/index.ts): lo
   sin reservar un solo byte, y el pool no escribe ninguna propiedad de alto. La tabla vuelve sola a
   ese camino si la función termina devolviendo el alto por defecto para todas.
 - `scrollToCell` con un índice de fila fuera de rango pide ahora el final del contenido en lugar de
-  una posición inventada más allá. Lo que se ve es lo mismo —el navegador acotaba esa escritura
+  una posición inventada más allí. Lo que se ve es lo mismo —el navegador acotaba esa escritura
   igual—, pero el número que la tabla pide cambió.
 - La celda toma su alto de `--dt-row-h`, el alto de SU fila, en lugar de `--dt-row-height`. Los
   tamaños decorativos que se derivan de `--dt-row-height` con `calc()` —píldoras, casillas,

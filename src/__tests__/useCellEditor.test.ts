@@ -1,7 +1,7 @@
 /**
  * Ciclo de vida de la edición de celdas.
  *
- * Tres contratos se verifican acá, y los tres son fáciles de romper sin que nada
+ * Tres contratos se verifican aquí, y los tres son fáciles de romper sin que nada
  * se note hasta producción:
  *
  * 1. El veto de `beforeEdit` no tiene puertas traseras. `beginEdit` y

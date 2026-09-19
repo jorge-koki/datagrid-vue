@@ -215,7 +215,7 @@ export interface DataTableColumn<TRow> {
    *
    * Solo lo usa {@link sortRows}: la tabla nunca compara nada por su cuenta. El
    * sentido descendente lo resuelve el helper invirtiendo el resultado, así que
-   * acá alcanza con describir el ascendente.
+   * aquí alcanza con describir el ascendente.
    *
    * Hace falta cuando el orden natural del valor no es el que el usuario espera:
    * una prioridad que va `baja < media < alta` y no alfabéticamente, un texto
@@ -409,7 +409,7 @@ export interface CellEditorSlotProps<TRow> {
    *
    * El valor se entrega TAL CUAL: no hay coacción de tipos, a diferencia del
    * editor incluido, que recibe un string de un control del DOM y tiene que
-   * devolverlo al tipo original. Acá el consumidor ya tiene el valor tipado.
+   * devolverlo al tipo original. Aquí el consumidor ya tiene el valor tipado.
    */
   commit(newValue: CellValue): void
   /**
@@ -724,7 +724,7 @@ export interface DataTablePersistOptions {
  * Guarda las referencias a los nodos que `update` va a mutar en cada repintado,
  * más el caché que cada renderer necesite para saltear escrituras redundantes.
  * El pool lo almacena sobre el nodo de celda y se lo devuelve tal cual: nunca
- * lee su contenido ni asume nada sobre él más allá de `root`.
+ * lee su contenido ni asume nada sobre él más allí de `root`.
  */
 export interface CellRendererHandle {
   /** El nodo `.dt-cell` sobre el que trabaja el renderer. */
@@ -750,7 +750,7 @@ export interface CellRenderContext<TRow> {
    * `value` está reducido a {@link CellValue}, que no puede expresar un array ni
    * un objeto: `toCellValue` los convierte a texto. Renderers como `tags` o
    * `avatar` necesitan la forma original —una lista de etiquetas, un
-   * `{ name, src }`— y la leen de acá, estrechándola por su cuenta.
+   * `{ name, src }`— y la leen de aquí, estrechándola por su cuenta.
    *
    * Es `unknown` a propósito: quien lo consume debe validarlo antes de usarlo.
    */
@@ -913,7 +913,7 @@ export interface DataTableProps<TRow> {
    * sus datos en memoria y no deberían pagar ni una línea por un modo que no
    * usan.
    *
-   * Con ella, la tabla separa dos cosas que hasta acá eran la misma:
+   * Con ella, la tabla separa dos cosas que hasta aquí eran la misma:
    *
    * - **Cuántas filas hay** lo dice `rowCount`, y es lo que dimensiona la barra
    *   de scroll. La tabla deja scrollear hasta ahí aunque `rows` esté casi vacío.
@@ -925,7 +925,7 @@ export interface DataTableProps<TRow> {
    * transporte, la caché, los reintentos y la cancelación son del consumidor,
    * por la misma razón por la que `rows` es controlada para editar.
    *
-   * Si no conocés el total —el caso del scroll infinito clásico—, `rowCount` es
+   * Si no conoces el total —el caso del scroll infinito clásico—, `rowCount` es
    * "hasta dónde puede scrollear": `cargadas + pageSize` mientras el servidor
    * diga que hay más, y `cargadas` cuando diga que se acabó. No hay un segundo
    * modo ni una segunda API.
@@ -1050,8 +1050,8 @@ export interface DataTableProps<TRow> {
    * forma de moverlo con el mouse. Una columna puntual se puede anclar con
    * `column.reorderable: false`.
    *
-   * Convive con el clic que selecciona la columna: apretar y soltar sin mover
-   * selecciona, apretar y arrastrar mueve. Lo que decide cuál de las dos cosas
+   * Convive con el clic que selecciona la columna: presionar y soltar sin mover
+   * selecciona, presionar y arrastrar mueve. Lo que decide cuál de las dos cosas
    * fue es un umbral de unos pocos píxeles, no el orden de los eventos.
    */
   columnReorder?: boolean
@@ -1175,7 +1175,7 @@ export interface DataTableProps<TRow> {
    */
   selectionMode?: SelectionMode
   /**
-   * Selección de un RANGO de celdas, como en una planilla. Por defecto `true`.
+   * Selección de un RANGO de celdas, como en una hoja de cálculo. Por defecto `true`.
    *
    * Arrastrar con el botón primario desde una celda, `Shift`+clic y
    * `Shift`+flechas extienden la selección a un rectángulo, `Ctrl`+`C` lo copia
@@ -1261,7 +1261,7 @@ export interface DataTableProps<TRow> {
 /**
  * Modo de selección de la tabla.
  *
- * - `cell`: se marca la celda activa. Es el modelo de una planilla de cálculo.
+ * - `cell`: se marca la celda activa. Es el modelo de una hoja de cálculo.
  * - `row`: se marca la fila entera, pero la celda activa igual se registra para
  *   que la navegación con teclado sepa en qué columna está parada.
  * - `none`: sin selección. Ni siquiera se registran los manejadores de teclado.
@@ -1356,7 +1356,7 @@ export interface CellPosition {
 }
 
 /**
- * Rectángulo de celdas seleccionado, como lo entiende una planilla.
+ * Rectángulo de celdas seleccionado, como lo entiende una hoja de cálculo.
  *
  * ## Por qué dos puntas y no un rectángulo ya normalizado
  *
@@ -1492,7 +1492,7 @@ export interface ColumnResizeEvent {
 export interface VirtualWindow {
   /** Primer índice de item a pintar, inclusive. */
   start: number
-  /** Uno más allá del último índice de item a pintar. */
+  /** Uno más allí del último índice de item a pintar. */
   end: number
   /** Offset en px del item `start` respecto del tope (o la izquierda) del canvas. */
   offset: number
@@ -1572,7 +1572,7 @@ export interface DataTableInstance {
    * También sirve para invalidar sin acortar `rows`: al cambiar un orden o un
    * filtro del lado del servidor, lo normal es `rows = []`, que la tabla detecta
    * sola. Si en cambio se reemplaza el array por otro del mismo largo, hay que
-   * llamar acá.
+   * llamar aquí.
    */
   refreshRows(): void
   /**
@@ -1630,7 +1630,7 @@ export interface DataTableInstance {
    * A diferencia de {@link DataTableInstance.scrollToRow}, que sí lo acota. La
    * razón es de dónde viene cada uno: `scrollToRow` es un salto absoluto que
    * pide el consumidor con un número suelto, mientras que la posición que llega
-   * acá ya viene acotada por el camino de navegación interno. Con un índice
+   * aquí ya viene acotada por el camino de navegación interno. Con un índice
    * fuera de rango, el navegador acota la escritura del scroll contra la altura
    * real del canvas y la vista queda en el extremo.
    */

@@ -196,20 +196,20 @@ export interface RowPoolCallbacks {
    * El usuario apuntó a una celda con un clic simple o un toque.
    *
    * Se dispara en `pointerdown` y no en `click` para que la marca aparezca
-   * apenas se aprieta, sin esperar a que se suelte. Selecciona; no edita.
+   * apenas se presiona, sin esperar a que se suelte. Selecciona; no edita.
    */
   onCellPointerDown?: (position: CellPosition) => void
   /**
-   * Igual, pero con `Shift` apretado: EXTIENDE en vez de mover.
+   * Igual, pero con `Shift` presionado: EXTIENDE en vez de mover.
    *
    * Es un callback aparte y no un parámetro de {@link RowPoolCallbacks.onCellPointerDown}
    * porque son dos acciones distintas sobre dos estados distintos —una mueve el
    * ancla, la otra mueve el foco—, y meterlas en el mismo camino obligaría a
-   * decidir cuál es en dos lugares: acá y del otro lado.
+   * decidir cuál es en dos lugares: aquí y del otro lado.
    */
   onCellShiftPointerDown?: (position: CellPosition) => void
   /**
-   * El puntero pasó por una celda con el botón primario apretado.
+   * El puntero pasó por una celda con el botón primario presionado.
    *
    * Solo llega entre un `pointerdown` sobre una celda y el `pointerup` que lo
    * cierra: fuera del arrastre no hay listener de movimiento registrado, así que
@@ -217,7 +217,7 @@ export interface RowPoolCallbacks {
    */
   onCellDragOver?: (position: CellPosition) => void
   /**
-   * El usuario apretó sobre el número de una fila, en la regleta.
+   * El usuario presionó sobre el número de una fila, en la regleta.
    *
    * Llega con la posición VISIBLE de esa fila. Qué significa el gesto lo decide
    * el componente: el pool no sabe si la tabla permite seleccionar filas enteras.
@@ -568,7 +568,7 @@ export function useRowPool<TRow extends Record<string, unknown>>(
     // El tamaño del pool es la base del módulo, así que achicarlo corre el slot
     // de TODAS las filas que sobreviven. Se marcan como no pintadas para que
     // `getCellElement` no devuelva un nodo que ya no representa lo que dice
-    // representar durante la ventana que va desde acá hasta el próximo pintado.
+    // representar durante la ventana que va desde aquí hasta el próximo pintado.
     // El pintado siguiente recalcula el slot de cada fila y repinta lo que
     // efectivamente cambió; `setRowKey` y `setRowAriaIndex` tienen su propio
     // caché, así que una fila que conserva su índice no vuelve a escribir.
@@ -642,7 +642,7 @@ export function useRowPool<TRow extends Record<string, unknown>>(
 
     // Los renderers se resuelven una vez por COLUMNA, no por celda. Resolver
     // adentro del bucle costaría una búsqueda en el registro por cada una de las
-    // ~450 celdas visibles; resolver acá son ~15 búsquedas y un array chico por
+    // ~450 celdas visibles; resolver aquí son ~15 búsquedas y un array chico por
     // frame, del mismo orden que el `slice` de columnas visibles.
     // Se empuja una entrada por slot incluso si la columna faltara, para que el
     // array quede alineado por índice con `columns`: un `continue` correría los
@@ -669,7 +669,7 @@ export function useRowPool<TRow extends Record<string, unknown>>(
     // La celda activa se resuelve por COMPARACIÓN, no por búsqueda: se
     // desarma la posición una vez por frame y cada celda compara dos valores
     // que ya tiene a mano. No hay un barrido extra sobre las celdas visibles
-    // preguntando "¿sos vos la activa?", y al moverse la selección solo escriben
+    // preguntando "¿sos tú la activa?", y al moverse la selección solo escriben
     // las dos celdas cuyo estado cambió de verdad.
     const activeRowIndex = active ? active.rowIndex : UNPAINTED_ROW_INDEX
     const activeColumnKey = active ? active.columnKey : ''
@@ -1071,7 +1071,7 @@ export function useRowPool<TRow extends Record<string, unknown>>(
    * el único que ocurre durante el scroll, porque la rotación conserva el slot de
    * cada fila visible— no se hace absolutamente nada.
    *
-   * Lo que sí difiere de `ensureRenderer` es que acá NO se destruye nada. Las dos
+   * Lo que sí difiere de `ensureRenderer` es que aquí NO se destruye nada. Las dos
    * estructuras conviven en el mismo nodo y se turnan con `hidden`: reconstruir
    * la cabecera de grupo en cada ida y vuelta significaría crear y destruir cinco
    * nodos —uno de ellos un SVG— en mitad del scroll, y un slot que oscila entre
@@ -1154,7 +1154,7 @@ export function useRowPool<TRow extends Record<string, unknown>>(
    * arriba, no una cuenta que habría que rehacer con cada cambio de columnas.
    *
    * Que la etiqueta no se vaya con el scroll horizontal lo resuelve
-   * `position: sticky` sobre `parts.inner`. Acá no se escribe ninguna posición.
+   * `position: sticky` sobre `parts.inner`. Aquí no se escribe ninguna posición.
    */
   function paintGroupRow(
     rowNode: PooledRowElement,
@@ -1202,7 +1202,7 @@ export function useRowPool<TRow extends Record<string, unknown>>(
     // un hueco vacío, que es exactamente lo que no es una cabecera de grupo.
     //
     // Que la etiqueta siga a la vista al scrollear lo resuelve `position: sticky`
-    // sobre `parts.inner`, no una cuenta hecha acá. Ver la nota en `dom.ts`.
+    // sobre `parts.inner`, no una cuenta hecha aquí. Ver la nota en `dom.ts`.
     setGroupHeaderWidth(parts, frame.totalWidth)
 
     let used = 0
@@ -1256,7 +1256,7 @@ export function useRowPool<TRow extends Record<string, unknown>>(
    * correcta y basta con `update`. Si difiere, se cierra el handle viejo con
    * `destroy`, se vacía el nodo y se vuelve a construir.
    *
-   * ## El modo de maquetado viaja acá y en ningún otro lado
+   * ## El modo de maquetado viaja aquí y en ningún otro lado
    *
    * Que una celda se centre por altura de línea o por flex depende del RENDERER
    * y de nada más, así que el único momento en que puede cambiar es este mismo.
@@ -1301,7 +1301,7 @@ export function useRowPool<TRow extends Record<string, unknown>>(
     x: number,
   ): void {
     // Saca el estado de marcador si lo tenía. Cuando ENTRÓ en él se cerró su
-    // handle, así que `ensureRenderer` lo va a reconstruir acá abajo y va a
+    // handle, así que `ensureRenderer` lo va a reconstruir aquí abajo y va a
     // devolver `true`, que es lo que fuerza el `update` aunque el valor
     // memoizado coincida con el que había antes de vaciar la celda.
     //
@@ -1325,7 +1325,7 @@ export function useRowPool<TRow extends Record<string, unknown>>(
       resolved.key === frame.activeColumnKey
 
     // La celda activa NO se tiñe, aunque caiga adentro del rectángulo. Es la
-    // convención de toda planilla: el ancla queda con el fondo normal para que
+    // convención de toda hoja de cálculo: el ancla queda con el fondo normal para que
     // se vea desde dónde se extendió la selección, y es además lo que evita que
     // el tinte y la marca de celda activa se sumen en un color que no es
     // ninguno de los dos.
@@ -1357,7 +1357,7 @@ export function useRowPool<TRow extends Record<string, unknown>>(
     setCellRange(cellNode, inRange)
     // `aria-selected` anuncia la selección ENTERA, no solo su ancla: un lector
     // de pantalla que recorre un rango de diez celdas tiene que encontrar las
-    // diez seleccionadas, igual que en una planilla.
+    // diez seleccionadas, igual que en una hoja de cálculo.
     setCellAriaSelected(cellNode, isActive || inRange)
     // `resolved.index` es la posición dentro de las columnas VISIBLES, que es
     // justo lo que debe anunciar `aria-colindex`: una columna oculta no ocupa
@@ -1416,7 +1416,7 @@ export function useRowPool<TRow extends Record<string, unknown>>(
    * slot puede corresponder aritméticamente a una fila que quedó fuera de la
    * ventana, y en ese caso la respuesta correcta es `null`.
    *
-   * La horizontal sí es un barrido: las celdas también rotan, pero acá se entra
+   * La horizontal sí es un barrido: las celdas también rotan, pero aquí se entra
    * con una CLAVE de columna y no con su índice, así que no hay módulo que
    * aplicar. Son ~15 comparaciones y solo ocurren en respuesta a una interacción
    * o una vez por frame mientras hay una celda en edición.
@@ -1428,7 +1428,7 @@ export function useRowPool<TRow extends Record<string, unknown>>(
     const rowNode = rows[slotFor(rowIndex, poolSize)]
     if (!rowNode || rowNode.__dtRowIndex !== rowIndex || rowNode.hidden) return null
     // Una cabecera de grupo no tiene celdas visibles: las suyas están escondidas
-    // y no representan ninguna columna. Responder `null` acá es lo que mantiene a
+    // y no representan ninguna columna. Responder `null` aquí es lo que mantiene a
     // los grupos fuera de la edición y de la selección de celdas sin que ninguno
     // de esos dos módulos tenga que saber que los grupos existen.
     if (rowNode.__dtRowKind !== ROW_KIND_DATA) return null
@@ -1466,7 +1466,7 @@ export function useRowPool<TRow extends Record<string, unknown>>(
 
     for (const rowNode of rows) {
       // Una cabecera de grupo conserva sus celdas escondidas; ninguna puede ser
-      // el blanco de un evento, pero descartarla acá vuelve explícito que los
+      // el blanco de un evento, pero descartarla aquí vuelve explícito que los
       // grupos no participan de la edición ni de la selección de celdas.
       if (rowNode.__dtRowKind !== ROW_KIND_DATA) continue
       for (const cellNode of rowNode.__dtCells) {
@@ -1549,12 +1549,12 @@ export function useRowPool<TRow extends Record<string, unknown>>(
   /**
    * Selección con un solo clic, y comienzo de un arrastre.
    *
-   * El teclado NO se maneja acá. La navegación opera sobre la celda activa, que
+   * El teclado NO se maneja aquí. La navegación opera sobre la celda activa, que
    * es estado del componente, no sobre el nodo que tenga el foco: los nodos se
    * reciclan y el foco del DOM no sobrevive a un scroll. El manejador de teclas
    * vive en el viewport y lee esa posición.
    *
-   * ## Las tres formas de apretar sobre una celda
+   * ## Las tres formas de presionar sobre una celda
    *
    * 1. Botón primario: mueve la selección y ARMA el arrastre.
    * 2. Botón primario con `Shift`: extiende el rango desde el ancla, sin mover
@@ -1657,7 +1657,7 @@ export function useRowPool<TRow extends Record<string, unknown>>(
   function handleDragMove(event: Event): void {
     // Soltar el botón fuera de la ventana no produce `pointerup`, así que el
     // arrastre quedaría armado y la selección seguiría al puntero sin que nadie
-    // esté apretando nada. `buttons` en cero dice exactamente eso.
+    // esté presionando nada. `buttons` en cero dice exactamente eso.
     if (event instanceof MouseEvent && event.buttons === 0) {
       endDrag()
       return

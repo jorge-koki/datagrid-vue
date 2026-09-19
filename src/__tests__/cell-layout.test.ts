@@ -2,7 +2,7 @@
  * Modo de maquetado de la celda: texto centrado por altura de línea contra caja
  * centrada por flex.
  *
- * ## Qué se puede verificar acá y qué no
+ * ## Qué se puede verificar aquí y qué no
  *
  * `happy-dom` no calcula layout ni resuelve la cascada de una hoja de estilos
  * externa: `getComputedStyle` sobre una celda devuelve valores vacíos aunque el
@@ -316,7 +316,7 @@ describe('alignment — the same three states in both layout modes', () => {
   }
 
   it('gives a checkbox column the centred state it declares by default', () => {
-    // `defaultAlign` y `layout` son ejes independientes y acá conviven: la
+    // `defaultAlign` y `layout` son ejes independientes y aquí conviven: la
     // casilla se centra horizontalmente por su alineación y verticalmente por su
     // modo de maquetado.
     const fixture = createPoolFixture({
@@ -373,7 +373,7 @@ describe('box cells keep taking events through the single delegated listener', (
  * Se abre con `node:fs` y no con un `import ... from '...css?raw'` porque Vitest
  * no procesa CSS —`test.css` viene apagado— y ese import devuelve un string
  * vacío: el test pasaría en verde sin haber leído nada. Las firmas de `node:fs`,
- * `node:path` y `node:url` las declara `node-fs.d.ts` acá al lado, para no meter
+ * `node:path` y `node:url` las declara `node-fs.d.ts` aquí al lado, para no meter
  * `@types/node` en el proyecto de tests; el archivo explica por qué.
  *
  * Los comentarios se quitan porque explican reglas y mencionan propiedades que
@@ -457,7 +457,7 @@ describe('stylesheet — what the classes the pool writes actually mean', () => 
     expect(declarations).toContain('text-overflow: ellipsis')
     expect(declarations).toContain('overflow: hidden')
     // Y `.dt-cell` sigue sin declarar `display`: el flex llega SOLO con la clase
-    // de modo caja. Si estuviera acá, el texto anónimo dejaría de recortarse.
+    // de modo caja. Si estuviera aquí, el texto anónimo dejaría de recortarse.
     expect(declarations.filter((entry) => entry.startsWith('display:'))).toEqual([])
   })
 

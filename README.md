@@ -1,6 +1,6 @@
 # vue-tablekit
 
-Una tabla de datos para Vue 3 que se maneja como una planilla de cálculo y aguanta cien mil filas sin
+Una tabla de datos para Vue 3 que se maneja como una hoja de cálculo y aguanta cien mil filas sin
 ponerse lenta. Sin dependencias: solo Vue.
 
 **→ [Probala en vivo](https://jorge-koki.github.io/vue-tablekit/)**
@@ -46,13 +46,13 @@ const columnas: DataTableColumn<Empleado>[] = [
 - Navegación por teclado completa y **selección de bloques** que se copian con `Ctrl`+`C` y se pegan
   en Excel.
 - **Edición en línea** cancelable. La tabla nunca escribe en tus datos.
-- **Ordenamiento** por una o varias columnas. La tabla lleva el estado y vos ordenás —o le preguntás
+- **Ordenamiento** por una o varias columnas. La tabla lleva el estado y tú ordenas —o le preguntas
   al servidor—, que es lo que hace que funcione igual con mil filas que con un millón.
 - **Agrupación multinivel** con totales, promedios, conteos, mínimos y máximos.
 - **Columnas anclables, redimensionables, ocultables y reordenables**, con el layout guardado y un
-  menú propio en cada encabezado si lo querés.
-- **Alturas de fila distintas**, decididas por vos fila por fila.
-- **Datos del servidor**: pide los tramos que le faltan mientras scrolleás.
+  menú propio en cada encabezado si lo quieres.
+- **Alturas de fila distintas**, decididas por tú fila por fila.
+- **Datos del servidor**: pide los tramos que le faltan mientras haces scroll.
 - **Ocho tipos de celda**, temas claro / oscuro, y el color principal en una línea:
   `.dt-root { --dt-primary: #8b5cf6 }`.
 

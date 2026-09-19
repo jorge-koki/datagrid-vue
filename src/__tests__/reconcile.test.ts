@@ -4,7 +4,7 @@
  * El escenario que cubre este archivo es siempre el mismo: el estado guardado es
  * viejo por definición. Entre la sesión en que el usuario acomodó la tabla y la
  * sesión en que vuelve, alguien agregó columnas, borró otras, renombró una clave
- * o apretó los límites de ancho. Todo lo que sale de acá tiene que ser válido
+ * o apretó los límites de ancho. Todo lo que sale de aquí tiene que ser válido
  * HOY, sin importar lo que dijera el payload.
  */
 

@@ -9,7 +9,7 @@ npm run dev      # http://localhost:5173
 
 La pantalla está repartida en tres: a la izquierda **lo que se puede cambiar**, en el medio **lo que
 se está mirando** y a la derecha **lo que está pasando**. Las tres se ven al mismo tiempo, así que
-tocás un control y ves el efecto de inmediato.
+tocas un control y ves el efecto de inmediato.
 
 Abre con 100 filas. Desde ahí vale la pena:
 
@@ -22,7 +22,7 @@ Abre con 100 filas. Desde ahí vale la pena:
 - Editar una fila marcada como **Bloqueado**: la edición se rechaza, y la bitácora muestra el ciclo
   entero a medida que ocurre.
 
-## Qué hay acá adentro
+## Qué hay aquí adentro
 
 **`src/` es la librería y nada más que la librería** —exactamente lo que se publica— y `demo/` es la
 aplicación que la ejercita. La separación no es cosmética: la demo importa `vue-tablekit`, igual que
@@ -77,7 +77,7 @@ actualiza con cada push.
 ## Por qué el paquete se llama `vue-tablekit`
 
 Porque los dos nombres obvios están vetados, cada uno por una regla distinta de npm, y ninguna de las
-dos se puede consultar de antemano. Queda anotado acá porque volver a chocarse con ellas cuesta un
+dos se puede consultar de antemano. Queda anotado aquí porque volver a chocarse con ellas cuesta un
 intento de publicación cada vez.
 
 **`datagrid-vue` tiene una lápida.** Alguien publicó `0.0.1`, `0.0.2` y `0.0.3` el 2019-09-10 y las

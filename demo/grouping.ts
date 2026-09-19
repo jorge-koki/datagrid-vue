@@ -3,7 +3,7 @@
  *
  * La tabla habla de claves de columna —`groupBy` es un `readonly string[]`— y el
  * `<select>` de la barra habla de una opción por vez. Este módulo es la
- * traducción entre las dos formas, y vive acá y no en `App.vue` porque hace
+ * traducción entre las dos formas, y vive aquí y no en `App.vue` porque hace
  * falta en las DOS direcciones:
  *
  * 1. Al elegir una opción, para escribir `groupBy`.

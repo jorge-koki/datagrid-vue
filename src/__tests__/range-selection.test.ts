@@ -219,7 +219,7 @@ describe('range — dragging with the primary button', () => {
     ])
 
     // Un lector de pantalla que recorre el rango tiene que encontrar las cuatro
-    // celdas seleccionadas, igual que en una planilla.
+    // celdas seleccionadas, igual que en una hoja de cálculo.
     const selected = harness.canvas.querySelectorAll('.dt-cell[aria-selected="true"]')
     expect(selected).toHaveLength(4)
     harness.unmount()
@@ -233,7 +233,7 @@ describe('range — dragging with the primary button', () => {
     ])
     const afterDrag = tintedCount(harness)
 
-    // Un movimiento suelto, sin nada apretado: el listener ya no está registrado.
+    // Un movimiento suelto, sin nada presionado: el listener ya no está registrado.
     harness.cell(5, 'note')?.dispatchEvent(new MouseEvent('pointermove', { bubbles: true }))
     await harness.flush()
 

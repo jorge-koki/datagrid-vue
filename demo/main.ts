@@ -8,7 +8,7 @@ import { createApp } from 'vue'
  * —`vue-tablekit/style.css`— y no por una ruta relativa. Dentro de este
  * repositorio el alias de Vite la resuelve al mismo archivo que los SFC importan
  * por efecto secundario, así que no se duplica una sola regla; lo que se gana es
- * que la línea que se lee acá es exactamente la que hay que copiar afuera.
+ * que la línea que se lee aquí es exactamente la que hay que copiar afuera.
  *
  * Primero la librería y después la demo: `demo.css` redefine los tokens `--dt-*`
  * y necesita ganar la cascada. No se importa la hoja del andamiaje de Vite, que

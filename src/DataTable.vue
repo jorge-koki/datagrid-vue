@@ -109,7 +109,7 @@ const props = withDefaults(defineProps<DataTableProps<TRow>>(), {
   columnReorder: true,
   // Apagadas por defecto: son gestos EXTRA sobre el encabezado y la regleta, y
   // una tabla que no los espera no debería empezar a seleccionar de a columnas
-  // enteras porque alguien apretó un título.
+  // enteras porque alguien presionó un título.
   columnSelection: false,
   rowSelection: false,
   emptyText: 'No data',
@@ -326,7 +326,7 @@ function toggleSort(column: ResolvedColumn<TRow>, additive = false): void {
  *
  * Si la prop llega `undefined` el estado vive adentro; si llega con valor, la
  * prop manda y el componente solo emite. La única diferencia con el trío de
- * columnas es que acá el estado interno de expansión no lo guarda este
+ * columnas es que aquí el estado interno de expansión no lo guarda este
  * componente sino `useRowGrouping`, porque para decidir si un grupo está
  * expandido hace falta además saber cuáles existen.
  */
@@ -446,7 +446,7 @@ const grouping = useRowGrouping<TRow>({
 /**
  * Cantidad de entradas verticales, o sea hasta dónde se puede scrollear.
  *
- * Es el punto exacto donde el modo servidor separa las dos cosas que hasta acá
+ * Es el punto exacto donde el modo servidor separa las dos cosas que hasta aquí
  * eran una sola: cuántas filas HAY lo dice `rowCount`, y qué hay en cada índice
  * lo dice `rows`. Sin `rowCount` las dos siguen saliendo del mismo lado.
  */
@@ -464,7 +464,7 @@ const visibleRowCount = computed(() => {
  * ## Primero cuadrada, después lo que haga falta
  *
  * El ancho de referencia es la ALTURA DE FILA: una casilla cuadrada, que es la
- * forma que tiene la numeración en cualquier planilla y la que hace que se lea
+ * forma que tiene la numeración en cualquier hoja de cálculo y la que hace que se lea
  * como un margen y no como una columna más. Solo si el número más alto no entra
  * en ese cuadrado —cinco dígitos o más— la regleta se ensancha, y lo hace lo
  * justo para el número que tiene que mostrar.
@@ -594,7 +594,7 @@ const persistedState = computed<PersistedTableState>(() => {
   }
 
   // Mismo criterio que el corte de agrupación: la clave solo aparece si el
-  // usuario tocó algún ancla. Una tabla donde nadie apretó el botón escribe el
+  // usuario tocó algún ancla. Una tabla donde nadie presionó el botón escribe el
   // payload de siempre, así que los layouts guardados antes de que esto
   // existiera siguen valiendo y no hizo falta subir la versión del esquema.
   const pinning = columnPinning.value
@@ -631,7 +631,7 @@ const persistence = useTablePersistence<TRow>({
     setColumnOrder(loaded.columnOrder)
     if (loaded.columnPinning !== undefined) setColumnPinning({ ...loaded.columnPinning })
     // Se aplica en silencio: restaurar un layout no es que el usuario haya
-    // apretado un encabezado, y emitir `sortChange` acá le dispararía una
+    // presionado un encabezado, y emitir `sortChange` aquí le dispararía una
     // consulta al servidor a cada montaje. El v-model sí se emite, que es lo que
     // un padre controlado necesita para quedar en sincronía.
     if (loaded.sort !== undefined) {
@@ -770,8 +770,8 @@ const pool = useRowPool<TRow>({
     // Enter y F2.
     if (props.selectionMode === 'none') return
     // Solo alcanza al editor de slot, que no confirma por `blur`: apuntar otra
-    // celda es lo que lo cierra, con la misma semántica de planilla que ya
-    // aplicaba `beginEdit`. Los controles incluidos no pasan por acá; los
+    // celda es lo que lo cierra, con la misma semántica de hoja de cálculo que ya
+    // aplicaba `beginEdit`. Los controles incluidos no pasan por aquí; los
     // confirma el `blur` que dispara el foco de la línea siguiente.
     editor.commitIfElsewhere(position)
     // El foco va PRIMERO: si había un editor abierto sobre otra celda, moverlo
@@ -819,7 +819,7 @@ function readCurrentValue(position: CellPosition): CellValue {
  * Reescribe el índice de fila de un evento al del dataset del consumidor.
  *
  * Es el ÚNICO punto por el que un índice de la vista aplanada puede salir del
- * componente, y por eso se hace acá y no en cada emisión. Adentro todo trabaja en
+ * componente, y por eso se hace aquí y no en cada emisión. Adentro todo trabaja en
  * coordenadas visibles —que es lo que necesitan la geometría del editor, el
  * auto-scroll y las flechas—; afuera, el consumidor solo puede escribir sobre su
  * propio array.
@@ -870,7 +870,7 @@ const rangeEnabled = computed(() => props.rangeSelection && props.selectionMode 
 /**
  * El rango, con la celda activa como ancla.
  *
- * No es un segundo estado de selección: el ancla ES `activeCell`, y acá solo
+ * No es un segundo estado de selección: el ancla ES `activeCell`, y aquí solo
  * vive la punta que se mueve. Ver la cabecera de `useCellRange`.
  */
 const cellRange = useCellRange<TRow>({
@@ -1086,7 +1086,7 @@ function selectWholeRow(rowIndex: number): void {
  * Clic sobre el encabezado de una columna.
  *
  * Se atiende en `pointerdown` y no en `click` por lo mismo que las celdas: la
- * marca tiene que aparecer al apretar. El handle de redimensionado queda afuera
+ * marca tiene que aparecer al presionar. El handle de redimensionado queda afuera
  * —es un hijo del encabezado y tiene su propio gesto—, porque terminar un
  * arrastre de ancho seleccionando la columna sería una sorpresa en cada resize.
  */
@@ -1109,7 +1109,7 @@ let headerClickWasDrag = false
  * encendida, y no caben en el mismo gesto. **Se la queda ordenar**, por dos
  * razones:
  *
- * - Apretar un encabezado para ordenar es la interacción más común que existe en
+ * - Presionar un encabezado para ordenar es la interacción más común que existe en
  *   una grilla; seleccionar la columna entera para copiarla es ocasional. La
  *   acción frecuente tiene que llevarse el gesto frecuente.
  * - Al revés quedaba un agujero: con `columnSelection` encendida y sin
@@ -1136,7 +1136,7 @@ function headerGestureIsSelection(event: MouseEvent, column: ResolvedColumn<TRow
  *
  * Va en `click` y no en `pointerdown` —al revés que la selección de columna—
  * porque sobre el mismo encabezado empieza el arrastre de reordenamiento, y
- * ordenar al apretar dejaría la tabla reordenada cada vez que alguien intenta
+ * ordenar al presionar dejaría la tabla reordenada cada vez que alguien intenta
  * mover una columna.
  */
 function onHeaderClick(event: MouseEvent, column: ResolvedColumn<TRow>): void {
@@ -1154,7 +1154,7 @@ function onHeaderClick(event: MouseEvent, column: ResolvedColumn<TRow>): void {
   // El `pointerdown` ya seleccionó la columna: este `click` es la cola del mismo
   // gesto y no tiene que ordenar además.
   if (headerGestureIsSelection(event, column)) return
-  // Con `sortable: 'menu'` la columna se ordena, pero no desde acá.
+  // Con `sortable: 'menu'` la columna se ordena, pero no desde aquí.
   if (!column.sortOnHeaderClick) return
 
   toggleSort(column, event.shiftKey)
@@ -1164,7 +1164,7 @@ function onHeaderPointerDown(event: PointerEvent, column: ResolvedColumn<TRow>):
   const target = event.target
   // Los tres controles que viven adentro del encabezado —redimensionar, anclar
   // y el menú— tienen su propio gesto: ninguno selecciona la columna, la mueve
-  // ni la ordena. Sin esta línea, apretar el botón de anclar arrancaría además
+  // ni la ordena. Sin esta línea, presionar el botón de anclar arrancaría además
   // un arrastre, y abrir el menú ordenaría la columna de paso.
   if (
     target instanceof Element &&
@@ -1179,9 +1179,9 @@ function onHeaderPointerDown(event: PointerEvent, column: ResolvedColumn<TRow>):
   if (!headerGestureIsSelection(event, column)) return
 
   /*
-   * `preventDefault` acá no es ceremonia: sin él, el copiado no funciona.
+   * `preventDefault` aquí no es ceremonia: sin él, el copiado no funciona.
    *
-   * Apretar sobre un elemento que no es enfocable hace que el navegador lleve el
+   * Presionar sobre un elemento que no es enfocable hace que el navegador lleve el
    * foco a su ancestro enfocable más cercano, y el del encabezado no es el
    * viewport —vive afuera— sino el `body`. Ese movimiento ocurre DESPUÉS de este
    * manejador, así que pisaba el `focusViewport` de abajo y dejaba a la tabla sin
@@ -1227,10 +1227,10 @@ watch(rangeEnabled, (enabled) => {
  * 2. Si hay un editor abierto sobre ESTA misma celda, el foco le pertenece al
  *    control y quitárselo lo cerraría por `blur`. Un clic sobre OTRA celda sí
  *    mueve el foco: esa edición se confirma igual —es la misma semántica de
- *    planilla que ya aplica `beginEdit`— y el teclado tiene que quedar
+ *    hoja de cálculo que ya aplica `beginEdit`— y el teclado tiene que quedar
  *    apuntando al viewport.
  *
- * En modo `none` no se llega hasta acá: el llamador corta antes, así que una
+ * En modo `none` no se llega hasta aquí: el llamador corta antes, así que una
  * tabla sin selección nunca le roba el foco a nada de la página.
  */
 function focusViewport(position: CellPosition): void {
@@ -1249,7 +1249,7 @@ function focusViewport(position: CellPosition): void {
   // `preventScroll` no es un detalle: por defecto, enfocar un elemento lo
   // desplaza a la vista, y el viewport puede ser más alto que la ventana. Sin
   // esto, hacer clic en una celda movería el scroll de la PÁGINA para encuadrar
-  // la tabla, justo debajo del puntero del usuario. El foco acá se toma para
+  // la tabla, justo debajo del puntero del usuario. El foco aquí se toma para
   // habilitar el teclado, no para llevar a nadie a ningún lado.
   viewport.focus({ preventScroll: true })
 }
@@ -1330,12 +1330,12 @@ function selectCell(position: CellPosition | null): void {
  * pide con un número, y acotarlo es lo que convierte un índice fuera de rango en
  * el borde más cercano en vez de en una posición vacía. `scrollToCell` recibe
  * una posición de celda que en el camino interno YA viene acotada por
- * `moveActiveTo`, así que volver a acotarla acá sería trabajo repetido en cada
+ * `moveActiveTo`, así que volver a acotarla aquí sería trabajo repetido en cada
  * flecha.
  *
  * Lo que SÍ está acotado es la geometría: preguntarle dónde empieza una fila que
  * no existe devuelve el final del contenido, no un píxel inventado. Es
- * inevitable —con alturas variables, más allá de la última fila no hay nada que
+ * inevitable —con alturas variables, más allí de la última fila no hay nada que
  * sumar— y no cambia nada de lo que se ve: el navegador acota la escritura de
  * `scrollTop` contra la altura real del canvas, así que la vista se queda en el
  * extremo igual que antes.
@@ -1518,7 +1518,7 @@ function seedIndexFor(delta: number, count: number): number {
  * hacia arriba o hacia la izquierda selecciona la última. La misma regla vale
  * para PageUp y PageDown, que también son movimientos con sentido.
  *
- * `Home` y `End` no pasan por acá justamente porque no son movimientos con
+ * `Home` y `End` no pasan por aquí justamente porque no son movimientos con
  * sentido sino saltos absolutos: ver el manejador de teclado.
  *
  * ## El `Math.max(..., 0)` es una RECUPERACIÓN, y se conserva a propósito
@@ -1550,8 +1550,8 @@ function moveActiveBy(rowDelta: number, columnDelta: number): void {
 /**
  * Avanza o retrocede una celda en orden de lectura.
  *
- * A diferencia de las flechas, acá sí se pasa a la fila siguiente o anterior al
- * llegar al borde: es lo que hace Tab en un formulario y en una planilla, y es
+ * A diferencia de las flechas, aquí sí se pasa a la fila siguiente o anterior al
+ * llegar al borde: es lo que hace Tab en un formulario y en una hoja de cálculo, y es
  * lo que permite recorrer la tabla entera sin levantar la mano del teclado.
  */
 function moveActiveInReadingOrder(forward: boolean): void {
@@ -1671,7 +1671,7 @@ function onViewportKeyDown(event: KeyboardEvent): void {
     case 'Home':
       event.preventDefault()
       if (ctrl) moveOrExtendTo(shift, 0, 0)
-      // Absoluto, igual que `End` acá abajo, y no un delta negativo enorme que
+      // Absoluto, igual que `End` aquí abajo, y no un delta negativo enorme que
       // `moveActiveTo` termine acotando. Expresado como delta, `Home` sería un
       // movimiento "hacia la izquierda" y sin celda activa entraría por el borde
       // derecho, que es exactamente lo contrario de lo que significa `Home`.
@@ -1736,7 +1736,7 @@ function onViewportKeyDown(event: KeyboardEvent): void {
  * La clave es OPCIONAL, no de tipo `Fn | undefined`: la diferencia es
  * justamente el punto. Con `Record<string, Fn>` habría que producir un valor
  * para `keydown` siempre, y con `Record<string, Fn | undefined>` se produciría
- * la clave con valor indefinido. Acá, en modo `none`, la clave no existe y Vue
+ * la clave con valor indefinido. Aquí, en modo `none`, la clave no existe y Vue
  * no tiene nada que registrar.
  */
 /**
@@ -1874,7 +1874,7 @@ const editor = useCellEditor<TRow>({
   emitAfterEdit: (event) => emit('afterEdit', withSourceRowIndex(event)),
   emitEditCommit: (event) => emit('editCommit', withSourceRowIndex(event)),
   onEnterCommit: () => {
-    // Enter confirma y baja una fila, como en una planilla. La selección se
+    // Enter confirma y baja una fila, como en una hoja de cálculo. La selección se
     // mueve aunque el padre no persista el valor: es navegación, no edición.
     moveActiveBy(1, 0)
   },
@@ -1989,7 +1989,7 @@ watch(
 /**
  * Teclas dentro del editor de slot.
  *
- * Escape descarta, igual que en un editor incluido. El resto se detiene acá y no
+ * Escape descarta, igual que en un editor incluido. El resto se detiene aquí y no
  * llega al viewport: el editor comparte el contenedor que scrollea, y dejar
  * burbujear las flechas o la barra espaciadora lo desplazaría mientras el
  * usuario opera el control. `stopPropagation` no le quita nada al control del
@@ -2024,11 +2024,11 @@ function resolveRowKey(row: TRow, index: number): string {
  */
 function paintFrame(): void {
   /*
-   * Nada de lo que se pasa acá depende del scroll horizontal, y eso es
+   * Nada de lo que se pasa aquí depende del scroll horizontal, y eso es
    * deliberado: las columnas ancladas y la regleta de numeración se quedan
    * quietas por `position: sticky`, o sea que las sostiene el compositor.
    *
-   * Antes se las corría desde acá, leyendo el scroll del instante para que "no
+   * Antes se las corría desde aquí, leyendo el scroll del instante para que "no
    * fueran un frame atrasadas". Es inalcanzable: el navegador scrollea en el hilo
    * del compositor y compone el frame con el desplazamiento nuevo antes de que el
    * hilo principal llegue a escribir la compensación. Medido frame a frame en el
@@ -2074,7 +2074,7 @@ function paintFrame(): void {
  *
  * Peor todavía, el síntoma depende de una prop que no tiene nada que ver: con
  * `showRowNumbers` encendida la regleta va en flujo con el alto total escrito
- * inline, así que le da alto de contenido al viewport y todo "anda". Apagarla
+ * inline, así que le da alto de contenido al viewport y todo "funciona". Apagarla
  * hace desaparecer ese alto y la tabla se vacía. O sea que funcionaba de
  * casualidad.
  *
@@ -2100,7 +2100,7 @@ function warnIfCollapsed(): void {
     '[DataTable] La tabla no tiene alto para pintar filas, así que no se ve ninguna. ' +
       '`.dt-root` toma su alto del contenedor y el contenedor no le está dando ninguno. ' +
       'Dale una altura al contenedor (`height: 600px`), o si está dentro de un flex, ' +
-      'poné `flex: 1; min-height: 0` en `.dt-root`.',
+      'pon `flex: 1; min-height: 0` en `.dt-root`.',
   )
 }
 
@@ -2233,7 +2233,7 @@ const columnDrag = shallowRef<{
   /**
    * Esquina superior izquierda del fantasma, en coordenadas de `.dt-root`.
    *
-   * Ya resueltas acá y no en un `computed`: el arrastre las produce a partir del
+   * Ya resueltas aquí y no en un `computed`: el arrastre las produce a partir del
    * puntero, y traducirlas después obligaría a guardar además el rectángulo de
    * la raíz y el punto donde se agarró. Ver {@link startColumnDrag}.
    */
@@ -2264,7 +2264,7 @@ const dropIndicatorX = computed<number | null>(() => {
   const target = columns[drag.dropIndex]
   if (target) return target.offset
 
-  // Más allá de la última: la línea va contra su borde derecho.
+  // Más allí de la última: la línea va contra su borde derecho.
   const last = columns[columns.length - 1]
   return last ? last.offset + last.width : null
 })
@@ -2402,12 +2402,12 @@ function moveColumn(key: string, dropIndex: number): void {
  *
  * Arranca armado pero SIN moverse: hasta que el puntero no supera el umbral, el
  * gesto sigue siendo un clic y la selección de columna —si está encendida— ya
- * ocurrió en `pointerdown`. Recién al cruzarlo aparece la línea de caída y el
+ * ocurrió en `pointerdown`. Solo al cruzarlo aparece la línea de caída y el
  * encabezado se marca como en vuelo.
  *
- * Se usa `setPointerCapture` sobre el encabezado: acá sí conviene, al revés que
+ * Se usa `setPointerCapture` sobre el encabezado: aquí sí conviene, al revés que
  * en el arrastre de celdas. Ahí hacía falta saber sobre qué celda estaba el
- * puntero, y la captura habría retargeteado todos los eventos; acá la posición
+ * puntero, y la captura habría retargeteado todos los eventos; aquí la posición
  * se calcula con aritmética sobre `clientX`, así que capturar solo garantiza que
  * el `pointerup` llegue aunque se suelte fuera de la tabla.
  */
@@ -2426,7 +2426,7 @@ function startColumnDrag(event: PointerEvent, column: ResolvedColumn<TRow>): voi
   const headerBox = header.getBoundingClientRect()
   // Dónde AGARRÓ el usuario dentro del encabezado. Conservarlo es lo que hace
   // que el fantasma no salte al aparecer: nace justo encima del encabezado, en
-  // la misma posición relativa al dedo, y recién desde ahí se mueve.
+  // la misma posición relativa al dedo, y solo desde ahí se mueve.
   const grabX = event.clientX - headerBox.left
   const grabY = event.clientY - headerBox.top
 
@@ -2525,7 +2525,7 @@ function toggleColumnPinned(column: ResolvedColumn<TRow>): void {
  *
  * Todos de LÍNEA y ninguno relleno: mezclar las dos cosas en una misma lista
  * hace que unos pesen más que otros aunque midan igual. El trazo, el redondeo de
- * las puntas y el tamaño salen de la hoja de estilos, así que acá solo vive la
+ * las puntas y el tamaño salen de la hoja de estilos, así que aquí solo vive la
  * forma.
  *
  * Son genéricos a propósito —flechas, una barra, un ojo, un círculo— y no
@@ -2545,7 +2545,7 @@ const MENU_ICONS: Record<string, readonly string[]> = {
   // Se probaron las dos versiones con dibujo: dos galones con una diagonal
   // encima, y después una flecha de dos puntas tachada. Las dos terminan en un
   // borrón a 14px, que es el tamaño al que esto se ve de verdad. La cruz es la
-  // marca universal de "quitar", sobrevive a cualquier tamaño y acá no se puede
+  // marca universal de "quitar", sobrevive a cualquier tamaño y aquí no se puede
   // confundir con cerrar: el menú no tiene botón de cerrar.
   sortClear: ['M4.5 4.5 11.5 11.5', 'M11.5 4.5 4.5 11.5'],
   pinStart: ['M3 2.5v11', 'M13 8H6.5', 'M9 5 6 8l3 3'],
@@ -2768,9 +2768,9 @@ function runColumnMenuItem(item: ColumnMenuItem): void {
 }
 
 /**
- * Cierra al apretar fuera del menú.
+ * Cierra al hacer clic fuera del menú.
  *
- * En `pointerdown` y no en `click`: si esperara al `click`, apretar sobre una
+ * En `pointerdown` y no en `click`: si esperara al `click`, presionar sobre una
  * celda cerraría el menú DESPUÉS de que la celda ya procesó el gesto, y el
  * usuario vería la selección moverse con el menú todavía abierto.
  */
@@ -3087,7 +3087,7 @@ const gridRole = computed(() => (grouping.active.value ? 'treegrid' : 'grid'))
  * desaparecer la selección, y ahora también al ocultar o mostrar la columna
  * activa —un cambio de configuración, no un frame—. Vue parchea un atributo
  * únicamente cuando su valor cambia, así que recorrer la tabla entera con las
- * flechas sigue sin escribir nada acá.
+ * flechas sigue sin escribir nada aquí.
  */
 const hasActiveCell = computed(() => (activeColumnIndex.value >= 0 ? 'true' : 'false'))
 
@@ -3128,13 +3128,13 @@ function headerAlignClass(column: ResolvedColumn<TRow>): string | undefined {
     <!--
       El viewport scrollea y recibe el teclado, pero ya no es la grilla: es un
       contenedor sin rol propio entre la grilla y su cuerpo. El foco se queda
-      acá porque es el elemento que scrollea, y moverlo a la raíz separaría el
+      aquí porque es el elemento que scrollea, y moverlo a la raíz separaría el
       anillo de foco de la caja que el usuario está desplazando. En modo `none`
       el manejador es `undefined`, y entonces Vue directamente no registra el
       listener.
 
       RECIBIR el foco y PINTARLO son dos cosas distintas: el foco vive siempre
-      acá, porque es lo que hace que las teclas lleguen, y si además se dibuja un
+      aquí, porque es lo que hace que las teclas lleguen, y si además se dibuja un
       anillo lo deciden `focusRing` y `data-active-cell` desde la hoja de
       estilos.
     -->
@@ -3287,7 +3287,7 @@ function headerAlignClass(column: ResolvedColumn<TRow>): string | undefined {
       <!--
         El canvas solo dimensiona la barra de scroll. Sus hijos los inyecta
         useRowPool, y son exactamente las filas del cuerpo: por eso el
-        `rowgroup` va acá y no en el viewport, que además contiene al host del
+        `rowgroup` va aquí y no en el viewport, que además contiene al host del
         editor.
       -->
       <div ref="canvasEl" class="dt-canvas" role="rowgroup" :style="canvasStyle" />
@@ -3346,10 +3346,10 @@ function headerAlignClass(column: ResolvedColumn<TRow>): string | undefined {
         el slot, este nodo no se renderiza y el DOM queda exactamente como antes
         de que la función existiera.
 
-        Vive acá y NO dentro de `.dt-canvas` por la misma razón que el host de los
+        Vive aquí y NO dentro de `.dt-canvas` por la misma razón que el host de los
         editores incluidos: el canvas es territorio del pool, que recicla sus
         nodos por slot de viewport y no puede convivir con un árbol que administre
-        Vue. Acá adentro el contenido acompaña al scroll sin reposicionarse,
+        Vue. Aquí adentro el contenido acompaña al scroll sin reposicionarse,
         porque el viewport es el elemento que se desplaza.
 
         `hidden` lo escribe Vue a partir de `editorSlotProps`; la posición y el
@@ -3373,7 +3373,7 @@ function headerAlignClass(column: ResolvedColumn<TRow>): string | undefined {
     <!--
       Línea de caída: dónde va a quedar la columna que se está arrastrando.
 
-      Va acá, en la raíz, y no adentro del viewport: la raíz no scrollea, así que
+      Va aquí, en la raíz, y no adentro del viewport: la raíz no scrollea, así que
       la línea puede atravesar el header y el cuerpo de una sola pieza. Adentro
       del viewport se desplazaría con el cuerpo y dejaría de coincidir con el
       hueco que promete.
@@ -3401,7 +3401,7 @@ function headerAlignClass(column: ResolvedColumn<TRow>): string | undefined {
       Vive en la raíz y no adentro del encabezado por dos razones: la tira de
       encabezados scrollea en horizontal y se llevaría el panel con ella, y
       además recorta, así que un panel más alto que el encabezado quedaría
-      cortado. Acá queda recortado por la tabla entera, que es lo correcto.
+      cortado. Aquí queda recortado por la tabla entera, que es lo correcto.
     -->
     <div
       v-if="columnMenu"

@@ -13,7 +13,7 @@ import type { CellOption } from 'vue-tablekit'
  * Sin dependencias: el algoritmo es mulberry32, doce líneas de aritmética entera.
  */
 
-/** Lista con al menos un elemento. Permite elegir al azar sin chequear vacíos. */
+/** Lista con al menos un elemento. Permite elegir al azar sin verificar vacíos. */
 type NonEmpty<T> = readonly [T, ...T[]]
 
 /** Semilla fija. Cambiarla produce otro dataset, igual de reproducible. */
@@ -22,7 +22,7 @@ const SEED = 0x5eed_1337
 /**
  * Crea un generador pseudoaleatorio determinista en el rango [0, 1).
  *
- * `Math.random` no sirve acá porque no admite semilla: cada recarga daría otro
+ * `Math.random` no sirve aquí porque no admite semilla: cada recarga daría otro
  * dataset y las mediciones dejarían de ser comparables entre sí.
  */
 function createRandom(seed: number): () => number {
@@ -58,7 +58,7 @@ function pickInt(random: () => number, min: number, max: number): number {
 /**
  * Estados posibles de un proyecto.
  *
- * Es la ÚNICA fuente de verdad: de acá salen las opciones que consumen el
+ * Es la ÚNICA fuente de verdad: de aquí salen las opciones que consumen el
  * renderer `select` y el editor desplegable, el texto de las cabeceras de grupo
  * cuando se agrupa por esta columna, y también el tipo literal del campo
  * `status` de una fila. Duplicar la lista sería la forma más rápida de que un
@@ -179,7 +179,7 @@ const DESCRIPTION_OBJECTS: NonEmpty<string> = [
 
 /** Persona responsable. Es la forma de objeto que acepta el renderer `avatar`. */
 export type ProjectOwner = {
-  /** Nombre completo. De acá salen las iniciales y el color estable del círculo. */
+  /** Nombre completo. De aquí salen las iniciales y el color estable del círculo. */
   name: string
   /** URL de la foto. Sin ella, el avatar dibuja iniciales. */
   src?: string
@@ -216,7 +216,7 @@ const LOCKED_EVERY = 12
  * Tamaños de dataset ofrecidos en la demo. El primero es el que se carga al
  * abrir la página.
  *
- * Vive acá y no en la pantalla porque lo necesitan los dos lados: el panel de
+ * Vive aquí y no en la pantalla porque lo necesitan los dos lados: el panel de
  * controles para armar el desplegable, y `App.vue` para saber con cuántas filas
  * arrancar. Una segunda copia se desincronizaría de esta en el primer cambio.
  */

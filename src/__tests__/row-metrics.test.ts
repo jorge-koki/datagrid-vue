@@ -5,7 +5,7 @@
  *
  * Todo lo que la tabla sabe sobre el eje vertical —dónde empieza una fila, qué
  * fila hay en un píxel, cuánto mide el contenido entero, qué tramo pintar— sale
- * de acá. Con alturas uniformes eran divisiones y cualquier error se veía de
+ * de aquí. Con alturas uniformes eran divisiones y cualquier error se veía de
  * inmediato; con alturas mezcladas el error típico es de un píxel acumulado a lo
  * largo de miles de filas, que no se ve hasta el final de la lista.
  *
@@ -89,7 +89,7 @@ describe('useRowMetrics — sin función de altura, nada cambia', () => {
 
   it('NO degrada cuando todas miden igual pero distinto de la base', () => {
     // Una función que devuelve 60 para todas también es uniforme, pero 60 no es
-    // lo que dice `--dt-row-height`: degradar acá dejaría al pool sin escribir
+    // lo que dice `--dt-row-height`: degradar aquí dejaría al pool sin escribir
     // alturas y a la hoja de estilos pintando celdas de 40 en filas de 60.
     const { metrics } = setup({ rowCount: 100, heightAt: () => 60 })
 

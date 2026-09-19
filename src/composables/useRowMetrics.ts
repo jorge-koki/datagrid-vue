@@ -32,7 +32,7 @@ import { useVirtualWindow } from './useVirtualWindow'
  * desincronizarse de la primera.
  *
  * La alternativa considerada fue un árbol de Fenwick, que agrega corregir el
- * alto de una fila suelta en `O(log n)` sin rehacer las de abajo. Acá **no hace
+ * alto de una fila suelta en `O(log n)` sin rehacer las de abajo. Aquí **no hace
  * falta**: las alturas las declara el consumidor con una función pura, así que
  * nunca cambia una sola —cambia la función, y entonces cambian todas—. Esa
  * estructura solo se paga cuando los altos se MIDEN del DOM, fila por fila y a

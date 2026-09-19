@@ -71,7 +71,7 @@ function escapeField(value: string): string {
  * Las cabeceras de grupo que caigan adentro del rango NO aportan una línea. La
  * alternativa —una línea vacía por cabecera— metería filas en blanco en medio
  * de los datos pegados, y la etiqueta del grupo tampoco pertenece a ninguna de
- * las columnas copiadas: no hay una celda de la planilla donde ponerla sin
+ * las columnas copiadas: no hay una celda de la hoja de cálculo donde ponerla sin
  * correr el resto.
  *
  * @param rowStart - Primera fila de la secuencia visible. Incluida.

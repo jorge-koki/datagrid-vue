@@ -117,7 +117,7 @@ const requestedPages = shallowRef(0)
 /* ------------------------------------------------------------ Ordenamiento */
 
 /**
- * Los criterios de orden, que la tabla administra y acá se aplican.
+ * Los criterios de orden, que la tabla administra y aquí se aplican.
  *
  * La tabla NO ordena `rows`: escribe el estado y lo anuncia. Esto es el otro
  * lado de ese trato, y son dos líneas.
@@ -132,7 +132,7 @@ const sort = shallowRef<SortState>([])
  *
  * En modo servidor este array hace de "tabla del servidor": es de donde
  * `fetchRows` corta las páginas, que es lo que hace una base de datos con un
- * `ORDER BY`. Por eso el orden se aplica acá y no después de recibir la página:
+ * `ORDER BY`. Por eso el orden se aplica aquí y no después de recibir la página:
  * ordenar las 50 filas que llegaron daría un orden correcto adentro de la página
  * y absurdo respecto de las 100.000 que hay.
  */
@@ -189,7 +189,7 @@ watch([dataSource, rows], resetServerRows)
  *
  * Esto es lo único que hay que escribir del lado del consumidor. La tabla ya se
  * encargó de alinear el pedido a la página y de no repetirlo mientras esté en
- * vuelo; acá solo queda traerlo y escribirlo en su lugar.
+ * vuelo; aquí solo queda traerlo y escribirlo en su lugar.
  *
  * El array se reemplaza en lugar de mutarse: es lo que la tabla observa para
  * repintar, igual que con `editCommit`.
@@ -243,7 +243,7 @@ const variant = shallowRef<DataTableVariant>('default')
  * Es de las pocas cosas donde la demo no espeja el default del componente, y a
  * propósito: el default recto existe porque una grilla suele ir adentro de un
  * panel que ya tiene su propio redondeo, y ahí dos radios distintos se leen como
- * un error de alineación. Acá la tabla NO va adentro de ningún panel —su panel
+ * un error de alineación. Aquí la tabla NO va adentro de ningún panel —su panel
  * no dibuja marco justamente para que esto se vea—, así que mostrarla recta
  * escondería una prop que existe y se ve bien.
  */
@@ -253,8 +253,8 @@ const showRowNumbers = shallowRef(true)
 /**
  * Los dos gestos de selección en bloque, apagados igual que en el componente.
  *
- * Se exponen juntos porque son la misma idea sobre ejes distintos: apretar el
- * encabezado selecciona la columna entera, apretar el número selecciona la fila
+ * Se exponen juntos porque son la misma idea sobre ejes distintos: presionar el
+ * encabezado selecciona la columna entera, presionar el número selecciona la fila
  * entera, y las dos cosas producen un rango normal que se copia con Ctrl+C.
  */
 const columnSelection = shallowRef(false)
@@ -267,7 +267,7 @@ const dense = shallowRef(false)
 /**
  * Alto de fila: fijo, o uno por fila según la prioridad.
  *
- * ## Por qué el resolutor está acá afuera y no en una función anónima
+ * ## Por qué el resolutor está aquí afuera y no en una función anónima
  *
  * `rowHeight` como función es una DEPENDENCIA de la geometría de la tabla: si la
  * identidad de la función cambia, la tabla rehace los offsets de todas las
@@ -366,7 +366,7 @@ const selectionMode = shallowRef<SelectionMode>('cell')
 /**
  * Celda activa, controlada por el padre.
  *
- * Con `v-model:active-cell` el estado vive acá y se puede mostrar en pantalla.
+ * Con `v-model:active-cell` el estado vive aquí y se puede mostrar en pantalla.
  * Sin controlar, la tabla lo mantendría internamente y funcionaría igual: se
  * controla solamente para poder exhibirlo.
  */
@@ -374,7 +374,7 @@ const activeCell = shallowRef<CellPosition | null>(null)
 
 /**
  * `selectionMode: 'none'` apaga las vías de entrada del usuario, pero no borra
- * una selección ya existente. Se limpia desde acá para que el control haga lo
+ * una selección ya existente. Se limpia desde aquí para que el control haga lo
  * que su etiqueta promete.
  */
 watch(selectionMode, (mode) => {
@@ -384,7 +384,7 @@ watch(selectionMode, (mode) => {
 watch(rowCount, (count) => {
   rows.value = createProjects(count)
   // La celda activa apunta a un índice del dataset anterior: al regenerarlo
-  // podría quedar fuera de rango. Como acá la selección está controlada, basta
+  // podría quedar fuera de rango. Como aquí la selección está controlada, basta
   // con limpiarla.
   activeCell.value = null
   logEvent('info', `Dataset regenerado con ${count.toLocaleString('es-AR')} filas`)
@@ -444,7 +444,7 @@ watchEffect(() => {
  * Restablece el layout guardado.
  *
  * Además de visibilidad, orden y anchos, el componente vacía la agrupación y el
- * conjunto de grupos colapsados. Como acá `groupBy` está controlado, ese vaciado
+ * conjunto de grupos colapsados. Como aquí `groupBy` está controlado, ese vaciado
  * llega por `update:groupBy` y el desplegable vuelve solo a "Sin agrupar".
  */
 function resetLayout(): void {

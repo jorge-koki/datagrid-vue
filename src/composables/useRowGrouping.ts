@@ -50,7 +50,7 @@ import { readCellValue } from '../internal/values'
  * El array aplanado puede tener decenas de miles de entradas. Un `ref` profundo
  * las envolvería a todas en proxies reactivos, que es precisamente el costo de
  * memoria y de tracking que el resto del componente se toma el trabajo de evitar.
- * Nada de acá adentro se muta en el lugar: cada reconstrucción REEMPLAZA el
+ * Nada de aquí adentro se muta en el lugar: cada reconstrucción REEMPLAZA el
  * array, así que la reactividad superficial alcanza y sobra.
  *
  * Los dos `watch` son síncronos a propósito. Un `flush` diferido dejaría al
@@ -72,7 +72,7 @@ export interface UseRowGroupingOptions<TRow extends Record<string, unknown>> {
    *
    * Acepta huecos porque la prop `rows` de la tabla los acepta en modo servidor.
    * Una fila que no llegó no se puede agrupar y se saltea, aunque en la práctica
-   * no llega hasta acá: agrupar y modo servidor son excluyentes.
+   * no llega hasta aquí: agrupar y modo servidor son excluyentes.
    */
   rows: MaybeRefOrGetter<readonly (TRow | undefined)[]>
   /** Definiciones de columna, de donde salen accessors, opciones y agregados. */
@@ -200,7 +200,7 @@ export function useRowGrouping<TRow extends Record<string, unknown>>(
   /**
    * Claves de agrupación utilizables.
    *
-   * Se sanean acá y no en cada lugar que las lea: una clave desconocida o de una
+   * Se sanean aquí y no en cada lugar que las lea: una clave desconocida o de una
    * columna no agrupable produciría un nivel entero de grupos vacíos, y el
    * síntoma —una tabla que de golpe tiene el doble de filas— es mucho más difícil
    * de rastrear que el descarte.
@@ -283,7 +283,7 @@ export function useRowGrouping<TRow extends Record<string, unknown>>(
 
     for (let rowIndex = 0; rowIndex < rows.length; rowIndex += 1) {
       const row = rows[rowIndex]
-      // Guarda de `noUncheckedIndexedAccess`. Un array ralo también aterriza acá.
+      // Guarda de `noUncheckedIndexedAccess`. Un array ralo también aterriza aquí.
       if (row === undefined) continue
 
       let siblings = roots
@@ -300,7 +300,7 @@ export function useRowGrouping<TRow extends Record<string, unknown>>(
         const value = column ? readCellValue(column, row) : null
         const segment = groupSegment(columnKey, value)
         // El id sale de las MISMAS dos funciones que usa el helper público
-        // `groupId`. Repetir la interpolación acá sería una segunda escritura del
+        // `groupId`. Repetir la interpolación aquí sería una segunda escritura del
         // formato, y una segunda escritura se desincroniza.
         const id = joinGroupId(parentId, segment)
 

@@ -139,7 +139,7 @@ export function useTablePersistence<TRow>(
 ): UseTablePersistenceReturn {
   /** Se apaga al desmontar para descartar respuestas asíncronas tardías. */
   let alive = true
-  /** Recién en `true` después de cargar: antes, guardar pisaría lo guardado. */
+  /** Solo en `true` después de cargar: antes, guardar pisaría lo guardado. */
   let ready = false
   /** Handle del timer de debounce. 0 significa que no hay escritura pendiente. */
   let timer = 0
@@ -293,7 +293,7 @@ export function useTablePersistence<TRow>(
       return
     }
     // `setTimeout` en el navegador devuelve un número; el tipo del entorno DOM
-    // es el que corresponde acá y evita depender de los tipos de Node.
+    // es el que corresponde aquí y evita depender de los tipos de Node.
     timer = setTimeout(() => {
       timer = 0
       writeNow()
@@ -312,7 +312,7 @@ export function useTablePersistence<TRow>(
     cancelPending()
     // Misma defensa que en `writeNow`: `remove` es la otra escritura del
     // adaptador y tenía el mismo `void` que descartaba un rechazo sin manejar.
-    // Acá el error sí subiría por la pila de quien llamó a `resetLayout()`, que
+    // Aquí el error sí subiría por la pila de quien llamó a `resetLayout()`, que
     // es menos grave que salir por un timer, pero tumbar la aplicación por no
     // poder borrar una preferencia sigue siendo desproporcionado.
     runAdapterWrite(() => config.adapter.remove(config.storageKey))
@@ -320,7 +320,7 @@ export function useTablePersistence<TRow>(
 
   /** Aplica lo cargado si sigue siendo pertinente, y habilita el guardado. */
   function applyLoaded(loaded: PersistedTableState | null, config: ResolvedPersistOptions): void {
-    // El componente pudo desmontarse mientras el adaptador resolvía. Aplicar acá
+    // El componente pudo desmontarse mientras el adaptador resolvía. Aplicar aquí
     // escribiría sobre un componente que ya no existe.
     if (!alive) return
 
@@ -333,7 +333,7 @@ export function useTablePersistence<TRow>(
         columnWidths: config.includeWidths ? reconciled.columnWidths : {},
         columnOrder: config.includeOrder ? reconciled.columnOrder : [],
       }
-      // Las claves de agrupación siguen siendo opcionales también acá: ausentes
+      // Las claves de agrupación siguen siendo opcionales también aquí: ausentes
       // significan "no había nada que restaurar", y el componente distingue eso
       // de "había, y era vacío".
       if (config.includeGrouping && reconciled.groupBy !== undefined) {
@@ -350,7 +350,7 @@ export function useTablePersistence<TRow>(
     }
 
     // Se marca listo incluso cuando no había nada o la versión no coincidía: a
-    // partir de acá los cambios del usuario sí deben guardarse.
+    // partir de aquí los cambios del usuario sí deben guardarse.
     ready = true
   }
 

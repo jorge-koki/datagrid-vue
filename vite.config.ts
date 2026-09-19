@@ -115,7 +115,7 @@ export default defineConfig(({ mode }) => {
           emptyOutDir: true,
         },
 
-    // La configuración de Vitest vive acá y no en un `vitest.config.ts` aparte
+    // La configuración de Vitest vive aquí y no en un `vitest.config.ts` aparte
     // para que la suite resuelva exactamente los mismos alias y la misma cadena
     // de plugins que compilan la aplicación. Vite ignora esta clave en `build`,
     // así que ni `vite build` ni `vite build --mode lib` la ven.

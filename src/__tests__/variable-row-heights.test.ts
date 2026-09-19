@@ -3,11 +3,11 @@
  *
  * ## Qué protege este archivo
  *
- * `row-metrics.test.ts` verifica la aritmética; acá se verifica que esa
+ * `row-metrics.test.ts` verifica la aritmética; aquí se verifica que esa
  * aritmética llegue al píxel. Son dos cosas separables, y el modo típico de
  * romper la segunda sin tocar la primera es dejar algún lugar que siga
  * multiplicando el índice por el alto: el recuadro de la selección, el editor,
- * la regleta, la cabecera de grupo. Cada uno tiene su caso acá.
+ * la regleta, la cabecera de grupo. Cada uno tiene su caso aquí.
  *
  * ## El invariante que lo sostiene todo
  *
@@ -93,7 +93,7 @@ describe('alturas variables — una fila arranca donde termina la anterior', () 
       const alto = heightOf(anterior)
       expect(alto).not.toBeNull()
       // Este es el invariante entero. Un `índice * alto` olvidado en cualquier
-      // lado lo rompe acá y en ningún otro lugar.
+      // lado lo rompe aquí y en ningún otro lugar.
       expect(topOf(pintadas[i]!)).toBe(topOf(anterior) + alto!)
     }
 
@@ -297,7 +297,7 @@ describe('alturas variables — el camino de siempre no paga nada', () => {
     })
 
     for (const node of paintedRows(harness.canvas)) {
-      // El alto lo pone la hoja de estilos. Una sola escritura acá serían treinta
+      // El alto lo pone la hoja de estilos. Una sola escritura aquí serían treinta
       // por frame que antes no existían.
       expect(heightOf(node)).toBeNull()
     }

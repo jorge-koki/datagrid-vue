@@ -6,7 +6,7 @@
  * todo el resto de la suite, que opera sobre props, eventos y DOM, y explica que
  * hasta ahora solo se la rozara de costado —`refresh` una vez desde los tests de
  * agrupación, `expandAllGroups` y `collapseAllGroups` desde los de exclusividad
- * de fila, y siempre para verificar otra cosa—. Acá se verifica el CONTRATO de
+ * de fila, y siempre para verificar otra cosa—. Aquí se verifica el CONTRATO de
  * cada método: qué hace, qué hace en los bordes y qué anuncia.
  *
  * ## Los bordes son el punto
@@ -16,7 +16,7 @@
  * está oculta, o la clave no existe. "Oculta" llega por una acción normal del
  * usuario —el selector de columnas, un layout restaurado, `defaultVisible:
  * false`—, así que el silencio es deliberado y lo que hay que fijar es qué pasa
- * exactamente en ese silencio. Varios de los tests de acá abajo existen
+ * exactamente en ese silencio. Varios de los tests de aquí abajo existen
  * únicamente para que ese comportamiento no se "arregle" sin querer.
  */
 

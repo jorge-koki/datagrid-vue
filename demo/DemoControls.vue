@@ -25,8 +25,8 @@ import type { GroupingPresetId } from './grouping'
  *
  * ## Por qué un `defineModel` por control y no un objeto de configuración
  *
- * Un solo `v-model` sobre un objeto `settings` sería menos código acá y peor
- * ejemplo allá: cada campo necesitaría un computed escribible para que
+ * Un solo `v-model` sobre un objeto `settings` sería menos código aquí y peor
+ * ejemplo allí: cada campo necesitaría un computed escribible para que
  * `v-model` funcione sobre él, y el tipo de lo que viaja quedaría escondido
  * adentro de una interfaz. Con un modelo por control, el nombre y el tipo de
  * cada prop de la tabla se leen en una línea, que es exactamente lo que alguien
@@ -114,7 +114,7 @@ const focusRing = defineModel<boolean>('focusRing', { required: true })
  * La cruz de la celda activa, apagada igual que en el componente.
  *
  * Se expone como control porque lo que aporta solo se entiende con la tabla
- * scrolleada: encendida, marcá una celda y andá hasta el otro extremo: el
+ * scrolleada: encendida, marca una celda y ve hasta el otro extremo: el
  * encabezado y la regleta siguen diciendo en qué columna y en qué fila estabas.
  */
 const crosshair = defineModel<boolean>('crosshair', { required: true })
@@ -154,7 +154,7 @@ const columnVisibility = defineModel<ColumnVisibilityState>('columnVisibility', 
       -->
       <p v-if="dataSource === 'server'" class="demo-field-note">
         Se piden <strong>50 filas</strong> por vez, con {{ SERVER_LATENCY }}ms de demora. Scrolleá
-        rápido para ver los marcadores, y mirá la bitácora.
+        rápido para ver los marcadores, y mira la bitácora.
       </p>
     </fieldset>
 
@@ -232,7 +232,7 @@ const columnVisibility = defineModel<ColumnVisibilityState>('columnVisibility', 
       </label>
 
       <p v-if="rowHeightMode === 'prioridad'" class="demo-field-note">
-        Crítica <strong>88px</strong>, alta <strong>64px</strong>, el resto el alto normal. Mirá que
+        Crítica <strong>88px</strong>, alta <strong>64px</strong>, el resto el alto normal. Mira que
         la selección, el editor y la regleta acompañan cada alto.
       </p>
     </fieldset>
@@ -277,7 +277,7 @@ const columnVisibility = defineModel<ColumnVisibilityState>('columnVisibility', 
       </label>
 
       <!--
-        Seleccionar una fila entera se hace apretando su número, así que sin
+        Seleccionar una fila entera se hace presionando su número, así que sin
         regleta el gesto no tiene dónde ocurrir. El control se deshabilita en
         lugar de ocultarse: comunica la dependencia en vez de desaparecer.
       -->
@@ -297,7 +297,7 @@ const columnVisibility = defineModel<ColumnVisibilityState>('columnVisibility', 
       </label>
 
       <p v-if="crosshair" class="demo-field-note">
-        Una línea bajo el encabezado de la columna y otra al costado del número de fila. Marcá una
+        Una línea bajo el encabezado de la columna y otra al costado del número de fila. Marca una
         celda y scrolleá lejos: las dos siguen a la vista.
       </p>
     </fieldset>

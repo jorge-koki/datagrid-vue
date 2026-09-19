@@ -15,7 +15,7 @@
  * Cuánto tarda una respuesta, en ms.
  *
  * Suficiente para ver el marcador al scrollear rápido, y no tanto como para que
- * la demo se sienta rota. Una consulta paginada contra una base real anda en este
+ * la demo se sienta rota. Una consulta paginada contra una base real va en este
  * orden.
  */
 export const SERVER_LATENCY = 400

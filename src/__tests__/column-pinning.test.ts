@@ -15,7 +15,7 @@
  * no la tocó" y deja mandar a `column.pinned`; `null` significa "el usuario la
  * soltó" y tiene que pisarlo. Si se colapsan, soltar una columna declarada
  * anclada es imposible: se vuelve a anclar sola en el mismo tick y el botón
- * parece no funcionar. Es el caso que más veces aparece acá.
+ * parece no funcionar. Es el caso que más veces aparece aquí.
  */
 
 import { describe, expect, it, vi } from 'vitest'
@@ -203,12 +203,12 @@ describe('anclar desde el encabezado — el gesto', () => {
     harness.unmount()
   })
 
-  it('apretar el botón no arrastra la columna ni la selecciona', async () => {
+  it('presionar el botón no arrastra la columna ni la selecciona', async () => {
     const harness = await mountGrid({ columnSelection: true })
     const button = pinButton(harness, 'name')
 
     // El `pointerdown` del botón burbujea hasta el encabezado, que es donde
-    // viven los otros dos gestos. Sin la exclusión, un clic acá arrancaría
+    // viven los otros dos gestos. Sin la exclusión, un clic aquí arrancaría
     // además un arrastre y seleccionaría la columna entera.
     button?.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, button: 0, clientX: 0 }))
     await harness.flush()

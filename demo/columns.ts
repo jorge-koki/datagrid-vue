@@ -121,7 +121,7 @@ export const projectColumns: readonly DataTableColumn<ProjectRow>[] = [
      * mil filas por accidente es una molestia.
      *
      * Y como el menú tiene lugar para preguntar, ofrece los DOS bordes: desde
-     * acá se puede llevar la columna a la izquierda o a la derecha, cosa que el
+     * aquí se puede llevar la columna a la izquierda o a la derecha, cosa que el
      * botón del encabezado —que es un solo gesto— no puede hacer.
      */
     sortable: 'menu',
@@ -211,7 +211,7 @@ export const projectColumns: readonly DataTableColumn<ProjectRow>[] = [
     cellClass: (value: CellValue): string | undefined =>
       typeof value === 'number' && value >= HIGH_BUDGET ? 'demo-cell-high-budget' : undefined,
     // El total del grupo, en la misma moneda que las celdas. El formateador es
-    // el mismo; lo que cambia es la firma, porque acá no hay fila que pasar.
+    // el mismo; lo que cambia es la firma, porque aquí no hay fila que pasar.
     aggregate: 'sum',
     formatAggregate: (value: CellValue): string =>
       typeof value === 'number' ? currencyFormatter.format(value) : '',
